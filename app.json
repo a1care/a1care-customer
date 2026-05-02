@@ -82,7 +82,9 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "useFrameworks": "static",
+            "useModularHeaders": true,
+            "deploymentTarget": "15.1"
           },
           "android": {
             "compileSdkVersion": 35,
