@@ -1,30 +1,48 @@
 const { withDangerousMod } = require('@expo/config-plugins');
-const { mergeContents } = require('@expo/config-plugins/build/utils/generateCode');
 const fs = require('fs');
 const path = require('path');
 
 /**
- * Adds $RNFirebaseAsStaticFramework = true to the Podfile.
- * This is the official fix for Firebase Swift pods failing with static frameworks.
- * See: https://rnfirebase.io/#expo
+ * 1. Adds $RNFirebaseAsStaticFramework = true to the Podfile.
+ * 2. Injects CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = 'YES' into all targets.
+ * This is the ultimate fix for Firebase + static framework build errors in Expo.
  */
 const withFirebaseStaticFramework = (config) => {
   return withDangerousMod(config, [
     'ios',
     async (config) => {
       const podfilePath = path.join(config.modRequest.platformProjectRoot, 'Podfile');
-      const contents = fs.readFileSync(podfilePath, 'utf-8');
+      let contents = fs.readFileSync(podfilePath, 'utf-8');
 
-      const modified = mergeContents({
-        tag: 'rn-firebase-static-framework',
-        src: contents,
-        newSrc: '$RNFirebaseAsStaticFramework = true',
-        anchor: /^/,
-        offset: 0,
-        comment: '#',
-      });
+      // Add the global flag for Firebase
+      if (!contents.includes('$RNFirebaseAsStaticFramework = true')) {
+        contents = '$RNFirebaseAsStaticFramework = true\n' + contents;
+      }
 
-      fs.writeFileSync(podfilePath, modified.contents);
+      // Add the post_install hook to allow non-modular headers
+      const postInstallMatch = contents.match(/post_install do \|installer\|/);
+      
+      const buildSettingInclusion = `
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      end
+    end`;
+
+      if (postInstallMatch) {
+        // If post_install already exists, inject into it
+        if (!contents.includes('CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES')) {
+          contents = contents.replace(
+            /post_install do \|installer\|/,
+            `post_install do |installer|${buildSettingInclusion}`
+          );
+        }
+      } else {
+        // If no post_install, add it at the end
+        contents += `\npost_install do |installer|${buildSettingInclusion}\nend\n`;
+      }
+
+      fs.writeFileSync(podfilePath, contents);
       return config;
     },
   ]);
