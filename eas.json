@@ -13,6 +13,11 @@
     },
     "production": {
       "autoIncrement": true,
+      "ios": {
+        "buildSettings": {
+          "CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES": "YES"
+        }
+      },
       "env": {
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
       }
