@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.jpeg",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "userInterfaceStyle": "light",
     "scheme": "a1care",
     "splash": {
