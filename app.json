@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.jpeg",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "userInterfaceStyle": "light",
     "scheme": "a1care",
     "splash": {
@@ -82,7 +82,6 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static",
             "useModularHeaders": true,
             "deploymentTarget": "15.1"
           },
