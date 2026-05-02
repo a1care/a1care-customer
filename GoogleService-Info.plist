@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>426082561306-6ul06c8sgo5ej0rumljht7qmfogdjli9.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.426082561306-6ul06c8sgo5ej0rumljht7qmfogdjli9</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>426082561306-3j3ekau3otq9nt2qoim8tngo3g2pfmqb.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyBYdU3RZXhqwNRE0lj_lgJ4p_k7nfAuJTQ</string>
+	<key>GCM_SENDER_ID</key>
+	<string>426082561306</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.a1care.user</string>
+	<key>PROJECT_ID</key>
+	<string>a1-care-hospitals</string>
+	<key>STORAGE_BUCKET</key>
+	<string>a1-care-hospitals.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:426082561306:ios:ed9a1b2d7c425e7e2550a3</string>
+</dict>
+</plist>

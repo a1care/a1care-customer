@@ -1,0 +1,91 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+.gradle-local/
+.gradle-user-home/
+.gradle/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# OS
+.DS_Store
+*.pem
+Thumbs.db
+
+# local env files
+.env
+.env*.local
+.env.staging
+.env.production
+env.bak
+
+# typescript
+*.tsbuildinfo
+*.d.ts
+!razorpay.d.ts
+*.d.ts.map
+*.map
+
+# generated native folders
+/android/
+/ios/
+
+# Build artifacts, archives & logs
+*.zip
+*.apk
+*.log
+*.txt
+!RELEASE_CHECKLIST.md
+*.bat
+
+# Copies
+* - Copy*
+*-Copy*
+
+# Screenshots & Images
+*.png
+!assets/**/*.png
+
+# Firebase
+google-services.json
+
+# Local / Dev
+.env*
+*.local
+
+# Editor / IDE
+.vscode/
+.idea/
+*.iml
+
+# Caches / temp
+.cache/
+coverage/
+tmp/
+temp/
+*.tmp
+
+# Runtime dumps
+*.pid
+*.seed
+*.stackdump
