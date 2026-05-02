@@ -13,7 +13,6 @@
     },
     "production": {
       "autoIncrement": true,
-      "image": "macos-sequoia-15.2-xcode-16.2",
       "env": {
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
       }
