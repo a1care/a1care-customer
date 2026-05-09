@@ -127,6 +127,7 @@ export interface DoctorAppointment {
     paymentMode?: PaymentMode;
     paymentStatus?: PaymentStatus;
     totalAmount?: number;
+    serviceName?: string;
     createdAt: string;
 }
 

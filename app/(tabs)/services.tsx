@@ -315,6 +315,12 @@ export default function ServicesScreen() {
         } else if (level === 'services' && isFromIndex) {
             // At root services list but arrived from Home tab
             router.replace('/');
+        } else {
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.replace('/');
+            }
         }
     };
 
@@ -367,11 +373,9 @@ export default function ServicesScreen() {
         <SafeAreaView style={styles.root} edges={['top']}>
             {/* Header */}
             <View style={styles.header}>
-                {(level !== 'services' || isFromIndex) && (
-                    <TouchableOpacity onPress={goBack} style={styles.backBtn}>
-                        <Text style={styles.backText}>←</Text>
-                    </TouchableOpacity>
-                )}
+                <TouchableOpacity onPress={goBack} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
+                </TouchableOpacity>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.headerTitle}>
                         {level === 'services'
@@ -788,4 +792,6 @@ const styles = StyleSheet.create({
     },
     bookBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
 });
+
+
 

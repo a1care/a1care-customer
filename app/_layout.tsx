@@ -36,6 +36,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const { fetchConfig, config } = useConfigStore();
     const router = useRouter();
     const segments = useSegments();
+    const [hasRequestedPostLoginPermissions, setHasRequestedPostLoginPermissions] = React.useState(false);
 
     useEffect(() => {
         console.log('[AuthGuard] Initializing...');
@@ -151,12 +152,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         if (isAuthenticated) {
-            // Ask location + notification permissions after login.
-            requestNotificationPermissionOnly();
-            requestLocationPermission();
-            // Register FCM token for authenticated users.
-            requestNotificationPermission();
-
             const unsubscribe = messaging().onMessage(async remoteMessage => {
                 console.log('[FCM] Foreground message received:', remoteMessage);
                 const title = remoteMessage.notification?.title || "A1Care";
@@ -225,6 +220,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }, [isAuthenticated, user?.isRegistered, segments]);
 
     useEffect(() => {
+        if (!isAuthenticated || !user?.isRegistered) {
+            setHasRequestedPostLoginPermissions(false);
+        }
+    }, [isAuthenticated, user?.isRegistered]);
+
+    useEffect(() => {
         if (!isAuthenticated) return;
 
         let timer: ReturnType<typeof setInterval> | undefined;
@@ -289,14 +290,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         } else if (isAuthenticated && user && (inAuthGroup || isAtRoot)) {
             // If registered go to tabs; else go to profile setup
             if (user.isRegistered) {
-                console.log('[AuthGuard] Redirecting to tabs');
-                router.replace('/(tabs)');
+                const run = async () => {
+                    if (!hasRequestedPostLoginPermissions) {
+                        await requestNotificationPermissionOnly();
+                        await requestLocationPermission();
+                        await requestNotificationPermission();
+                        setHasRequestedPostLoginPermissions(true);
+                    }
+                    console.log('[AuthGuard] Redirecting to tabs');
+                    router.replace('/(tabs)');
+                };
+                run();
             } else {
                 console.log('[AuthGuard] Redirecting to profile-setup');
                 router.replace('/(auth)/profile-setup');
             }
         }
-    }, [isAuthenticated, isLoading, user, segments, config?.maintenanceMode]);
+    }, [isAuthenticated, isLoading, user, segments, config?.maintenanceMode, hasRequestedPostLoginPermissions]);
 
     if (isLoading) {
         console.log('[AuthGuard] Rendering Loading State');

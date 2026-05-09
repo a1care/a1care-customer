@@ -145,6 +145,19 @@ function ServiceCard({ booking, onPress }: { booking: ServiceRequest; onPress: (
 }
 
 function AppointmentCard({ appt, onPress }: { appt: DoctorAppointment; onPress?: () => void }) {
+    const formatApptDate = (value?: string) => {
+        if (!value) return '';
+        const raw = value.trim();
+        const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (m) {
+            return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+                .toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+        }
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return raw;
+        return parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    };
+
     const mode = (appt.paymentMode || 'OFFLINE').toUpperCase();
     const isPaid = appt.paymentStatus === 'COMPLETED';
     const paymentLabel =
@@ -159,14 +172,16 @@ function AppointmentCard({ appt, onPress }: { appt: DoctorAppointment; onPress?:
                     <Stethoscope size={22} color={Colors.health} />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Text style={styles.cardName} numberOfLines={1}>Doctor Appointment</Text>
+                    <Text style={styles.cardName} numberOfLines={1}>
+                        {appt.serviceName || (typeof appt.doctorId === 'object' ? `Dr. ${appt.doctorId.name}` : "General Consultation")}
+                    </Text>
                     <Text style={styles.cardType}>Specialist Consultation</Text>
                 </View>
                 <StatusBadge status={appt.status ?? 'Pending'} />
             </View>
             <View style={styles.cardDivider} />
             <BookingMetaRow
-                dateText={`${appt.date ? new Date(appt.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : ''} · ${appt.startingTime && appt.endingTime ? `${appt.startingTime}-${appt.endingTime}` : (appt.timeSlot ?? 'ASAP')}`}
+                dateText={`${formatApptDate(appt.date)} · ${appt.startingTime && appt.endingTime ? `${appt.startingTime}-${appt.endingTime}` : (appt.timeSlot ?? 'ASAP')}`}
                 paymentText={paymentLabel}
             />
         </TouchableOpacity>
@@ -270,6 +285,20 @@ export default function BookingsScreen() {
         (a) => APPT_TAB[a.status ?? 'Pending'] === activeTab
     );
     const visibleCount = filteredServiceBookings.length + filteredAppts.length;
+    const filteredItems = [
+        ...filteredAppts.map((appt) => ({
+            kind: 'appt' as const,
+            id: appt._id,
+            ts: new Date(appt.createdAt || appt.date || 0).getTime(),
+            appt,
+        })),
+        ...filteredServiceBookings.map((booking) => ({
+            kind: 'service' as const,
+            id: booking._id,
+            ts: new Date(booking.createdAt || 0).getTime(),
+            booking,
+        })),
+    ].sort((a, b) => b.ts - a.ts);
 
     const tabCount = (tab: TabId) => {
         const sbCount = myServiceBookings.filter((b) => SERVICE_TAB[b.status] === tab).length;
@@ -366,26 +395,27 @@ export default function BookingsScreen() {
                         />
                     ) : (
                         <>
-                            {filteredAppts.map((a) => (
-                                <AppointmentCard
-                                    key={a._id}
-                                    appt={a}
-                                    onPress={() => {
-                                        if (!allowCardPress) return;
-                                        router.push({ pathname: '/doctor/appointment/[id]', params: { id: a._id } });
-                                    }}
-                                />
-                            ))}
-                            {filteredServiceBookings.map((b) => (
-                                <ServiceCard
-                                    key={b._id}
-                                    booking={b}
-                                    onPress={() => {
-                                        if (!allowCardPress) return;
-                                        router.push({ pathname: '/booking/[id]', params: { id: b._id } });
-                                    }}
-                                />
-                            ))}
+                            {filteredItems.map((item) =>
+                                item.kind === 'appt' ? (
+                                    <AppointmentCard
+                                        key={`appt-${item.id}`}
+                                        appt={item.appt}
+                                        onPress={() => {
+                                            if (!allowCardPress) return;
+                                            router.push({ pathname: '/doctor/appointment/[id]', params: { id: item.appt._id } });
+                                        }}
+                                    />
+                                ) : (
+                                    <ServiceCard
+                                        key={`service-${item.id}`}
+                                        booking={item.booking}
+                                        onPress={() => {
+                                            if (!allowCardPress) return;
+                                            router.push({ pathname: '/booking/[id]', params: { id: item.booking._id } });
+                                        }}
+                                    />
+                                )
+                            )}
                         </>
                     )}
                     <View style={{ height: 24 }} />

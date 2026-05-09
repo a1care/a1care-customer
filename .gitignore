@@ -89,3 +89,7 @@ temp/
 *.pid
 *.seed
 *.stackdump
+
+# Local crash/replay dumps
+hs_err_pid*.log
+replay_pid*.log

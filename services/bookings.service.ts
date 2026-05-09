@@ -65,7 +65,7 @@ export const bookingsService = {
     // Doctor appointments
     bookDoctor: async (
         doctorId: string,
-        data: { date: string; startingTime: string; endingTime: string; totalAmount?: number; paymentMode?: 'ONLINE' | 'OFFLINE' | 'WALLET'; isGatewayPayment?: boolean }
+        data: { date: string; startingTime: string; endingTime: string; totalAmount?: number; paymentMode?: 'ONLINE' | 'OFFLINE' | 'WALLET'; isGatewayPayment?: boolean; serviceName?: string }
     ) => {
         const payload = { 
             ...data, 

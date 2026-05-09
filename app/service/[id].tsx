@@ -737,7 +737,7 @@ export default function ServiceDetailScreen() {
                         : paymentMethod === 'WALLET'
                             ? 'WALLET'
                             : 'ONLINE',
-                    isGatewayPayment: paymentMethod === 'ONLINE',
+                    isGatewayPayment: paymentMethod === 'ONLINE', serviceName: nameParam ?? service?.name ?? 'Doctor Consult',
                 });
             }
 

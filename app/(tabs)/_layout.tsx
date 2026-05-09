@@ -123,11 +123,13 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
     tabBar: {
         position: 'absolute',
-        bottom: Platform.OS === 'ios' ? 24 : 16,
+        bottom: 0,
         left: 12,
         right: 12,
         backgroundColor: '#FFFFFF',
         borderRadius: 32,
+        borderBottomLeftRadius: 0,
+        borderBottomRightRadius: 0,
         height: 68,
         borderTopWidth: 0,
         ...Shadows.float,

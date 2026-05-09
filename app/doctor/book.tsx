@@ -55,13 +55,14 @@ const formatSlotTimeLocal = (raw: string) => {
 };
 
 export default function DoctorBookingScreen() {
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, serviceName: nameParam } = useLocalSearchParams<{ id: string; serviceName?: string }>();
     const router = useRouter();
     const qc = useQueryClient();
 
     const [selectedDate, setSelectedDate] = useState(() => toLocalYMD(new Date()));
     const [selectedSlot, setSelectedSlot] = useState<{ startingTime: string; endingTime: string } | null>(null);
     const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE'>('COD');
+    const [chosenSpecialization, setChosenSpecialization] = useState<string>(nameParam || "");
 
     // 1. Fetch Doctor Details (Dynamic Price)
     const { data: doctor, isLoading: doctorLoading, isError: doctorError, refetch: refetchDoctor } = useQuery({
@@ -69,6 +70,14 @@ export default function DoctorBookingScreen() {
         queryFn: () => doctorsService.getById(id!),
         enabled: !!id,
     });
+
+    useEffect(() => {
+        if (doctor && !chosenSpecialization) {
+            if (doctor.specialization && doctor.specialization.length > 0) {
+                setChosenSpecialization(doctor.specialization[0]);
+            }
+        }
+    }, [doctor]);
 
     // 2. Fetch Slots with 12s polling
     const { data: slots, isLoading: slotsLoading, isError: slotsError, refetch: refetchSlots, isFetching: isFetchingSlots } = useQuery({
@@ -97,7 +106,8 @@ export default function DoctorBookingScreen() {
                 date: selectedDate,
                 startingTime: slot.startingTime,
                 endingTime: slot.endingTime,
-                paymentMode: paymentMethod === 'WALLET' ? 'ONLINE' : 'OFFLINE'
+                paymentMode: paymentMethod === 'WALLET' ? 'ONLINE' : 'OFFLINE',
+                serviceName: chosenSpecialization || "Doctor Consultation"
             }),
         onSuccess: () => {
             const prettyDate = new Date(`${selectedDate}T00:00:00`).toLocaleDateString([], {

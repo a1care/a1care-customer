@@ -130,16 +130,9 @@ export default function WalletScreen() {
                                 <Text style={styles.balanceLabel}>Available Balance</Text>
                                 <Text style={styles.balanceAmount} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(wallet?.balance ?? 0)}</Text>
                                 
-                                {/* Original Add Money Button - Commented Out Per Request */}
-                                {/* 
                                 <TouchableOpacity style={styles.addBtn} onPress={() => setIsAddModalVisible(true)}>
                                     <Text style={styles.addBtnText}>+ Add Money</Text>
-                                </TouchableOpacity> 
-                                */}
-
-                                <View style={[styles.addBtn, { backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderColor: '#fff' }]}>
-                                    <Text style={[styles.addBtnText, { color: '#fff' }]}>Coming Soon</Text>
-                                </View>
+                                </TouchableOpacity>
                             </LinearGradient>
                         </TouchableOpacity>
 

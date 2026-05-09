@@ -84,7 +84,7 @@
         {
           "ios": {
             "useFrameworks": "static",
-            "useModularHeaders": true,
+            "useModularHeaders": false,
             "deploymentTarget": "15.1"
           },
           "android": {
@@ -110,9 +110,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "340395ac-38e5-4753-bd4f-7a1eb7dc2263"
+        "projectId": "1d2e3fdc-1974-4d98-860c-e9ea7c9a9e0b"
       }
     },
-    "owner": "a1care"
+    "owner": "saidinesh11"
   }
 }
