@@ -67,7 +67,7 @@ env.bak
 !assets/**/*.png
 
 # Firebase
-google-services.json
+# google-services.json (Removed from ignore to allow EAS Build)
 
 # Local / Dev
 .env*

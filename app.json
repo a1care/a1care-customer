@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "scheme": "a1care",
     "splash": {
-      "image": "./assets/splash-icon.jpeg",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#2F80ED"
     },
@@ -54,10 +54,6 @@
       "bundler": "metro"
     },
     "plugins": [
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
-      "@react-native-firebase/messaging",
-      "./plugins/withFirebaseStaticFramework",
       "expo-router",
       "expo-secure-store",
       [
@@ -91,7 +87,7 @@
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
             "minSdkVersion": 24,
-            "kotlinVersion": "2.1.20",
+            "kotlinVersion": "1.9.24",
             "packagingOptions": {
               "pickFirst": [
                 "lib/x86/libc++_shared.so",
@@ -110,9 +106,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "1d2e3fdc-1974-4d98-860c-e9ea7c9a9e0b"
+        "projectId": "57eee4ae-c5d1-4b1c-a8fe-1b032184057c"
       }
     },
-    "owner": "saidinesh11"
+    "owner": "vamsireddy0306"
   }
 }

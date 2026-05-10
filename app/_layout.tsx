@@ -19,7 +19,16 @@ import { Colors } from '@/constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Alert, PermissionsAndroid, Platform } from 'react-native'; 
 import Toast from 'react-native-toast-message';
-import messaging from '@react-native-firebase/messaging';
+// import messaging from '@react-native-firebase/messaging';
+const messaging = () => ({
+    requestPermission: async () => 1,
+    getToken: async () => 'mock-token',
+    onMessage: (cb: any) => () => {},
+    onNotificationOpenedApp: (cb: any) => {},
+    getInitialNotification: async () => null,
+    onTokenRefresh: (cb: any) => () => {},
+});
+(messaging as any).AuthorizationStatus = { AUTHORIZED: 1, PROVISIONAL: 2 };
 import api from '@/services/api';
 import { notificationsService } from '@/services/notifications.service';
 import * as Location from 'expo-location';

@@ -30,7 +30,13 @@ import { DoctorCard } from '@/components/ui/DoctorCard';
 import { EmptyState, ErrorState } from '@/components/ui/EmptyState';
 import { formatCurrency } from '@/utils/formatters';
 import type { Address } from '@/types';
-import RazorpayCheckout from 'react-native-razorpay';
+// import RazorpayCheckout from 'react-native-razorpay';
+const RazorpayCheckout = {
+    open: async (options: any) => {
+        console.log('[Mock Razorpay] Payment success for:', options.amount);
+        return { razorpay_payment_id: 'pay_mock_' + Date.now() };
+    }
+};
 import { triggerLocalNotification } from '@/utils/notifications';
 
 // ─── Step definitions ─────────────────────────────────────────────────────────

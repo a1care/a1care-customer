@@ -21,6 +21,8 @@ interface AppConfig {
         termsAndConditions: string;
     };
     landing: {
+        mainBanners?: any[];
+        promotionalBanners?: any[];
         festivalBanners: any[];
         playStoreUrl: string;
         appStoreUrl: string;
@@ -38,7 +40,9 @@ interface ConfigState {
     getMapsKey: () => string;
 }
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.a1carehospital.in/api';
+import { API_BASE_URL } from '../constants/api';
+
+const API_URL = API_BASE_URL;
 console.log('DEBUG: API_URL in config.store.ts is:', API_URL);
 const FALLBACK_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyCQp47kwCVpsPbgSWB-c9HrlsqyiLwe06o';
 
@@ -53,6 +57,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
             const response = await axios.get(`${API_URL}/common/config/user`, { timeout: 10000 });
             // Support both success: true and statusCode: 200 formats
             if (response.data.success || response.data.statusCode === 200) {
+                console.log('DEBUG: Config fetched successfully:', response.data.data?.landing?.mainBanners?.length, 'main banners found');
                 set({ config: response.data.data, isLoading: false, error: null });
             } else {
                 set({ error: response.data.message || 'Failed to fetch config', isLoading: false });

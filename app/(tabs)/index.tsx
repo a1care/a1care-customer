@@ -39,7 +39,8 @@ import {
     Activity,
     ShieldCheck,
     X,
-    BookOpen
+    BookOpen,
+    Hospital
 } from 'lucide-react-native';
 
 import { servicesService } from '@/services/services.service';
@@ -135,132 +136,9 @@ function getQuickServiceLabel(name: string) {
         .join(' ');
 }
 
-const HERO_SLIDES = [
-    {
-        id: '1',
-        tag: '24/7 AVAILABLE',
-        title: 'Doctor Consultation\nat Home',
-        subtitle: 'Book trusted doctors & nurses instantly.',
-        cta: 'Consult Now',
-        colors: ['#2F80ED', '#21BB7E'],
-        path: '/services',
-        params: { category: 'Doctor Consult' },
-        secondaryIcon: Stethoscope
-    },
-    {
-        id: '2',
-        tag: 'SKIP THE LINE',
-        title: 'Diagnostic Tests\nat Your Doorstep',
-        subtitle: 'Get accurate results within 24 hours.',
-        cta: 'Book Lab Test',
-        colors: ['#9B51E0', '#2F80ED'],
-        path: '/services',
-        params: { category: 'Diagnostics' },
-        secondaryIcon: FlaskConical
-    },
-    {
-        id: '3',
-        tag: 'PROFESSIONAL CARE',
-        title: 'Nursing & Elderly\nCare Services',
-        subtitle: 'Post-op & specialized home nursing care.',
-        cta: 'Hire a Nurse',
-        colors: ['#F2994A', '#EB5757'],
-        path: '/services',
-        params: { category: 'Nursing' },
-        secondaryIcon: HeartPulse
-    },
-    {
-        id: '4',
-        tag: 'EMERGENCY HUB',
-        title: 'Instant Ambulance\nResponse',
-        subtitle: 'Fastest medical transit across the city.',
-        cta: 'Call SOS',
-        colors: ['#EB5757', '#000000'],
-        path: '/services',
-        params: { category: 'Ambulance' },
-        secondaryIcon: Ambulance
-    },
-    {
-        id: '5',
-        tag: 'SMART BOOKING',
-        title: 'Hospital OP Tokens\nMade Easy',
-        subtitle: 'Skip queues at A1care Super-Speciality.',
-        cta: 'Get Token',
-        colors: ['#21BB7E', '#2F80ED'],
-        path: '/services',
-        params: { category: 'Hospital' },
-        secondaryIcon: Activity
-    },
-    {
-        id: '6',
-        tag: 'DOORSTEP DELIVERY',
-        title: 'Pharmacy &\nMedicines',
-        subtitle: 'Get prescribed medicines delivered in 30 mins.',
-        cta: 'Order Now',
-        colors: ['#27AE60', '#11998E'],
-        path: '/services',
-        params: { category: 'Pharmacy' },
-        secondaryIcon: Pill
-    },
-    {
-        id: '7',
-        tag: 'RENTAL HUB',
-        title: 'Medical Equipment\non Rent',
-        subtitle: 'Oxygen, wheelchairs & beds at best prices.',
-        cta: 'Explore Gear',
-        colors: ['#F2C94C', '#F2994A'],
-        path: '/services',
-        params: { category: 'Equipment' },
-        secondaryIcon: ShieldCheck
-    }
-];
 
-const KNOWLEDGE_BASE = [
-    {
-        id: '1',
-        title: 'Managing Blood Pressure',
-        author: 'Dr. Sarah Wilson',
-        readTime: '5 min',
-        icon: Activity,
-        color: '#FF6B6B',
-        bgColor: '#FFF5F5',
-        fallbackImage: require('@/assets/images/doctor_fallback_ai.png'),
-        description: 'Managing blood pressure is crucial for long-term heart health. Consistent monitoring, a low-sodium diet, and regular cardiovascular exercise are the pillars of hypertension management. Dr. Wilson recommends tracking your readings daily and avoiding processed foods which are often hidden sources of sodium.'
-    },
-    {
-        id: '2',
-        title: 'Post-Surgery Nutrition',
-        author: 'Dr. James Chen',
-        readTime: '8 min',
-        icon: FlaskConical,
-        color: '#4DABF7',
-        bgColor: '#E7F5FF',
-        fallbackImage: require('@/assets/images/doctor_fallback_ai_2.png'),
-        description: 'Recovery from surgery requires a specific nutritional profile. High-quality proteins aid in tissue repair, while Vitamin C and Zinc support the immune system. Dr. Chen emphasizes staying hydrated and incorporating anti-inflammatory foods like berries and leafy greens to speed up the healing process.'
-    },
-    {
-        id: '3',
-        title: 'Exercise for Seniors',
-        author: 'Dr. Maria Garcia',
-        readTime: '6 min',
-        icon: HeartPulse,
-        color: '#51CF66',
-        bgColor: '#EBFBEE',
-        fallbackImage: require('@/assets/images/doctor_fallback_ai_3.png'),
-        description: 'Staying active in your golden years doesn\'t have to be strenuous. Low-impact activities like swimming, walking, and light yoga help maintain joint mobility and balance. Dr. Garcia suggests at least 20 minutes of daily movement to improve circulation and cognitive function.'
-    },
-    {
-        id: '4',
-        title: 'Mental Health Awareness',
-        author: 'Dr. Robert Brown',
-        readTime: '10 min',
-        icon: ShieldCheck,
-        color: '#FCC419',
-        bgColor: '#FFF9DB',
-        fallbackImage: require('@/assets/images/doctor_fallback_ai.png'),
-        description: 'Mental well-being is just as important as physical health. Stress management techniques, adequate sleep, and social connection are vital. Dr. Brown highlights the importance of seeking professional help when needed and practicing mindfulness to reduce daily anxiety.'
-    }
-];
+
+
 
 const formatExperience = (exp: string | number) => {
     if (!exp) return "0 yrs";
@@ -301,11 +179,15 @@ export default function HomeScreen() {
 
     // Computed dynamic components
     const dynamicBanners = useMemo(() => {
+        const main = config?.landing.mainBanners || [];
         const festival = config?.landing.festivalBanners || [];
-        const activeFestival = festival.filter(b => b.active !== false);
 
-        if (activeFestival.length > 0) {
-            return activeFestival.map((b: any, index: number) => {
+        // Prefer mainBanners, fallback to festivalBanners
+        const pool = main.length > 0 ? main : festival;
+        const activeBanners = pool.filter(b => b.active !== false);
+
+        if (activeBanners.length > 0) {
+            return activeBanners.map((b: any, index: number) => {
                 const imageUrl = getBannerImage(b);
                 return {
                     id: b.id || b._id || `admin-banner-${index}`,
@@ -323,12 +205,34 @@ export default function HomeScreen() {
             });
         }
 
-        return HERO_SLIDES;
-    }, [config?.branding?.primaryColor, config?.branding?.secondaryColor, config?.landing.festivalBanners]);
+        return [];
+    }, [config?.branding?.primaryColor, config?.branding?.secondaryColor, config?.landing.mainBanners, config?.landing.festivalBanners]);
+
+    const dynamicPromotionalBanners = useMemo(() => {
+        const promo = config?.landing.promotionalBanners || [];
+        return promo.filter(b => b.active !== false).map((b: any, index: number) => ({
+            id: b.id || b._id || `promo-banner-${index}`,
+            title: b.title || 'Special Offer',
+            imageUrl: getBannerImage(b),
+            path: b.redirectUrl || b.link || '/services',
+            params: b.params || {},
+        }));
+    }, [config?.landing.promotionalBanners]);
+
+    const dynamicKnowledgeBanners = useMemo(() => {
+        const knowledge = (config?.landing as any)?.knowledgeBanners || [];
+        return knowledge.filter((b: any) => b.active !== false).map((b: any, index: number) => ({
+            id: b.id || b._id || `knowledge-banner-${index}`,
+            title: b.title || 'Health Insight',
+            imageUrl: getBannerImage(b),
+            path: b.redirectUrl || b.link || '/services',
+            params: b.params || {},
+        }));
+    }, [config?.landing]);
 
     const dynamicKB = useMemo(() => {
         const cloudKB = config?.knowledgeBase || [];
-        if (cloudKB.length === 0) return KNOWLEDGE_BASE;
+        if (cloudKB.length === 0) return [];
 
         return cloudKB.map((item: any) => ({
             ...item,
@@ -523,6 +427,7 @@ export default function HomeScreen() {
         queryKey: ['health-packages'],
         queryFn: async () => {
             const res = await api.get(Endpoints.HEALTH_PACKAGES);
+            console.log('DEBUG: Health Packages API response:', res.data?.data?.length, 'items found');
             return res.data.data as any[];
         },
     });
@@ -548,27 +453,30 @@ export default function HomeScreen() {
 
     const dynamicQuickServices = useMemo(() => {
         if (!services) return [];
+        // Sort by priority if they match, else by name
         const priority = ['doctor', 'diagnostics', 'lab', 'nurse', 'ambulance', 'emergency'];
         const sorted = [...services].sort((a, b) => {
-            const aIdx = priority.findIndex(p => a.name.toLowerCase().includes(p));
-            const bIdx = priority.findIndex(p => b.name.toLowerCase().includes(p));
+            const aName = a.name.toLowerCase();
+            const bName = b.name.toLowerCase();
+            const aIdx = priority.findIndex(p => aName.includes(p));
+            const bIdx = priority.findIndex(p => bName.includes(p));
+            
             if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
             if (aIdx !== -1) return -1;
             if (bIdx !== -1) return 1;
-            return 0;
+            return aName.localeCompare(bName);
         });
-        return sorted.map((s) => {
-            const theme = getServiceTheme(s.name);
-            return {
-                id: s._id,
-                icon: theme.icon,
-                label: getQuickServiceLabel(s.name),
-                color: theme.color,
-                sub: s.title || 'Professional care',
-                bgColor: theme.bgColor,
-                imageUrl: s.imageUrl,
-            };
-        }).slice(0, 8);
+
+        return sorted.map(s => ({
+            id: s._id,
+            label: getQuickServiceLabel(s.name),
+            icon: getServiceTheme(s.name).icon,
+            color: getServiceTheme(s.name).color,
+            bgColor: getServiceTheme(s.name).bgColor,
+            imageUrl: s.imageUrl,
+            path: '/services',
+            params: { category: s.name, serviceId: s._id }
+        }));
     }, [services]);
 
     const onRefresh = async () => {
@@ -593,10 +501,33 @@ export default function HomeScreen() {
 
     const handleBannerPress = (slide: any) => {
         const target = slide.path || '/services';
+
+        // Handle web links
         if (typeof target === 'string' && /^https?:\/\//i.test(target)) {
             Linking.openURL(target);
             return;
         }
+
+        // Handle a1care deep links (e.g. a1care://services?category=...&serviceId=...)
+        if (typeof target === 'string' && target.startsWith('a1care://')) {
+            try {
+                const url = new URL(target.replace('a1care://', 'https://a1care.app/'));
+                const path = url.pathname === '/' ? '/services' : url.pathname;
+                const params: any = {};
+                url.searchParams.forEach((val, key) => {
+                    params[key] = val;
+                });
+
+                router.push({
+                    pathname: path as any,
+                    params: { ...params, from: 'banner' }
+                });
+                return;
+            } catch (err) {
+                console.error('[BannerPress] Deep link parse failed:', err);
+            }
+        }
+
         router.push({
             pathname: target as any,
             params: { ...slide.params, from: 'home' },
@@ -710,70 +641,69 @@ export default function HomeScreen() {
 
     return (
         <View style={styles.root}>
-            {/* ── 1. Sticky Top Bar ── */}
-            <View style={[styles.stickyHeader, { paddingTop: insets.top + 8 }]}>
-                <View style={styles.headerTop}>
-                    <TouchableOpacity style={styles.locationSelector} onPress={() => handleGetLocation()} disabled={locLoading}>
-                        <View style={styles.locIconContainer}>
-                            {locLoading
-                                ? <ActivityIndicator size="small" color={Colors.primary} />
-                                : <MapPin size={16} color={Colors.primary} />
-                            }
-                        </View>
-                        <View>
-                            <Text style={styles.locCity} numberOfLines={1}>{locArea || 'Current Location'}</Text>
-                            <Text style={styles.locSub} numberOfLines={1}>{locCity}</Text>
-                        </View>
-                    </TouchableOpacity>
-
-                    <View style={styles.headerActions}>
-                        <TouchableOpacity style={styles.iconCircle} onPress={() => router.push('/(tabs)/notifications')}>
-                            <Bell size={20} color={Colors.textPrimary} />
-                            {globalUnreadCount > 0 && <View style={styles.notifDot} />}
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
-                            <View style={styles.avatarCircle}>
-                                {user?.profileImage ? (
-                                    <Image
-                                        source={{ uri: user.profileImage }}
-                                        style={{ width: '100%', height: '100%', borderRadius: 100 }}
-                                    />
-                                ) : (
-                                    <Text style={styles.avatarInitial}>{user?.name?.charAt(0) ?? 'U'}</Text>
-                                )}
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Search integrated into sticky header area */}
-                <View style={styles.searchWrapper}>
-                    <View style={styles.searchBar}>
-                        <Search size={18} color={Colors.muted} style={{ marginRight: 10 }} />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="Search symptoms, doctors..."
-                            placeholderTextColor={Colors.muted}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                        {searchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearIcon}>
-                                <X size={18} color={Colors.muted} />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
-                <View style={styles.headerDivider} />
-            </View>
-
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
                 }
-                contentContainerStyle={{ paddingTop: insets.top + 148 }}
+                contentContainerStyle={{ paddingTop: 0 }}
             >
+                {/* ── 1. Top Bar (Now part of scroll) ── */}
+                <View style={[styles.stickyHeader, { paddingTop: insets.top + 12 }]}>
+                    <View style={styles.headerTop}>
+                        <TouchableOpacity style={styles.locationSelector} onPress={() => handleGetLocation()} disabled={locLoading}>
+                            <View style={styles.locIconContainer}>
+                                {locLoading
+                                    ? <ActivityIndicator size="small" color={Colors.primary} />
+                                    : <MapPin size={16} color={Colors.primary} />
+                                }
+                            </View>
+                            <View>
+                                <Text style={styles.locCity} numberOfLines={1}>{locArea || 'Current Location'}</Text>
+                                <Text style={styles.locSub} numberOfLines={1}>{locCity}</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        <View style={styles.headerActions}>
+                            <TouchableOpacity style={styles.iconCircle} onPress={() => router.push('/(tabs)/notifications')}>
+                                <Bell size={20} color={Colors.textPrimary} />
+                                {globalUnreadCount > 0 && <View style={styles.notifDot} />}
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
+                                <View style={styles.avatarCircle}>
+                                    {user?.profileImage ? (
+                                        <Image
+                                            source={{ uri: user.profileImage }}
+                                            style={{ width: '100%', height: '100%', borderRadius: 100 }}
+                                        />
+                                    ) : (
+                                        <Text style={styles.avatarInitial}>{user?.name?.charAt(0) ?? 'U'}</Text>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Search integrated into header area */}
+                    <View style={styles.searchWrapper}>
+                        <View style={styles.searchBar}>
+                            <Search size={18} color={Colors.muted} style={{ marginRight: 10 }} />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder="Search symptoms, doctors..."
+                                placeholderTextColor={Colors.muted}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearIcon}>
+                                    <X size={18} color={Colors.muted} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                    <View style={styles.headerDivider} />
+                </View>
                 {isSearching ? (
                     <View style={styles.searchResultsContainer}>
                         <View style={styles.searchHeader}>
@@ -861,40 +791,33 @@ export default function HomeScreen() {
                                                 style={styles.heroGradient}
                                             >
                                                 {(slide as any).imageUrl ? (
+                                                    <Image
+                                                        source={{ uri: (slide as any).imageUrl }}
+                                                        style={[styles.adminBannerImage, { zIndex: 1 }]}
+                                                        contentFit="cover"
+                                                        contentPosition="center"
+                                                        transition={220}
+                                                    />
+                                                ) : (
                                                     <>
-                                                        <Image
-                                                            source={{ uri: (slide as any).imageUrl }}
-                                                            style={styles.adminBannerImage}
-                                                            contentFit="cover"
-                                                            transition={220}
-                                                        />
-                                                        <LinearGradient
-                                                            colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.62)']}
-                                                            start={{ x: 1, y: 0 }}
-                                                            end={{ x: 0, y: 1 }}
-                                                            style={styles.adminBannerOverlay}
-                                                        />
+                                                        <View style={styles.heroTextContent}>
+                                                            <Text style={styles.heroTag}>{slide.tag}</Text>
+                                                            <Text style={styles.heroTitle}>{slide.title}</Text>
+                                                            <Text style={styles.heroSubtitle}>{slide.subtitle}</Text>
+
+                                                            <View style={styles.heroCta}>
+                                                                <Text style={styles.heroCtaText}>{slide.cta}</Text>
+                                                                <ArrowRight size={16} color={Colors.primary} />
+                                                            </View>
+
+                                                            <View style={styles.heroLink}>
+                                                                <Text style={styles.heroLinkText}>Explore Services</Text>
+                                                            </View>
+                                                        </View>
+                                                        <View style={styles.heroDecorationContainer}>
+                                                            <slide.secondaryIcon size={140} color="rgba(255,255,255,0.15)" strokeWidth={1.5} />
+                                                        </View>
                                                     </>
-                                                ) : null}
-                                                <View style={styles.heroTextContent}>
-                                                    <Text style={styles.heroTag}>{slide.tag}</Text>
-                                                    <Text style={styles.heroTitle}>{slide.title}</Text>
-                                                    <Text style={styles.heroSubtitle}>{slide.subtitle}</Text>
-
-                                                    <View style={styles.heroCta}>
-                                                        <Text style={styles.heroCtaText}>{slide.cta}</Text>
-                                                        <ArrowRight size={16} color={Colors.primary} />
-                                                    </View>
-
-                                                    <View style={styles.heroLink}>
-                                                        <Text style={styles.heroLinkText}>Explore Services</Text>
-                                                    </View>
-                                                </View>
-
-                                                {!((slide as any).imageUrl) && (
-                                                    <View style={styles.heroDecorationContainer}>
-                                                        <slide.secondaryIcon size={140} color="rgba(255,255,255,0.15)" strokeWidth={1.5} />
-                                                    </View>
                                                 )}
                                             </LinearGradient>
                                         </TouchableOpacity>
@@ -912,19 +835,10 @@ export default function HomeScreen() {
                         <View style={styles.servicesGridContainer}>
                             <View style={styles.servicesHeader}>
                                 <View style={{ paddingHorizontal: 20 }}>
-                                    <Text style={styles.servicesEyebrow}>Quick access</Text>
                                     <Text style={styles.sectionTitle}>Our Services</Text>
                                 </View>
-                                <TouchableOpacity style={[styles.servicesViewAllBtn, { marginRight: 20 }]} onPress={() => router.push({ pathname: '/services', params: { from: 'home' } })}>
-                                    <Text style={styles.servicesViewAllText}>View All</Text>
-                                    <ArrowRight size={14} color={Colors.primary} />
-                                </TouchableOpacity>
                             </View>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.horizontalScroll}
-                            >
+                            <View style={styles.servicesGridWrap}>
                                 {dynamicQuickServices.length > 0 ? (
                                     dynamicQuickServices.map((item) => (
                                         <TouchableOpacity
@@ -951,25 +865,22 @@ export default function HomeScreen() {
                                         </TouchableOpacity>
                                     ))
                                 ) : (
-                                    [1, 2, 3, 4].map(i => (
+                                    [1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                                         <View key={i} style={styles.horizontalGridItem}>
                                             <View style={styles.serviceCard} />
                                         </View>
                                     ))
                                 )}
-                            </ScrollView>
+                            </View>
                         </View>
 
                         <View style={styles.hospitalSection}>
-                            <TouchableOpacity activeOpacity={0.9} style={styles.hospitalContainer} onPress={handleHospitalBooking}>
-                                <Image
-                                    source={require('@/assets/images/hospital_facade_modern.png')}
-                                    style={styles.hospitalBgImage}
-                                    contentFit="cover"
-                                />
+                            <TouchableOpacity activeOpacity={0.9} style={styles.hospitalSmartCard} onPress={handleHospitalBooking}>
                                 <LinearGradient
-                                    colors={['transparent', 'rgba(0,0,0,0.85)']}
-                                    style={styles.hospitalOverlay}
+                                    colors={[Colors.primary, '#1E40AF']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.hospitalGradient}
                                 >
                                     <View style={styles.hospitalInfo}>
                                         <View style={styles.hBadge}>
@@ -977,14 +888,27 @@ export default function HomeScreen() {
                                         </View>
                                         <Text style={styles.hTitle}>A1care Super-Speciality</Text>
                                         <Text style={styles.hDesc}>Skip the paper queue. Book your OP token online for faster consultation.</Text>
-                                        <View style={styles.hCta}>
-                                            <Text style={styles.hCtaText}>Reserve OP Token</Text>
-                                            <ArrowRight size={14} color="#fff" />
+
+                                        <View style={styles.hActionRow}>
+                                            <View style={styles.hCta}>
+                                                <Text style={styles.hCtaText}>Reserve OP Token</Text>
+                                                <ArrowRight size={16} color={Colors.primary} />
+                                            </View>
+                                            <View style={styles.hTokenStatus}>
+                                                <View style={styles.hStatusDot} />
+                                                <Text style={styles.hStatusText}>Live Token Tracking</Text>
+                                            </View>
                                         </View>
+                                    </View>
+
+                                    <View style={styles.hIconDecoration}>
+                                        <Hospital size={120} color="rgba(255,255,255,0.12)" strokeWidth={1.5} />
                                     </View>
                                 </LinearGradient>
                             </TouchableOpacity>
                         </View>
+
+
 
                         {/* ── 5. Smart Recommendations (Horizontal) ── */}
                         {featured && featured.length > 0 && (
@@ -1003,7 +927,7 @@ export default function HomeScreen() {
                                     }}
                                     scrollEventThrottle={16}
                                 >
-                                    {featured.slice(0, 3).map((item) => {
+                                    {featured.slice(0, 10).map((item) => {
                                         const theme = getServiceTheme(item.name);
                                         const IconComp = theme.icon;
                                         return (
@@ -1045,7 +969,7 @@ export default function HomeScreen() {
                                 </ScrollView>
 
                                 <View style={styles.miniPagination}>
-                                    {(featured?.slice(0, 3) ?? [1, 2]).map((_, i) => (
+                                    {(featured?.slice(0, 10) ?? [1, 2]).map((_, i) => (
                                         <View key={i} style={[styles.miniDot, activePopular === i && styles.miniDotActive]} />
                                     ))}
                                 </View>
@@ -1334,6 +1258,47 @@ export default function HomeScreen() {
                             </View>
                         </View>
 
+                        {/* ── 12. Knowledge Section (Dynamic Promo Banners) ── */}
+                        {dynamicKnowledgeBanners.length > 0 && (
+                            <View style={[styles.section, { marginBottom: 32 }]}>
+                                <View style={styles.sectionHeader}>
+                                    <View>
+                                        <Text style={styles.sectionTitle}>Knowledge</Text>
+                                        <Text style={styles.sectionSub}>Latest health updates & insights</Text>
+                                    </View>
+                                </View>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
+                                >
+                                    {dynamicKnowledgeBanners.map((banner) => (
+                                        <TouchableOpacity
+                                            key={banner.id}
+                                            activeOpacity={0.9}
+                                            style={styles.knowledgePromoCard}
+                                            onPress={() => handleBannerPress(banner)}
+                                        >
+                                            <Image
+                                                source={{ uri: banner.imageUrl }}
+                                                style={styles.knowledgePromoImage}
+                                                contentFit="cover"
+                                                transition={200}
+                                            />
+                                            <View style={styles.knowledgePromoOverlay}>
+                                                <View style={styles.knowledgePromoBadge}>
+                                                    <Text style={styles.knowledgePromoBadgeText}>LATEST</Text>
+                                                </View>
+                                                <Text style={styles.knowledgePromoTitle} numberOfLines={2}>
+                                                    {banner.title || 'Health Insights'}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
                         {/* ── 11. Knowledge Base Detail Modal ── */}
                         <Modal
                             visible={isKBModalOpen}
@@ -1408,12 +1373,7 @@ const styles = StyleSheet.create({
 
     // 1. Sticky Top Bar
     stickyHeader: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
         backgroundColor: Colors.white,
-        zIndex: 100,
         paddingHorizontal: 20,
         paddingBottom: 16,
     },
@@ -1538,7 +1498,7 @@ const styles = StyleSheet.create({
 
     // 2. Strong Hero Section
     heroContainer: {
-        marginBottom: 24,
+        marginBottom: 0,
     },
     heroCard: {
         width: width,
@@ -1546,13 +1506,16 @@ const styles = StyleSheet.create({
     },
     heroGradient: {
         borderRadius: 24,
-        padding: 24,
         flexDirection: 'row',
         minHeight: 180,
         overflow: 'hidden',
     },
     adminBannerImage: {
-        ...StyleSheet.absoluteFillObject,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         width: '100%',
         height: '100%',
     },
@@ -1561,6 +1524,7 @@ const styles = StyleSheet.create({
     },
     heroTextContent: {
         flex: 1,
+        padding: 24,
         zIndex: 2,
     },
     heroDecorationContainer: {
@@ -1628,14 +1592,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         gap: 6,
-        marginTop: 12,
+        marginTop: 4,
     },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E2E8F0' },
     dotActive: { width: 18, backgroundColor: Colors.primary },
 
     // 3. Quick Services Grid
     servicesGridContainer: {
-        marginTop: 8,
+        marginTop: 0,
         marginBottom: 24,
     },
     servicesHeader: {
@@ -1666,10 +1630,13 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontWeight: '900',
     },
-    horizontalScroll: {
+    servicesGridWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         paddingHorizontal: 20,
-        paddingBottom: 10,
         gap: 12,
+        rowGap: 20,
+        justifyContent: 'flex-start',
     },
     horizontalGridItem: {
         width: (width - 40 - (3 * 12)) / 4,
@@ -1875,30 +1842,26 @@ const styles = StyleSheet.create({
         marginTop: 8,
         paddingHorizontal: 20,
     },
-    hospitalContainer: {
-        height: 200,
+    hospitalSmartCard: {
+        height: 190,
         borderRadius: 28,
         overflow: 'hidden',
-        backgroundColor: '#111',
-        ...Shadows.float,
+        ...Shadows.medium,
     },
-    hospitalBgImage: {
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
-    },
-    hospitalOverlay: {
+    hospitalGradient: {
         flex: 1,
-        justifyContent: 'flex-end',
         padding: 24,
+        flexDirection: 'row',
+        position: 'relative',
     },
     hospitalInfo: {
-        zIndex: 5,
+        flex: 1,
+        zIndex: 2,
     },
     hBadge: {
         backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
         borderRadius: 8,
         alignSelf: 'flex-start',
         marginBottom: 12,
@@ -1906,30 +1869,63 @@ const styles = StyleSheet.create({
     hBadgeText: {
         color: Colors.white,
         fontSize: 10,
-        fontWeight: '800',
+        fontWeight: '900',
         letterSpacing: 1,
     },
     hTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '900',
         color: Colors.white,
         marginBottom: 6,
     },
     hDesc: {
         fontSize: 12,
-        color: 'rgba(255,255,255,0.7)',
-        lineHeight: 18,
+        color: 'rgba(255,255,255,0.8)',
+        lineHeight: 16,
         marginBottom: 16,
+        fontWeight: '500',
+    },
+    hActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
     },
     hCta: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 8,
+        backgroundColor: Colors.white,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 12,
     },
     hCtaText: {
-        color: Colors.white,
+        color: Colors.primary,
         fontWeight: '800',
         fontSize: 14,
+    },
+    hTokenStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    hStatusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#4ADE80',
+    },
+    hStatusText: {
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    hIconDecoration: {
+        position: 'absolute',
+        right: -10,
+        bottom: -20,
+        zIndex: 1,
+        transform: [{ rotate: '-10deg' }]
     },
 
     emergencyPulse: {
@@ -2337,6 +2333,82 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: '800',
         fontSize: 13,
+    },
+
+    // ── Promotional Banner Styles ──
+    promoSection: {
+        marginTop: 12,
+        marginBottom: 24,
+    },
+    promoScroll: {
+        paddingHorizontal: 20,
+        gap: 12,
+    },
+    promoCard: {
+        width: width - 40,
+        height: 160,
+        borderRadius: 24,
+        overflow: 'hidden',
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        ...Shadows.card,
+    },
+    promoImage: {
+        width: '100%',
+        height: '100%',
+    },
+    promoPlaceholder: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+    },
+    promoPlaceholderText: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: Colors.primary,
+        textAlign: 'center',
+    },
+
+    // ── Knowledge Section (from Promo Banners) ──
+    knowledgePromoCard: {
+        width: width * 0.7,
+        height: 180,
+        borderRadius: 24,
+        overflow: 'hidden',
+        backgroundColor: '#fff',
+        ...Shadows.card,
+    },
+    knowledgePromoImage: {
+        width: '100%',
+        height: '100%',
+    },
+    knowledgePromoOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: 16,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    knowledgePromoBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: Colors.emergency,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginBottom: 6,
+    },
+    knowledgePromoBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    knowledgePromoTitle: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '800',
     },
 });
 
