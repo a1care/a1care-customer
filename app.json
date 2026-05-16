@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "14",
+      "buildNumber": "15",
       "bundleIdentifier": "com.a1care.user",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
