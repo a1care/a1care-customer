@@ -1,4 +1,4 @@
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.a1carehospital.in/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000/api';
 console.log('DEBUG: BASE_URL in constants/api.ts is:', BASE_URL);
 
 export const API_BASE_URL = BASE_URL;

@@ -16,7 +16,7 @@ import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { io, Socket } from 'socket.io-client';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://api.a1carehospital.in';
+const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
 
 export default function TrackingScreen() {
     const { id, providerId } = useLocalSearchParams<{ id: string, providerId: string }>();

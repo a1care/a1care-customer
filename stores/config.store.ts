@@ -22,6 +22,7 @@ interface AppConfig {
     };
     landing: {
         mainBanners?: any[];
+        knowledgeBanners?: any[];
         promotionalBanners?: any[];
         festivalBanners: any[];
         playStoreUrl: string;

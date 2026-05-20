@@ -75,6 +75,42 @@ export function SkeletonListItem() {
     );
 }
 
+export function SkeletonSubCard() {
+    return (
+        <View style={styles.subCard}>
+            <SkeletonBox width={72} height={72} borderRadius={16} />
+            <View style={{ flex: 1 }}>
+                <SkeletonBox height={15} borderRadius={6} style={{ marginBottom: 8 }} />
+                <SkeletonBox width="80%" height={11} borderRadius={6} style={{ marginBottom: 6 }} />
+                <SkeletonBox width="55%" height={11} borderRadius={6} />
+            </View>
+        </View>
+    );
+}
+
+export function SkeletonChildCard() {
+    return (
+        <View style={styles.childCard}>
+            <View style={{ flexDirection: 'row', gap: 10, padding: 12 }}>
+                <SkeletonBox width={80} height={80} borderRadius={12} />
+                <View style={{ flex: 1 }}>
+                    <SkeletonBox width="40%" height={10} borderRadius={6} style={{ marginBottom: 8 }} />
+                    <SkeletonBox height={16} borderRadius={6} style={{ marginBottom: 6 }} />
+                    <SkeletonBox width="90%" height={11} borderRadius={6} style={{ marginBottom: 4 }} />
+                    <SkeletonBox width="70%" height={11} borderRadius={6} />
+                </View>
+            </View>
+            <View style={styles.childCardBottom}>
+                <SkeletonBox width={60} height={32} borderRadius={8} />
+                <SkeletonBox width={40} height={32} borderRadius={8} />
+                <SkeletonBox width={40} height={32} borderRadius={8} />
+                <SkeletonBox width={40} height={32} borderRadius={8} />
+                <SkeletonBox width={80} height={36} borderRadius={12} />
+            </View>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
     box: { backgroundColor: Colors.border },
     card: {
@@ -98,5 +134,29 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         padding: 14,
         marginBottom: 10,
+    },
+    subCard: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 14,
+        backgroundColor: Colors.card,
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 12,
+    },
+    childCard: {
+        backgroundColor: Colors.card,
+        borderRadius: 20,
+        marginBottom: 16,
+        overflow: 'hidden',
+    },
+    childCardBottom: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
     },
 });

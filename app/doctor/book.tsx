@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import RazorpayCheckout from 'react-native-razorpay';
 import { doctorsService } from '@/services/doctors.service';
 import { bookingsService } from '@/services/bookings.service';
 import { walletService } from '@/services/wallet.service';
@@ -63,6 +64,7 @@ export default function DoctorBookingScreen() {
     const [selectedSlot, setSelectedSlot] = useState<{ startingTime: string; endingTime: string } | null>(null);
     const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE'>('COD');
     const [chosenSpecialization, setChosenSpecialization] = useState<string>(nameParam || "");
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
     // 1. Fetch Doctor Details (Dynamic Price)
     const { data: doctor, isLoading: doctorLoading, isError: doctorError, refetch: refetchDoctor } = useQuery({
@@ -138,23 +140,100 @@ export default function DoctorBookingScreen() {
             return;
         }
 
-        /* 
-        if (paymentMethod === 'WALLET' && (wallet?.balance ?? 0) < (doctor?.consultationFee ?? 0)) {
-            Alert.alert('Insufficient Balance', 'Your wallet balance is lower than the consultation fee. Please top up or use COD.');
+        if (paymentMethod === 'WALLET') {
+            const fee = doctor?.consultationFee ?? 0;
+            if ((wallet?.balance ?? 0) < fee) {
+                Alert.alert('Insufficient Balance', 'Your wallet balance is lower than the consultation fee. Please top up or use another method.');
+                return;
+            }
+            try {
+                setIsProcessingPayment(true);
+                const booking = await bookingsService.bookDoctor(id!, {
+                    date: selectedDate,
+                    startingTime: selectedSlot.startingTime,
+                    endingTime: selectedSlot.endingTime,
+                    paymentMode: 'ONLINE',
+                    serviceName: chosenSpecialization || 'Doctor Consultation',
+                });
+                const order = await paymentService.createOrder({ amount: fee, type: 'BOOKING', referenceId: booking._id });
+                await paymentService.payWithWallet(order._id);
+                triggerLocalNotification('Appointment Confirmed', `Paid ₹${fee} from wallet for Dr. ${doctor?.name}.`);
+                qc.invalidateQueries({ queryKey: ['appointments'] });
+                qc.invalidateQueries({ queryKey: ['wallet'] });
+                router.replace({
+                    pathname: '/checkout/status' as any,
+                    params: {
+                        status: 'SUCCESS',
+                        txnId: order.txnId,
+                        amount: String(fee),
+                        type: 'BOOKING',
+                        description: `Consultation with Dr. ${doctor?.name}`,
+                        bookingId: booking._id,
+                    },
+                });
+            } catch (err: any) {
+                Alert.alert('Payment Failed', err?.response?.data?.message || 'Could not complete wallet payment.');
+            } finally {
+                setIsProcessingPayment(false);
+            }
             return;
         }
 
         if (paymentMethod === 'ONLINE') {
             try {
-                // ... online payment integration commented out
+                setIsProcessingPayment(true);
+                const booking = await bookingsService.bookDoctor(id!, {
+                    date: selectedDate,
+                    startingTime: selectedSlot.startingTime,
+                    endingTime: selectedSlot.endingTime,
+                    paymentMode: 'ONLINE',
+                    serviceName: chosenSpecialization || 'Doctor Consultation',
+                });
+                const fee = doctor?.consultationFee ?? 0;
+                const order = await paymentService.createOrder({ amount: fee, type: 'BOOKING', referenceId: booking._id });
+                const razorData = await paymentService.initiateRazorpay(order._id);
+                const data = await RazorpayCheckout.open({
+                    key: razorData.key,
+                    amount: razorData.razorOrder.amount,
+                    currency: 'INR',
+                    name: 'A1Care 24/7',
+                    description: `Consultation with Dr. ${doctor?.name}`,
+                    order_id: razorData.razorOrder.id,
+                    prefill: {
+                        email: razorData.customer.email || '',
+                        contact: razorData.customer.contact || '',
+                        name: razorData.customer.name || '',
+                    },
+                    theme: { color: Colors.primary },
+                });
+                await paymentService.verifyRazorpay({
+                    razorpay_order_id: (data as any).razorpay_order_id,
+                    razorpay_payment_id: (data as any).razorpay_payment_id,
+                    razorpay_signature: (data as any).razorpay_signature,
+                    orderId: order._id,
+                });
+                triggerLocalNotification('Appointment Confirmed', `Payment successful for Dr. ${doctor?.name}.`);
+                qc.invalidateQueries({ queryKey: ['appointments'] });
+                router.replace({
+                    pathname: '/checkout/status' as any,
+                    params: {
+                        status: 'SUCCESS',
+                        txnId: order.txnId,
+                        amount: String(fee),
+                        type: 'BOOKING',
+                        description: `Consultation with Dr. ${doctor?.name}`,
+                        bookingId: booking._id,
+                    },
+                });
             } catch (err: any) {
-                // ...
+                if (err.code !== 2) Alert.alert('Payment Error', err?.description || 'Payment failed. Please try again.');
+            } finally {
+                setIsProcessingPayment(false);
             }
-        } else {
-        */
-        // Default to COD flow
+            return;
+        }
+
         bookMutation.mutate(selectedSlot);
-        // }
     };
 
     if (doctorError) return <ErrorState message="Could not find doctor context" onRetry={refetchDoctor} />;
@@ -255,19 +334,28 @@ export default function DoctorBookingScreen() {
                 {/* Payment Method Selector */}
                 <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Payment Method</Text>
                 <View style={styles.paymentMethods}>
-                    <TouchableOpacity
-                        style={[styles.payCard, styles.payCardActive]}
-                        onPress={() => setPaymentMethod('COD')}
-                    >
-                        {/* <Text style={styles.payIcon}>💵</Text> */}
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.payLabel}>Cash on Pay</Text>
-                            <Text style={styles.paySub}>Pay at clinic/home</Text>
-                        </View>
-                        <View style={[styles.radio, styles.radioActive]}>
-                            <View style={styles.radioInner} />
-                        </View>
-                    </TouchableOpacity>
+                    {([
+                        { key: 'COD', label: 'Cash on Pay', sub: 'Pay at clinic / home after consultation' },
+                        { key: 'WALLET', label: 'Wallet', sub: `Balance: ${formatCurrency(wallet?.balance ?? 0)}` },
+                        { key: 'ONLINE', label: 'Pay Online', sub: 'Razorpay — UPI, Card, Net Banking' },
+                    ] as const).map(({ key, label, sub }) => {
+                        const active = paymentMethod === key;
+                        return (
+                            <TouchableOpacity
+                                key={key}
+                                style={[styles.payCard, active && styles.payCardActive]}
+                                onPress={() => setPaymentMethod(key)}
+                            >
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.payLabel}>{label}</Text>
+                                    <Text style={styles.paySub}>{sub}</Text>
+                                </View>
+                                <View style={[styles.radio, active && styles.radioActive]}>
+                                    {active && <View style={styles.radioInner} />}
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
 
                 <View style={{ height: 180 }} />
@@ -282,14 +370,14 @@ export default function DoctorBookingScreen() {
                 <Button
                     label={paymentMethod === 'WALLET' ? 'Book & Pay from Wallet' : paymentMethod === 'ONLINE' ? 'Confirm & Pay Online' : 'Confirm & Book (COD)'}
                     onPress={handleBook}
-                    loading={bookMutation.isPending}
-                    disabled={!selectedSlot || !doctor}
+                    loading={bookMutation.isPending || isProcessingPayment}
+                    disabled={!selectedSlot || !doctor || bookMutation.isPending || isProcessingPayment}
                     variant="primary"
                     size="lg"
                     fullWidth
                 />
                 <Text style={styles.footerNote}>
-                    {paymentMethod === 'WALLET' ? 'Amount will be deducted from your wallet' : paymentMethod === 'ONLINE' ? 'You will be redirected to Easebuzz gateway' : 'Pay at clinic / home after consultation'}
+                    {paymentMethod === 'WALLET' ? 'Amount will be deducted from your wallet' : paymentMethod === 'ONLINE' ? 'Secure payment via Razorpay' : 'Pay at clinic / home after consultation'}
                 </Text>
             </View>
         </SafeAreaView>

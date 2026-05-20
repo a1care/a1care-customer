@@ -20,7 +20,7 @@ import { FontSize } from '@/constants/spacing';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { io, Socket } from 'socket.io-client';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://api.a1carehospital.in';
+const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
 
 export default function BookingChatScreen() {
     const { id, name } = useLocalSearchParams<{ id: string, name: string }>();

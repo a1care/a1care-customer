@@ -48,6 +48,7 @@ export interface Service {
     title?: string;
     type?: string;
     imageUrl?: string;
+    bannerUrl?: string;
     createdAt: string;
 }
 
@@ -57,6 +58,7 @@ export interface SubService {
     description?: string;
     serviceId: string;
     imageUrl?: string;
+    startingPrice?: number | null;
 }
 
 export interface ChildService {

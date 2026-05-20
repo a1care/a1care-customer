@@ -9,14 +9,35 @@ import { useQueryClient } from "@tanstack/react-query";
 export default function PaymentStatusScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
-    const { status, txnId, amount, type } = useLocalSearchParams() as any;
+    const { status, txnId, amount, type, description, bookingId } = useLocalSearchParams() as any;
     const isSuccess = status === "SUCCESS";
+    const isWallet = type === "WALLET_TOPUP";
 
     useEffect(() => {
         if (isSuccess) {
             queryClient.invalidateQueries({ queryKey: ["wallet"] });
+            if (!isWallet) {
+                queryClient.invalidateQueries({ queryKey: ["appointments"] });
+                queryClient.invalidateQueries({ queryKey: ["service-booking"] });
+            }
         }
-    }, [isSuccess, queryClient]);
+    }, [isSuccess]);
+
+    const typeLabel =
+        type === "WALLET_TOPUP" ? "Wallet Top-up" :
+        type === "BOOKING" ? "Booking Payment" :
+        "Payment";
+
+    const primaryAction = () => {
+        if (!isSuccess) { router.back(); return; }
+        if (isWallet) { router.replace("/wallet" as any); return; }
+        if (bookingId) { router.replace({ pathname: '/booking/[id]', params: { id: bookingId } } as any); return; }
+        router.replace("/(tabs)/bookings" as any);
+    };
+
+    const primaryLabel = isSuccess
+        ? (isWallet ? "Back to Wallet" : "View Booking")
+        : "Go Back";
 
     return (
         <SafeAreaView style={styles.container}>
@@ -25,10 +46,10 @@ export default function PaymentStatusScreen() {
                 style={styles.headerGradient}
             >
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.replace("/wallet")} style={styles.backButton}>
+                    <TouchableOpacity onPress={() => router.replace("/(tabs)" as any)} style={styles.backButton}>
                         <ChevronLeft size={24} color="#1E293B" />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Transaction Details</Text>
+                    <Text style={styles.headerTitle}>Receipt</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
@@ -51,41 +72,69 @@ export default function PaymentStatusScreen() {
 
             <ScrollView style={styles.detailsContainer}>
                 <View style={styles.card}>
+                    {description ? (
+                        <>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Description</Text>
+                                <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>{description}</Text>
+                            </View>
+                            <View style={styles.divider} />
+                        </>
+                    ) : null}
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Transaction ID</Text>
-                        <Text style={styles.detailValue}>{txnId || "N/A"}</Text>
+                        <Text style={styles.detailValue} numberOfLines={1}>{txnId || "N/A"}</Text>
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Order Type</Text>
-                        <Text style={styles.detailValue}>{type === "WALLET_TOPUP" ? "Wallet Top-up" : "Booking Payment"}</Text>
+                        <Text style={styles.detailLabel}>Payment Type</Text>
+                        <Text style={styles.detailValue}>{typeLabel}</Text>
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Date</Text>
-                        <Text style={styles.detailValue}>{new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                        <Text style={styles.detailLabel}>Method</Text>
+                        <Text style={styles.detailValue}>Razorpay</Text>
+                    </View>
+                    <View style={styles.divider} />
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Date & Time</Text>
+                        <Text style={styles.detailValue}>
+                            {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                    </View>
+                    <View style={styles.divider} />
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Amount Paid</Text>
+                        <Text style={[styles.detailValue, { color: isSuccess ? '#059669' : '#DC2626', fontWeight: '800' }]}>
+                            ₹{parseFloat(amount || "0").toFixed(2)}
+                        </Text>
                     </View>
                 </View>
 
-                {isSuccess && (
+                {isSuccess && isWallet && (
                     <View style={styles.infoBox}>
                         <CreditCard size={20} color="#3B82F6" />
-                        <Text style={styles.infoText}>Your wallet balance has been updated automatically.</Text>
+                        <Text style={styles.infoText}>Your wallet balance has been credited automatically.</Text>
+                    </View>
+                )}
+                {isSuccess && !isWallet && (
+                    <View style={styles.infoBox}>
+                        <CreditCard size={20} color="#10B981" />
+                        <Text style={styles.infoText}>Payment confirmed. Your booking is active.</Text>
                     </View>
                 )}
             </ScrollView>
 
             <View style={styles.footer}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.button, { backgroundColor: isSuccess ? "#10B981" : "#1E293B" }]}
-                    onPress={() => router.replace("/wallet")}
+                    onPress={primaryAction}
                 >
-                    <Text style={styles.buttonText}>{isSuccess ? "Back to Wallet" : "Try Again"}</Text>
+                    <Text style={styles.buttonText}>{primaryLabel}</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.button, { backgroundColor: "transparent", marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }]}
-                    onPress={() => router.replace("/(tabs)")}
+                    onPress={() => router.replace("/(tabs)" as any)}
                 >
                     <Text style={[styles.buttonText, { color: "#64748B" }]}>Return to Home</Text>
                 </TouchableOpacity>

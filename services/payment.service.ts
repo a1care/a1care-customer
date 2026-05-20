@@ -41,6 +41,11 @@ export const paymentService = {
         return res.data.data;
     },
 
+    payWithWallet: async (orderId: string) => {
+        const res = await api.post("/payments/wallet/pay", { orderId });
+        return res.data.data;
+    },
+
     getOrder: async (orderId: string): Promise<Order> => {
         const res = await api.get(`/payments/orders/${orderId}`);
         return res.data.data;

@@ -6,12 +6,16 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
+    Modal,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { io, Socket } from 'socket.io-client';
 import { bookingsService } from '@/services/bookings.service';
 import { addressService } from '@/services/address.service';
+import { reviewsService } from '@/services/reviews.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { FontSize } from '@/constants/spacing';
@@ -21,6 +25,8 @@ import { ErrorState } from '@/components/ui/EmptyState';
 import { formatDateTime } from '@/utils/formatters';
 import { MapPin, MessageSquare, XCircle, Clock3, Radio, ShieldCheck, Truck, CheckCircle2, Search } from 'lucide-react-native';
 import { triggerLocalNotification } from '@/utils/notifications';
+
+const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_STEPS: Array<{ status: string; label: string; key: 'pending' | 'broadcasted' | 'accepted' | 'in_progress' | 'completed'; desc: string }> = [
@@ -128,13 +134,20 @@ function Timeline({ status }: { status: string }) {
 export default function BookingDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
+    const qc = useQueryClient();
     const [isManualRefreshing, setIsManualRefreshing] = React.useState(false);
     const [isCancelling, setIsCancelling] = React.useState(false);
+
+    // Rating modal state
+    const [showRatingModal, setShowRatingModal] = React.useState(false);
+    const [ratingStars, setRatingStars] = React.useState(0);
+    const prevStatusRef = React.useRef<string | null>(null);
+    const socketRef = React.useRef<Socket | null>(null);
 
     const { data: booking, isLoading, isError, refetch, isRefetching } = useQuery({
         queryKey: ['service-booking', id],
         queryFn: () => bookingsService.getServiceBookingById(id!),
-        refetchInterval: 12000, // Poll every 12 seconds for status updates
+        refetchInterval: 12000,
         retry: 2,
     });
 
@@ -142,6 +155,45 @@ export default function BookingDetailScreen() {
         queryKey: ['addresses-for-booking-detail'],
         queryFn: addressService.getAll,
         retry: 1,
+    });
+
+    // Socket — join booking room for real-time status updates
+    React.useEffect(() => {
+        if (!id) return;
+        const socket = io(SOCKET_URL);
+        socketRef.current = socket;
+        socket.on('connect', () => socket.emit('join_room', id));
+        socket.on('booking_status_updated', (data: { bookingId: string; status: string }) => {
+            if (data.bookingId === id) refetch();
+        });
+        return () => { socket.disconnect(); socketRef.current = null; };
+    }, [id]);
+
+    // Auto-prompt rating when status first transitions to COMPLETED
+    React.useEffect(() => {
+        if (!booking) return;
+        const prev = prevStatusRef.current;
+        const curr = booking.status;
+        if (prev !== null && prev !== 'COMPLETED' && curr === 'COMPLETED') {
+            setTimeout(() => setShowRatingModal(true), 800);
+        }
+        prevStatusRef.current = curr;
+    }, [booking?.status]);
+
+    const ratingMutation = useMutation({
+        mutationFn: () => reviewsService.addReview({
+            bookingId: id!,
+            bookingType: 'Service',
+            rating: ratingStars,
+            comment: '',
+            childServiceId: (booking as any)?.childServiceId?._id || (booking as any)?.childServiceId,
+        }),
+        onSuccess: () => {
+            setShowRatingModal(false);
+            qc.invalidateQueries({ queryKey: ['service-booking', id] });
+            Alert.alert('Thank You!', 'Your rating helps us improve.');
+        },
+        onError: () => { setShowRatingModal(false); },
     });
 
     const getAddressText = (b: any) => {
@@ -385,6 +437,59 @@ export default function BookingDetailScreen() {
                     <View style={{ height: 40 }} />
                 </ScrollView>
             )}
+            {/* Rating Prompt Modal */}
+            <Modal visible={showRatingModal} transparent animationType="slide" onRequestClose={() => setShowRatingModal(false)}>
+                <View style={styles.ratingOverlay}>
+                    <View style={styles.ratingSheet}>
+                        <Text style={styles.ratingTitle}>How was your experience?</Text>
+                        <Text style={styles.ratingSubtitle}>
+                            {(booking as any)?.childServiceId?.name || 'Your booking'} is complete
+                        </Text>
+                        <View style={styles.starsRow}>
+                            {[1, 2, 3, 4, 5].map((s) => (
+                                <TouchableOpacity key={s} onPress={() => setRatingStars(s)} activeOpacity={0.7}>
+                                    <Text style={[styles.star, s <= ratingStars ? styles.starFilled : styles.starEmpty]}>
+                                        {s <= ratingStars ? '★' : '☆'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        {ratingStars > 0 && (
+                            <Text style={styles.ratingLabel}>
+                                {ratingStars === 1 ? 'Disappointing' : ratingStars === 2 ? 'Could be better' : ratingStars === 3 ? 'Good' : ratingStars === 4 ? 'Very Good' : 'Excellent!'}
+                            </Text>
+                        )}
+                        <View style={styles.ratingActions}>
+                            <TouchableOpacity
+                                style={[styles.ratingSubmitBtn, ratingStars === 0 && { opacity: 0.4 }]}
+                                onPress={() => ratingStars > 0 && ratingMutation.mutate()}
+                                disabled={ratingStars === 0 || ratingMutation.isPending}
+                            >
+                                {ratingMutation.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.ratingSubmitText}>Submit Rating</Text>}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setShowRatingModal(false);
+                                    router.push({
+                                        pathname: '/booking/feedback' as any,
+                                        params: {
+                                            bookingId: id,
+                                            bookingType: 'Service',
+                                            childServiceId: (booking as any)?.childServiceId?._id || (booking as any)?.childServiceId,
+                                            name: (booking as any)?.childServiceId?.name || 'Service',
+                                        },
+                                    });
+                                }}
+                            >
+                                <Text style={styles.ratingDetailLink}>Write detailed review →</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setShowRatingModal(false)}>
+                                <Text style={styles.ratingSkipLink}>Maybe later</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -501,4 +606,34 @@ const styles = StyleSheet.create({
     actionBtn: { flex: 1, alignItems: 'center', gap: 8 },
     actionIcon: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
     actionLabel: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textPrimary },
+
+    // Rating modal
+    ratingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    ratingSheet: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        padding: 28,
+        paddingBottom: 44,
+        alignItems: 'center',
+    },
+    ratingTitle: { fontSize: FontSize.xl, fontWeight: '800', color: '#1F2A37', marginBottom: 6 },
+    ratingSubtitle: { fontSize: FontSize.sm, color: '#6B7280', marginBottom: 28, textAlign: 'center' },
+    starsRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+    star: { fontSize: 46 },
+    starFilled: { color: '#F59E0B' },
+    starEmpty: { color: '#D1D5DB' },
+    ratingLabel: { fontSize: FontSize.base, fontWeight: '600', color: Colors.primary, marginBottom: 28 },
+    ratingActions: { width: '100%', gap: 12, alignItems: 'center' },
+    ratingSubmitBtn: {
+        width: '100%',
+        backgroundColor: Colors.primary,
+        borderRadius: 16,
+        height: 52,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    ratingSubmitText: { color: '#fff', fontSize: FontSize.base, fontWeight: '700' },
+    ratingDetailLink: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
+    ratingSkipLink: { fontSize: FontSize.sm, color: '#9CA3AF' },
 });

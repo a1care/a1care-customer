@@ -11,6 +11,12 @@ export const Colors = {
     health: '#12B3B6', // Using Teal for health-related accents
     healthLight: '#E8F7F8',
     
+    success: '#22C55E', // Success Green
+    successLight: '#DCFCE7',
+
+    warning: '#F59E0B', // Warning Amber
+    warningLight: '#FEF3C7',
+
     emergency: '#EF4444', // Emergency Red
     emergencyLight: '#FEE2E2',
     

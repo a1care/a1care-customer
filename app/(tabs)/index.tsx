@@ -12,6 +12,8 @@ import {
     Dimensions,
     Modal,
     Platform,
+    Animated,
+    Easing,
 } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -40,7 +42,14 @@ import {
     ShieldCheck,
     X,
     BookOpen,
-    Hospital
+    Hospital,
+    Clock,
+    CalendarCheck,
+    CheckCircle2,
+    ChevronRight,
+    Lock,
+    BadgeCheck,
+    Tag,
 } from 'lucide-react-native';
 
 import { servicesService } from '@/services/services.service';
@@ -54,7 +63,6 @@ import { Colors, Shadows } from '@/constants/colors';
 import { API_BASE_URL, Endpoints } from '@/constants/api';
 import { FontSize } from '@/constants/spacing';
 import { DoctorCard } from '@/components/ui/DoctorCard';
-import { EmergencyFAB } from '@/components/ui/EmergencyFAB';
 
 import { useConfigStore } from '@/stores/config.store';
 import { useCallback } from 'react';
@@ -66,7 +74,10 @@ const toBannerImageUrl = (value?: string) => {
     if (!value || typeof value !== 'string') return undefined;
     const trimmed = value.trim();
     if (!trimmed) return undefined;
-    if (/^(https?:|data:|file:)/i.test(trimmed)) return trimmed;
+    if (/^(https?:|data:|file:)/i.test(trimmed)) {
+        // Rewrite localhost/127.0.0.1 URLs to the real API origin so physical devices can load images
+        return trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, API_ORIGIN);
+    }
     const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
     return `${API_ORIGIN}${path}`;
 };
@@ -121,6 +132,18 @@ function getServiceTheme(name: string) {
     return SERVICE_THEMES[key];
 }
 
+function getServiceSubtitle(name: string) {
+    const n = (name || '').toLowerCase();
+    if (n.includes('doctor') || n.includes('consult')) return 'Book doctors at home';
+    if (n.includes('diagnostic') || n.includes('lab') || n.includes('test')) return 'Lab tests at home';
+    if (n.includes('ambulance') || n.includes('emergency')) return '24/7 emergency services';
+    if (n.includes('nurs')) return 'Nursing care at home';
+    if (n.includes('equipment') || n.includes('rental')) return 'Rent / Buy equipment';
+    if (n.includes('pharmacy') || n.includes('medicine')) return 'Medicines at your door';
+    if (n.includes('physio') || n.includes('therapy')) return 'Therapy at home';
+    return 'Available near you';
+}
+
 function getQuickServiceLabel(name: string) {
     const trimmed = (name || '').trim();
     if (!trimmed) return 'Service';
@@ -164,6 +187,7 @@ export default function HomeScreen() {
     const [activeBooking, setActiveBooking] = useState(0);
     const [fastTrackLoading, setFastTrackLoading] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [homeAnimPlaceholder, setHomeAnimPlaceholder] = useState('');
     const [activeKB, setActiveKB] = useState(0);
     const [selectedKB, setSelectedKB] = useState<any>(null);
     const [isKBModalOpen, setIsKBModalOpen] = useState(false);
@@ -176,6 +200,29 @@ export default function HomeScreen() {
     const heroScrollRef = useRef<ScrollView>(null);
     const popularScrollRef = useRef<ScrollView>(null);
     const kbScrollRef = useRef<ScrollView>(null);
+    const serviceImageScale = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        const pulse = Animated.loop(
+            Animated.sequence([
+                Animated.timing(serviceImageScale, {
+                    toValue: 1.06,
+                    duration: 2400,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: true,
+                }),
+                Animated.timing(serviceImageScale, {
+                    toValue: 1,
+                    duration: 2400,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+
+        pulse.start();
+        return () => pulse.stop();
+    }, [serviceImageScale]);
 
     // Computed dynamic components
     const dynamicBanners = useMemo(() => {
@@ -451,29 +498,53 @@ export default function HomeScreen() {
 
     const isSearching = searchQuery.trim().length > 0;
 
+    // ── Typewriter placeholder for home search bar ──
+    useEffect(() => {
+        const phrases = services?.length
+            ? services.map(s => `Search for ${s.name}...`)
+            : [
+                'Search symptoms, doctors...',
+                'Search for Doctor at Home...',
+                'Search for Home Nursing...',
+                'Search for Diagnostics...',
+                'Search for Pharmacy...',
+                'Search for Ambulance...',
+            ];
+        let phraseIdx = 0;
+        let charIdx = 0;
+        let deleting = false;
+        let timeoutId: ReturnType<typeof setTimeout>;
+        const tick = () => {
+            const phrase = phrases[phraseIdx % phrases.length];
+            let delay = 80;
+            if (!deleting) {
+                charIdx++;
+                setHomeAnimPlaceholder(phrase.slice(0, charIdx));
+                if (charIdx === phrase.length) { deleting = true; delay = 1400; }
+            } else {
+                charIdx--;
+                setHomeAnimPlaceholder(phrase.slice(0, charIdx));
+                if (charIdx === 0) { deleting = false; phraseIdx++; delay = 300; }
+                else { delay = 38; }
+            }
+            timeoutId = setTimeout(tick, delay);
+        };
+        timeoutId = setTimeout(tick, 600);
+        return () => clearTimeout(timeoutId);
+    }, [services]);
+
     const dynamicQuickServices = useMemo(() => {
         if (!services) return [];
-        // Sort by priority if they match, else by name
-        const priority = ['doctor', 'diagnostics', 'lab', 'nurse', 'ambulance', 'emergency'];
-        const sorted = [...services].sort((a, b) => {
-            const aName = a.name.toLowerCase();
-            const bName = b.name.toLowerCase();
-            const aIdx = priority.findIndex(p => aName.includes(p));
-            const bIdx = priority.findIndex(p => bName.includes(p));
-            
-            if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-            if (aIdx !== -1) return -1;
-            if (bIdx !== -1) return 1;
-            return aName.localeCompare(bName);
-        });
-
-        return sorted.map(s => ({
+        // Use API order (already sorted by admin-set priority)
+        return services.slice(0, 6).map(s => ({
             id: s._id,
             label: getQuickServiceLabel(s.name),
+            subtitle: getServiceSubtitle(s.name),
             icon: getServiceTheme(s.name).icon,
             color: getServiceTheme(s.name).color,
             bgColor: getServiceTheme(s.name).bgColor,
             imageUrl: s.imageUrl,
+            isMore: false,
             path: '/services',
             params: { category: s.name, serviceId: s._id }
         }));
@@ -580,14 +651,14 @@ export default function HomeScreen() {
             // Always fallback if fast-track cannot resolve a child service.
             router.push({
                 pathname: '/services',
-                params: { category: item.label, serviceId: item.id, from: 'home' }
+                params: { category: item.label, serviceId: item.id, subServiceId: '', from: 'home' }
             });
             return;
         }
 
         router.push({
             pathname: '/services',
-            params: { category: item.label, serviceId: item.id, from: 'home' }
+            params: { category: item.label, serviceId: item.id, subServiceId: '', from: 'home' }
         });
     };
 
@@ -690,7 +761,7 @@ export default function HomeScreen() {
                             <Search size={18} color={Colors.muted} style={{ marginRight: 10 }} />
                             <TextInput
                                 style={styles.searchInput}
-                                placeholder="Search symptoms, doctors..."
+                                placeholder={homeAnimPlaceholder || 'Search symptoms, doctors...'}
                                 placeholderTextColor={Colors.muted}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
@@ -719,7 +790,7 @@ export default function HomeScreen() {
                                     <TouchableOpacity
                                         key={s._id}
                                         style={styles.searchResultRow}
-                                        onPress={() => router.push({ pathname: '/services', params: { category: s.name, serviceId: s._id, from: 'home' } })}
+                                        onPress={() => router.push({ pathname: '/services', params: { category: s.name, serviceId: s._id, subServiceId: '', from: 'home' } })}
                                     >
                                         <View style={styles.searchResultIcon}>
                                             <LayoutGrid size={18} color={Colors.primary} />
@@ -831,81 +902,124 @@ export default function HomeScreen() {
                             </View>
                         </View>
 
-                        {/* ── 4. Hospital Visit Section ── */}
+                        {/* ── Our Services Grid ── */}
                         <View style={styles.servicesGridContainer}>
                             <View style={styles.servicesHeader}>
-                                <View style={{ paddingHorizontal: 20 }}>
-                                    <Text style={styles.sectionTitle}>Our Services</Text>
-                                </View>
+                                <Text style={[styles.sectionTitle, { fontSize: 18 }]}>Our Services</Text>
+                                <TouchableOpacity onPress={() => router.push('/services' as any)} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                    <Text style={styles.seeAll}>View All</Text>
+                                    <ChevronRight size={14} color={Colors.primary} />
+                                </TouchableOpacity>
                             </View>
+
                             <View style={styles.servicesGridWrap}>
-                                {dynamicQuickServices.length > 0 ? (
-                                    dynamicQuickServices.map((item) => (
-                                        <TouchableOpacity
-                                            key={item.id}
-                                            style={styles.horizontalGridItem}
-                                            activeOpacity={0.86}
-                                            onPress={() => handleQuickServiceOpen(item)}
-                                        >
-                                            <View style={[styles.serviceCard, { backgroundColor: item.bgColor || '#F8FAFC' }]}>
+                                {(dynamicQuickServices.length > 0
+                                    ? dynamicQuickServices
+                                    : Array(6).fill(null).map((_, i) => ({ id: String(i), label: '', subtitle: '', icon: LayoutGrid, color: Colors.muted, bgColor: '#F1F5F9', imageUrl: undefined, isMore: false, path: '/services', params: {} }))
+                                ).map((item) => (
+                                    <TouchableOpacity
+                                        key={item.id}
+                                        style={styles.serviceBigCard}
+                                        activeOpacity={0.86}
+                                        onPress={() => handleQuickServiceOpen(item)}
+                                    >
+                                        {/* Service image area */}
+                                        <View style={styles.serviceCircleWrap}>
+                                            <View style={styles.serviceCircle}>
                                                 {fastTrackLoading === item.id ? (
-                                                    <ActivityIndicator color={item.color} />
+                                                    <ActivityIndicator color={item.color} size="small" />
+                                                                                ) : item.isMore ? (
+                                                    <View style={[styles.serviceCircleInner, { backgroundColor: Colors.primaryLight }]}>
+                                                        <LayoutGrid size={30} color={Colors.primary} />
+                                                    </View>
                                                 ) : item.imageUrl ? (
-                                                    <Image
-                                                        source={{ uri: item.imageUrl }}
-                                                        style={styles.serviceTileImage}
-                                                        contentFit="cover"
-                                                        transition={180}
-                                                    />
+                                                    <Animated.View style={[styles.serviceCircleImage, { transform: [{ scale: serviceImageScale }] }]}>
+                                                        <Image
+                                                            source={{ uri: item.imageUrl }}
+                                                            style={styles.serviceCircleImage}
+                                                            contentFit="cover"
+                                                            transition={180}
+                                                        />
+                                                    </Animated.View>
                                                 ) : (
-                                                    <item.icon size={32} color={item.color} />
+                                                    <View style={[styles.serviceCircleInner, { backgroundColor: item.bgColor }]}>
+                                                        <item.icon size={30} color={item.color} />
+                                                    </View>
                                                 )}
                                             </View>
-                                            <Text style={styles.gridLabel} numberOfLines={2}>{item.label}</Text>
-                                        </TouchableOpacity>
-                                    ))
-                                ) : (
-                                    [1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-                                        <View key={i} style={styles.horizontalGridItem}>
-                                            <View style={styles.serviceCard} />
                                         </View>
-                                    ))
-                                )}
+
+                                        <Text style={styles.serviceBigName} numberOfLines={2}>{item.label}</Text>
+                                        <Text style={styles.serviceBigSub} numberOfLines={1}>{item.subtitle}</Text>
+
+                                    </TouchableOpacity>
+                                ))}
+                                {/* Invisible fillers to keep last row left-aligned */}
+                                {Array(
+                                    dynamicQuickServices.length % 3 === 0 ? 0 : 3 - (dynamicQuickServices.length % 3)
+                                ).fill(null).map((_, i) => (
+                                    <View key={`filler-${i}`} style={{ width: Math.floor((width - 32 - 32 - 12) / 3) }} />
+                                ))}
                             </View>
+
                         </View>
 
-                        <View style={styles.hospitalSection}>
-                            <TouchableOpacity activeOpacity={0.9} style={styles.hospitalSmartCard} onPress={handleHospitalBooking}>
-                                <LinearGradient
-                                    colors={[Colors.primary, '#1E40AF']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.hospitalGradient}
-                                >
-                                    <View style={styles.hospitalInfo}>
-                                        <View style={styles.hBadge}>
-                                            <Text style={styles.hBadgeText}>HOSPITAL PARTNER</Text>
+                        {/* ── OP Booking Card ── */}
+                        <View style={styles.opCard}>
+                            {/* Top row: icon+title | divider | button */}
+                            <View style={styles.opTopRow}>
+                                <View style={styles.opLeft}>
+                                    <View style={styles.opIconWrap}>
+                                        <View style={styles.opIconCircle}>
+                                            <Hospital size={26} color={Colors.primary} />
                                         </View>
-                                        <Text style={styles.hTitle}>A1care Super-Speciality</Text>
-                                        <Text style={styles.hDesc}>Skip the paper queue. Book your OP token online for faster consultation.</Text>
-
-                                        <View style={styles.hActionRow}>
-                                            <View style={styles.hCta}>
-                                                <Text style={styles.hCtaText}>Reserve OP Token</Text>
-                                                <ArrowRight size={16} color={Colors.primary} />
-                                            </View>
-                                            <View style={styles.hTokenStatus}>
-                                                <View style={styles.hStatusDot} />
-                                                <Text style={styles.hStatusText}>Live Token Tracking</Text>
-                                            </View>
+                                        <View style={styles.opCheckBadge}>
+                                            <CheckCircle2 size={18} color="#fff" fill={Colors.accent} />
                                         </View>
                                     </View>
+                                    <Text style={styles.opTitle}>
+                                        Book <Text style={styles.opTitleAccent}>OP</Text>{'\n'}Consultation
+                                    </Text>
+                                </View>
 
-                                    <View style={styles.hIconDecoration}>
-                                        <Hospital size={120} color="rgba(255,255,255,0.12)" strokeWidth={1.5} />
+                                <View style={styles.opDivider} />
+
+                                <View style={styles.opRight}>
+                                    <TouchableOpacity style={styles.opBtn} onPress={handleHospitalBooking} activeOpacity={0.88}>
+                                        <Text style={styles.opBtnText}>Book Now</Text>
+                                        <ArrowRight size={18} color="#fff" />
+                                    </TouchableOpacity>
+                                    <View style={styles.opTrustRow}>
+                                        <ShieldCheck size={13} color={Colors.accent} />
+                                        <Text style={styles.opTrustText}>Quick • Easy • Trusted</Text>
                                     </View>
-                                </LinearGradient>
-                            </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Description spans full card width */}
+                            <Text style={styles.opSub}>
+                                Walk-in or schedule your appointment at A1Care Hospital
+                            </Text>
+
+                            {/* Bottom features row */}
+                            <View style={styles.opFeatureRow}>
+                                {[
+                                    { icon: Stethoscope, label: 'Expert\nDoctors' },
+                                    { icon: CalendarCheck, label: 'Quick\nAppointments' },
+                                    { icon: Clock, label: 'Shorter\nWaiting Time' },
+                                    { icon: ShieldCheck, label: 'Trusted\nCare' },
+                                ].map((f, i, arr) => (
+                                    <React.Fragment key={i}>
+                                        <View style={styles.opFeatureItem}>
+                                            <View style={styles.opFeatureIconBox}>
+                                                <f.icon size={18} color={Colors.accent} />
+                                            </View>
+                                            <Text style={styles.opFeatureLabel}>{f.label}</Text>
+                                        </View>
+                                        {i < arr.length - 1 && <View style={styles.opFeatureSep} />}
+                                    </React.Fragment>
+                                ))}
+                            </View>
                         </View>
 
 
@@ -1185,86 +1299,15 @@ export default function HomeScreen() {
                             </View>
                         )}
 
-                        {/* ── 10. Knowledge Base (Horizontal Auto-Slide) ── */}
-                        <View style={[styles.section, { marginBottom: 20 }]}>
-                            <View style={styles.sectionHeader}>
-                                <View>
-                                    <Text style={styles.sectionTitle}>Knowledge Base</Text>
-                                    <Text style={styles.sectionSub}>Expert health tips and articles</Text>
-                                </View>
-                                <TouchableOpacity onPress={handleOpenKnowledgeSpace} hitSlop={10} activeOpacity={0.75}>
-                                    <Text style={styles.seeAll}>Read All</Text>
-                                </TouchableOpacity>
-                            </View>
 
-                            <View style={styles.kbHorizontalWrapper}>
-                                <ScrollView
-                                    ref={kbScrollRef}
-                                    pagingEnabled
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    onScroll={(e) => {
-                                        const slide = Math.round(e.nativeEvent.contentOffset.x / (width - 40));
-                                        if (slide !== activeKB) setActiveKB(slide);
-                                    }}
-                                    scrollEventThrottle={16}
-                                >
-                                    {dynamicKB.map((item: any) => (
-                                        <TouchableOpacity
-                                            key={item.id}
-                                            style={[styles.kbItem, { width: width - 40, backgroundColor: item.bgColor }]}
-                                            activeOpacity={0.8}
-                                            onPress={() => {
-                                                setSelectedKB(item);
-                                                setIsKBModalOpen(true);
-                                            }}
-                                        >
-                                            <View style={styles.kbImageFrame}>
-                                                {item.imageUrl ? (
-                                                    <Image
-                                                        source={{ uri: item.imageUrl }}
-                                                        style={styles.kbCoverImage}
-                                                        contentFit="cover"
-                                                        transition={180}
-                                                    />
-                                                ) : (
-                                                    <Image
-                                                        source={item.fallbackImage}
-                                                        style={styles.kbCoverImage}
-                                                        contentFit="cover"
-                                                    />
-                                                )}
-                                                <View style={styles.kbImageTint} />
-                                            </View>
-                                            <View style={styles.kbContent}>
-                                                <Text style={styles.kbTitle}>{item.title}</Text>
-                                                <View style={styles.kbMeta}>
-                                                    <Text style={styles.kbAuthor}>{item.author}</Text>
-                                                    <View style={styles.kbDividerDot} />
-                                                    <Text style={styles.kbReadTime}>{item.readTime} read</Text>
-                                                </View>
-                                            </View>
-                                            <ArrowRight size={18} color={Colors.muted} />
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
 
-                                {/* Slide Indicator Overlay */}
-                                <View style={styles.kbIndicatorLine}>
-                                    {dynamicKB.map((_: any, i: number) => (
-                                        <View key={i} style={[styles.kbMiniDot, activeKB === i && styles.kbMiniDotActive]} />
-                                    ))}
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* ── 12. Knowledge Section (Dynamic Promo Banners) ── */}
+                        {/* ── Knowledge Base Section (from knowledgeBanners) ── */}
                         {dynamicKnowledgeBanners.length > 0 && (
-                            <View style={[styles.section, { marginBottom: 32 }]}>
+                            <View style={[styles.section, { marginBottom: 20 }]}>
                                 <View style={styles.sectionHeader}>
                                     <View>
-                                        <Text style={styles.sectionTitle}>Knowledge</Text>
-                                        <Text style={styles.sectionSub}>Latest health updates & insights</Text>
+                                        <Text style={styles.sectionTitle}>Knowledge Base</Text>
+                                        <Text style={styles.sectionSub}>Expert health tips and articles</Text>
                                     </View>
                                 </View>
                                 <ScrollView
@@ -1273,6 +1316,47 @@ export default function HomeScreen() {
                                     contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
                                 >
                                     {dynamicKnowledgeBanners.map((banner) => (
+                                        <TouchableOpacity
+                                            key={banner.id}
+                                            activeOpacity={0.9}
+                                            style={styles.knowledgePromoCard}
+                                            onPress={() => handleBannerPress(banner)}
+                                        >
+                                            <Image
+                                                source={{ uri: banner.imageUrl }}
+                                                style={styles.knowledgePromoImage}
+                                                contentFit="cover"
+                                                transition={200}
+                                            />
+                                            <View style={styles.knowledgePromoOverlay}>
+                                                <View style={styles.knowledgePromoBadge}>
+                                                    <Text style={styles.knowledgePromoBadgeText}>LATEST</Text>
+                                                </View>
+                                                <Text style={styles.knowledgePromoTitle} numberOfLines={2}>
+                                                    {banner.title || 'Health Insights'}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        {/* ── Promotional Banners Section (from promotionalBanners) ── */}
+                        {dynamicPromotionalBanners.length > 0 && (
+                            <View style={[styles.section, { marginBottom: 32 }]}>
+                                <View style={styles.sectionHeader}>
+                                    <View>
+                                        <Text style={styles.sectionTitle}>Promotional Banners</Text>
+                                        <Text style={styles.sectionSub}>Latest offers & featured services</Text>
+                                    </View>
+                                </View>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
+                                >
+                                    {dynamicPromotionalBanners.map((banner) => (
                                         <TouchableOpacity
                                             key={banner.id}
                                             activeOpacity={0.9}
@@ -1361,8 +1445,6 @@ export default function HomeScreen() {
                 )}
             </ScrollView>
 
-            {/* ── 8. Emergency Floating Widget ── */}
-            <EmergencyFAB bottom={100} />
         </View>
     );
 }
@@ -1597,10 +1679,19 @@ const styles = StyleSheet.create({
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E2E8F0' },
     dotActive: { width: 18, backgroundColor: Colors.primary },
 
-    // 3. Quick Services Grid
+    // Services Grid
     servicesGridContainer: {
         marginTop: 0,
-        marginBottom: 24,
+        marginBottom: 8,
+        backgroundColor: Colors.white,
+        marginHorizontal: 16,
+        borderRadius: 24,
+        padding: 16,
+        paddingBottom: 12,
+        ...Shadows.card,
+        shadowOpacity: 0.07,
+        borderWidth: 1,
+        borderColor: '#EEF2F8',
     },
     servicesHeader: {
         flexDirection: 'row',
@@ -1608,73 +1699,120 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 16,
     },
-    servicesEyebrow: {
-        fontSize: 11,
-        color: Colors.primary,
-        fontWeight: '900',
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
-        marginBottom: 3,
-    },
-    servicesViewAllBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: Colors.primaryLight,
-        borderRadius: 999,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
-    servicesViewAllText: {
-        fontSize: 12,
-        color: Colors.primary,
-        fontWeight: '900',
-    },
     servicesGridWrap: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        paddingHorizontal: 20,
-        gap: 12,
-        rowGap: 20,
-        justifyContent: 'flex-start',
+        justifyContent: 'space-between',
+        rowGap: 10,
     },
-    horizontalGridItem: {
-        width: (width - 40 - (3 * 12)) / 4,
+    serviceBigCard: {
+        width: Math.floor((width - 32 - 32 - 12) / 3),
         alignItems: 'center',
+        backgroundColor: Colors.white,
+        borderRadius: 18,
+        paddingTop: 0,
+        paddingBottom: 10,
+        paddingHorizontal: 0,
+        borderWidth: 1,
+        borderColor: '#EEF2F8',
+        overflow: 'hidden',
     },
-    serviceCard: {
-        width: (width - 40 - (3 * 12)) / 4,
-        height: (width - 40 - (3 * 12)) / 4,
-        borderRadius: 20,
+    serviceCircleWrap: {
+        position: 'relative',
+        width: '100%',
+        marginBottom: 8,
+    },
+    serviceCircle: {
+        width: '100%',
+        height: 76,
+        borderRadius: 0,
+        overflow: 'hidden',
+        backgroundColor: '#EEF4FF',
+    },
+    serviceCircleInner: {
+        width: '100%',
+        height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 0,
-        marginBottom: 10,
-        borderWidth: 1.5,
-        borderColor: '#CBD5E1',
-        overflow: 'hidden',
-        backgroundColor: '#fff',
-        ...Shadows.card,
     },
-    serviceTileImage: {
+    serviceCircleImage: {
         width: '100%',
         height: '100%',
     },
-    gridLabel: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: '#1F2937',
-        textAlign: 'center',
-        marginBottom: 1,
-        lineHeight: 16,
-        minHeight: 34,
-        paddingHorizontal: 2,
+    serviceBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: Colors.white,
     },
-    gridSubLabel: {
-        fontSize: 8,
-        color: '#6B7280',
+    serviceBigName: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: Colors.primary,
+        textAlign: 'center',
+        lineHeight: 15,
+        marginBottom: 2,
+        paddingHorizontal: 4,
+    },
+    serviceBigSub: {
+        fontSize: 10,
+        color: Colors.textSecondary,
         textAlign: 'center',
         fontWeight: '500',
+        lineHeight: 12,
+        marginBottom: 4,
+        paddingHorizontal: 4,
+    },
+    serviceArrowBtn: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: Colors.primaryLight,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    // Trust bar
+    trustBar: {
+        marginTop: 14,
+        backgroundColor: '#EEF4FF',
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        gap: 6,
+    },
+    trustBarLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    trustBarMain: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: Colors.primary,
+    },
+    trustBarRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        flexWrap: 'wrap',
+    },
+    trustBarItem: {
+        fontSize: 10,
+        color: Colors.textSecondary,
+        fontWeight: '600',
+    },
+    trustDot: {
+        width: 3,
+        height: 3,
+        borderRadius: 1.5,
+        backgroundColor: Colors.muted,
     },
 
     // 4. Sections & Top Doctors
@@ -1837,95 +1975,143 @@ const styles = StyleSheet.create({
         textDecorationLine: 'line-through',
     },
 
-    // 7. Hospital Section
-    hospitalSection: {
-        marginTop: 8,
-        paddingHorizontal: 20,
-    },
-    hospitalSmartCard: {
-        height: 190,
-        borderRadius: 28,
-        overflow: 'hidden',
+    // OP Booking Card
+    opCard: {
+        marginHorizontal: 20,
+        marginTop: 4,
+        marginBottom: 8,
+        backgroundColor: Colors.white,
+        borderRadius: 24,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: '#E8EDF5',
         ...Shadows.medium,
+        shadowOpacity: 0.07,
     },
-    hospitalGradient: {
-        flex: 1,
-        padding: 24,
-        flexDirection: 'row',
-        position: 'relative',
-    },
-    hospitalInfo: {
-        flex: 1,
-        zIndex: 2,
-    },
-    hBadge: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-        alignSelf: 'flex-start',
-        marginBottom: 12,
-    },
-    hBadgeText: {
-        color: Colors.white,
-        fontSize: 10,
-        fontWeight: '900',
-        letterSpacing: 1,
-    },
-    hTitle: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: Colors.white,
-        marginBottom: 6,
-    },
-    hDesc: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.8)',
-        lineHeight: 16,
-        marginBottom: 16,
-        fontWeight: '500',
-    },
-    hActionRow: {
+    opTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 16,
+        marginBottom: 10,
     },
-    hCta: {
+    opLeft: {
+        flex: 1,
         flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingRight: 10,
+    },
+    opIconWrap: {
+        position: 'relative',
+        flexShrink: 0,
+    },
+    opIconCircle: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#D6E4FF',
+        borderWidth: 1.5,
+        borderColor: '#B3CAFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    opCheckBadge: {
+        position: 'absolute',
+        bottom: -2,
+        right: -4,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: Colors.white,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    opTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: Colors.textPrimary,
+        lineHeight: 20,
+        marginBottom: 5,
+    },
+    opTitleAccent: {
+        color: Colors.accent,
+    },
+    opSub: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+        fontWeight: '500',
+        lineHeight: 17,
+        marginBottom: 14,
+    },
+    opDivider: {
+        width: 1,
+        height: 72,
+        backgroundColor: '#E8EDF5',
+        marginHorizontal: 2,
+        flexShrink: 0,
+    },
+    opRight: {
         alignItems: 'center',
         gap: 8,
-        backgroundColor: Colors.white,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 12,
+        paddingLeft: 10,
+        flexShrink: 0,
     },
-    hCtaText: {
-        color: Colors.primary,
-        fontWeight: '800',
-        fontSize: 14,
-    },
-    hTokenStatus: {
+    opBtn: {
         flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 14,
+        paddingVertical: 11,
+        borderRadius: 13,
+        ...Shadows.float,
+    },
+    opBtnText: {
+        color: Colors.white,
+        fontWeight: '800',
+        fontSize: 13,
+    },
+    opTrustRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    opTrustText: {
+        fontSize: 10,
+        color: Colors.textSecondary,
+        fontWeight: '600',
+    },
+    opFeatureRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F4F7FC',
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+    },
+    opFeatureItem: {
+        flex: 1,
         alignItems: 'center',
         gap: 6,
     },
-    hStatusDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#4ADE80',
+    opFeatureIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#E6F7F7',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    hStatusText: {
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: 12,
+    opFeatureLabel: {
+        fontSize: 10,
         fontWeight: '700',
+        color: Colors.textSecondary,
+        textAlign: 'center',
+        lineHeight: 13,
     },
-    hIconDecoration: {
-        position: 'absolute',
-        right: -10,
-        bottom: -20,
-        zIndex: 1,
-        transform: [{ rotate: '-10deg' }]
+    opFeatureSep: {
+        width: 1,
+        height: 36,
+        backgroundColor: '#DDE4EF',
     },
 
     emergencyPulse: {

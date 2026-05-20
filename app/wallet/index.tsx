@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import RazorpayCheckout from 'react-native-razorpay';
 import { walletService } from '@/services/wallet.service';
 import { paymentService } from '@/services/payment.service';
 import { Colors, Shadows } from '@/constants/colors';
@@ -57,29 +58,46 @@ export default function WalletScreen() {
 
     const addMoneyMutation = useMutation({
         mutationFn: async (amount: number) => {
-            console.log(`[Wallet] Starting topup: ${amount}`);
-            // STEP 1: Create Order in Backend (Pending state)
-            const order = await paymentService.createOrder({
-                amount,
-                type: "WALLET_TOPUP"
+            const order = await paymentService.createOrder({ amount, type: "WALLET_TOPUP" });
+            const razorData = await paymentService.initiateRazorpay(order._id);
+            const data = await RazorpayCheckout.open({
+                key: razorData.key,
+                amount: razorData.razorOrder.amount,
+                currency: 'INR',
+                name: 'A1Care 24/7',
+                description: 'Wallet Top-up',
+                order_id: razorData.razorOrder.id,
+                prefill: {
+                    email: razorData.customer.email || '',
+                    contact: razorData.customer.contact || '',
+                    name: razorData.customer.name || '',
+                },
+                theme: { color: Colors.primary },
             });
-            console.log(`[Wallet] Order created: ${order._id}. Now initiating gateway...`);
-
-            // STEP 2: Initiate with Gateway (Get Hash and Params)
-            const params = await paymentService.initiatePayment(order._id);
-            console.log(`[Wallet] Gateway initiation success. Redirecting to Easebuzz...`);
-
-            // STEP 3: Navigate to Payment Checkout Screen
-            router.push({
-                pathname: "/checkout/easebuzz" as any,
-                params: { ...params }
+            await paymentService.verifyRazorpay({
+                razorpay_order_id: (data as any).razorpay_order_id,
+                razorpay_payment_id: (data as any).razorpay_payment_id,
+                razorpay_signature: (data as any).razorpay_signature,
+                orderId: order._id,
             });
-            
             return order;
         },
+        onSuccess: (order) => {
+            qc.invalidateQueries({ queryKey: ['wallet'] });
+            router.push({
+                pathname: '/checkout/status' as any,
+                params: {
+                    status: 'SUCCESS',
+                    txnId: order.txnId,
+                    amount: String(order.amount),
+                    type: 'WALLET_TOPUP',
+                    description: 'Wallet Top-up via Razorpay',
+                },
+            });
+        },
         onError: (err: any) => {
-             Alert.alert("Payment Error", "Unable to start payment. Please try again.");
-        }
+            if (err.code !== 2) Alert.alert('Payment Error', err?.description || 'Unable to add money. Please try again.');
+        },
     });
 
     const handleAddMoneySubmit = () => {
