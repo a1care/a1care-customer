@@ -30,7 +30,7 @@ const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_STEPS: Array<{ status: string; label: string; key: 'pending' | 'broadcasted' | 'accepted' | 'in_progress' | 'completed'; desc: string }> = [
-    { status: 'PENDING', key: 'pending', label: 'Pending', desc: 'Waiting to be sent to nearby providers' },
+    { status: 'PENDING', key: 'pending', label: 'Pending', desc: 'Waiting for admin to assign a provider' },
     { status: 'BROADCASTED', key: 'broadcasted', label: 'Searching Provider', desc: 'We are matching you with the nearest available provider' },
     { status: 'ACCEPTED', key: 'accepted', label: 'Accepted', desc: 'A provider has accepted your request' },
     { status: 'IN_PROGRESS', key: 'in_progress', label: 'In Progress', desc: 'Provider is on the way' },

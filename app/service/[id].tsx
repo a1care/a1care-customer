@@ -11,8 +11,10 @@ import {
     Platform,
     Modal,
     KeyboardAvoidingView,
+    Dimensions,
+    useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -143,8 +145,17 @@ export default function ServiceDetailScreen() {
         }>();
     const router = useRouter();
     const qc = useQueryClient();
+    const insets = useSafeAreaInsets();
+    const window = useWindowDimensions();
     const source = Array.isArray(from) ? from[0] : from;
     const isFromIndex = source === 'home' || source === 'index';
+    const screenHeight = Dimensions.get('screen').height;
+    const androidNavBarHeight = Platform.OS === 'android'
+        ? Math.max(0, screenHeight - window.height)
+        : 0;
+    const bottomSafeArea = Math.max(insets.bottom, androidNavBarHeight);
+    const footerBottomPadding = Math.max(bottomSafeArea, Platform.OS === 'android' ? 40 : 16);
+    const scrollBottomPadding = footerBottomPadding + 104;
 
     const [step, setStep] = useState<Step | null>(null);
     const [selectedAddressId, setSelectedAddressId] = useState<string>('');
@@ -234,7 +245,7 @@ export default function ServiceDetailScreen() {
 
     const goToNextStep = () => {
         // Step Validation
-        if (step === 'doctor' && !selectedDoctorId) {
+        if (step === 'doctor' && shouldUseDoctorAppointment && !selectedDoctorId) {
             Alert.alert('Selection Required', 'Please select a healthcare expert to proceed.');
             return;
         }
@@ -556,6 +567,7 @@ export default function ServiceDetailScreen() {
         const name = `${service?.name ?? ''} ${nameParam ?? ''} ${subName ?? ''}`.toLowerCase();
         return /doctor|consult|specialist|cardiologist|neurologist|orthopedic|physician/.test(name);
     }, [service?.name, nameParam, subName]);
+    const shouldUseDoctorAppointment = false;
 
     const { data: staff } = useQuery({
         queryKey: ['staff-for-service', id, nameParam, subName, service?.name],
@@ -654,19 +666,19 @@ export default function ServiceDetailScreen() {
 
             return deduped;
         },
-        enabled: !!service && (service.selectionType !== 'ASSIGN' || isDoctorService),
+        enabled: !!service && shouldUseDoctorAppointment,
     });
 
     const activeSteps: Step[] = React.useMemo(() => {
         if (!service) return [];
         const steps: Step[] = ['info'];
-        if (service.selectionType !== 'ASSIGN' || isDoctorService) steps.push('doctor');
+        if (shouldUseDoctorAppointment) steps.push('doctor');
         const isHospital = service.fulfillmentMode === 'HOSPITAL_VISIT' || (subName && /hospital/i.test(subName));
         const isVirtual = service.fulfillmentMode === 'VIRTUAL' || (subName && /virtual|online/i.test(subName));
         if (!isHospital && !isVirtual) steps.push('address');
         steps.push('schedule', 'payment', 'confirm');
         return steps;
-    }, [service, subName, isDoctorService]);
+    }, [service, subName, shouldUseDoctorAppointment]);
 
 
 
@@ -716,7 +728,7 @@ export default function ServiceDetailScreen() {
             const addr = addresses?.find((a) => a._id === selectedAddressId);
             const isHosp = service?.fulfillmentMode === 'HOSPITAL_VISIT' || (subName && /hospital/i.test(subName));
 
-            if (isDoctorService) {
+            if (shouldUseDoctorAppointment) {
                 if (!selectedDoctorId) {
                     throw new Error('Please select a doctor to continue');
                 }
@@ -744,7 +756,7 @@ export default function ServiceDetailScreen() {
             return bookingsService.createServiceBooking({
                 childServiceId: id!,
                 addressId: isHosp ? undefined : addr?._id,
-                assignedProviderId: selectedDoctorId || undefined,
+                assignedProviderId: undefined,
                 scheduledTime: buildScheduledTime(),
                 bookingType: isAsap ? 'ON_DEMAND' : 'SCHEDULED',
                 fulfillmentMode: (service?.fulfillmentMode) ?? (isHosp ? 'HOSPITAL_VISIT' : 'HOME_VISIT'),
@@ -756,7 +768,7 @@ export default function ServiceDetailScreen() {
             submitting.current = false;
             qc.invalidateQueries({ queryKey: ['service-bookings'] });
             qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
-            if (isDoctorService) {
+            if (shouldUseDoctorAppointment) {
                 qc.invalidateQueries({ queryKey: ['appointments'] });
                 const doctorStatus = String(booking?.status || '').toLowerCase();
                 if (doctorStatus === 'confirmed' || doctorStatus === 'completed') {
@@ -821,7 +833,7 @@ export default function ServiceDetailScreen() {
                     razorpay_signature: data.razorpay_signature,
                     orderId: order._id
                 });
-                if (isDoctorService && booking?._id) {
+                if (shouldUseDoctorAppointment && booking?._id) {
                     router.replace({ pathname: '/doctor/appointment/[id]', params: { id: booking._id } });
                     return;
                 }
@@ -884,7 +896,10 @@ export default function ServiceDetailScreen() {
 
             <View style={styles.stepWrap}><StepIndicator current={step} activeSteps={activeSteps} /></View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]}
+            >
                 {step === 'info' && service && (
                     <View style={styles.stepContent}>
                         <View style={styles.heroSection}>
@@ -1060,10 +1075,9 @@ export default function ServiceDetailScreen() {
                         </View>
                     </View>
                 )}
-                <View style={{ height: 120 }} />
             </ScrollView>
 
-            <View style={styles.footer}>
+            <View style={[styles.footer, { paddingBottom: footerBottomPadding }]}>
                 <Button
                     label={step === 'confirm' ? 'Confirm Booking' : 'Continue →'}
                     onPress={() => {
@@ -1315,7 +1329,7 @@ const styles = StyleSheet.create({
     stepLine: { flex: 1, height: 2, backgroundColor: Colors.border, marginTop: -14 },
     stepLineDone: { backgroundColor: Colors.health },
 
-    scroll: { paddingBottom: 120 },
+    scroll: { paddingBottom: 0 },
     stepContent: { padding: 16, paddingTop: 20 },
     stepTitle: {
         fontSize: FontSize['2xl'],
@@ -1684,7 +1698,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.card,
         paddingHorizontal: 16,
         paddingTop: 14,
-        paddingBottom: 32,
+        paddingBottom: 16,
         ...Shadows.float,
         gap: 8,
     },
