@@ -4,7 +4,7 @@
     "slug": "a1care-user",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/icon.jpeg",
+    "icon": "./assets/icon.png",
     "newArchEnabled": false,
     "userInterfaceStyle": "light",
     "scheme": "a1care",
@@ -26,10 +26,10 @@
       }
     },
     "android": {
-      "versionCode": 2,
+      "versionCode": 7,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.jpeg",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#2F80ED"
       },
       "package": "com.a1care.customer",

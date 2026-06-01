@@ -28,19 +28,19 @@ const { width, height } = Dimensions.get("window");
 const slides = [
     {
         id: "1",
-        image: require("../assets/images/onboarding1.png"),
+        image: require("../assets/images/onboarding1.jpg"),
         title: "Expert Doctors\nAt Your Home",
         subtitle: "Skip the waiting room. Get professional consultations in the comfort of your living room.",
     },
     {
         id: "2",
-        image: require("../assets/images/onboarding2.png"),
+        image: require("../assets/images/onboarding2.jpg"),
         title: "Professional\nNursing Care",
         subtitle: "Dedicated nursing and post-operative care by certified professionals at your doorstep.",
     },
     {
         id: "3",
-        image: require("../assets/images/onboarding3.png"),
+        image: require("../assets/images/onboarding3.jpg"),
         title: "Fast & Accurate\nLab Diagnostics",
         subtitle: "Book blood tests and health checkups with quick home sample collection and digital reports.",
     },

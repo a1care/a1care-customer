@@ -93,3 +93,10 @@ temp/
 # Local crash/replay dumps
 hs_err_pid*.log
 replay_pid*.log
+
+# Android release/build artifacts
+*.aab
+*.keystore
+local.properties
+android/.cxx/
+android/**/build/

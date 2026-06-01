@@ -721,6 +721,24 @@ export default function ServiceDetailScreen() {
         return 'Not scheduled';
     };
 
+    const sendBookingNotification = (booking: any) => {
+        if (shouldUseDoctorAppointment) {
+            const doctorStatus = String(booking?.status || '').toLowerCase();
+            if (doctorStatus === 'confirmed' || doctorStatus === 'completed') {
+                triggerLocalNotification('Doctor Appointment Confirmed', `Your ${serviceName} appointment is confirmed.`);
+            } else {
+                triggerLocalNotification('Doctor Appointment Requested', `Your ${serviceName} appointment request has been submitted.`);
+            }
+            return;
+        }
+        const serviceStatus = String(booking?.status || '').toUpperCase();
+        if (serviceStatus === 'ACCEPTED' || serviceStatus === 'IN_PROGRESS' || serviceStatus === 'COMPLETED' || serviceStatus === 'CONFIRMED') {
+            triggerLocalNotification('Service Booking Confirmed', `Your ${serviceName} booking is confirmed.`);
+        } else {
+            triggerLocalNotification('Service Booking Placed', `Your ${serviceName} request has been submitted. We are finding a provider.`);
+        }
+    };
+
     const bookMutation = useMutation({
         mutationFn: () => {
             if (submitting.current) throw new Error('Already submitting');
@@ -770,24 +788,12 @@ export default function ServiceDetailScreen() {
             qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
             if (shouldUseDoctorAppointment) {
                 qc.invalidateQueries({ queryKey: ['appointments'] });
-                const doctorStatus = String(booking?.status || '').toLowerCase();
-                if (doctorStatus === 'confirmed' || doctorStatus === 'completed') {
-                    triggerLocalNotification('Doctor Appointment Confirmed', `Your ${serviceName} appointment is confirmed.`);
-                } else {
-                    triggerLocalNotification('Doctor Appointment Requested', `Your ${serviceName} appointment request has been submitted.`);
-                }
                 if (booking?._id) {
                     router.replace({ pathname: '/doctor/appointment/[id]', params: { id: booking._id } });
                     return;
                 }
-            } else {
-                const serviceStatus = String(booking?.status || '').toUpperCase();
-                if (serviceStatus === 'ACCEPTED' || serviceStatus === 'IN_PROGRESS' || serviceStatus === 'COMPLETED' || serviceStatus === 'CONFIRMED') {
-                    triggerLocalNotification('Service Booking Confirmed', `Your ${serviceName} booking is confirmed.`);
-                } else {
-                    triggerLocalNotification('Service Booking Placed', `Your ${serviceName} request has been submitted. We are finding a provider.`);
-                }
             }
+            if (paymentMethod !== 'ONLINE') sendBookingNotification(booking);
             if (paymentMethod !== 'ONLINE') setSubmitted(true);
         },
         onError: (err: any) => {
@@ -833,6 +839,7 @@ export default function ServiceDetailScreen() {
                     razorpay_signature: data.razorpay_signature,
                     orderId: order._id
                 });
+                sendBookingNotification(booking);
                 if (shouldUseDoctorAppointment && booking?._id) {
                     router.replace({ pathname: '/doctor/appointment/[id]', params: { id: booking._id } });
                     return;
