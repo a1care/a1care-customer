@@ -166,7 +166,7 @@ export default function ServiceDetailScreen() {
     const [notes, setNotes] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE' | null>(null);
     const [submittingOnline, setSubmittingOnline] = useState(false);
-    const [isAsap, setIsAsap] = useState(false);
+    const [isAsap, setIsAsap] = useState(true);
     const [submitted, setSubmitted] = useState(false);
     const submitting = useRef(false);
 
@@ -832,7 +832,10 @@ export default function ServiceDetailScreen() {
                     },
                     theme: { color: Colors.primary }
                 };
-                const data = await RazorpayCheckout.open(options);
+                if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
+                    throw new Error('Online payment is unavailable in this build. Please use the installed app (not Expo Go).');
+                }
+                const data = await RazorpayCheckout.open(options) as any;
                 await paymentService.verifyRazorpay({
                     razorpay_order_id: data.razorpay_order_id,
                     razorpay_payment_id: data.razorpay_payment_id,
@@ -846,7 +849,15 @@ export default function ServiceDetailScreen() {
                 }
                 setSubmitted(true);
             } catch (err: any) {
-                if (err.code !== 2) Alert.alert("Payment Error", err?.description || "Payment failed.");
+                // Razorpay user-cancel returns code 2 — ignore silently
+                if (err?.code === 2 || err?.code === '2') return;
+                const msg =
+                    err?.response?.data?.message ||
+                    err?.description ||
+                    err?.error?.description ||
+                    err?.message ||
+                    'Payment failed. Please try again.';
+                Alert.alert('Payment Error', msg);
             } finally {
                 setSubmittingOnline(false);
             }
@@ -1038,7 +1049,13 @@ export default function ServiceDetailScreen() {
                                     ))}
                                 </View>
                                 {timeSlots.length === 0 && (
-                                    <Text style={styles.asapText}>No slots remaining today. Please pick another date.</Text>
+                                    <View style={styles.noSlotsCard}>
+                                        <Text style={styles.noSlotsIcon}>⚠️</Text>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.noSlotsTitle}>No Slots Available</Text>
+                                            <Text style={styles.noSlotsSub}>No time slots available for this date. Please choose another date or use ASAP.</Text>
+                                        </View>
+                                    </View>
                                 )}
                             </>
                         )}
@@ -1067,21 +1084,57 @@ export default function ServiceDetailScreen() {
                     </View>
                 )}
 
-                {step === 'confirm' && (
-                    <View style={styles.stepContent}>
-                        <Text style={styles.stepTitle}> Review Booking</Text>
-                        <View style={styles.reviewCard}>
-                            {[
-                                { label: 'Service', value: serviceName },
-                                { label: 'Schedule', value: getDisplaySchedule() },
-                                { label: 'Payment', value: paymentMethod },
-                                { label: 'Price', value: formatCurrency(priceParam ? parseFloat(priceParam) : 0) },
-                            ].map(r => (
-                                <View key={r.label} style={styles.reviewRow}><Text style={styles.reviewLabel}>{r.label}</Text><Text style={styles.reviewValue}>{r.value}</Text></View>
-                            ))}
+                {step === 'confirm' && (() => {
+                    const selectedAddr = addresses?.find(a => a._id === selectedAddressId);
+                    const addrText = selectedAddr
+                        ? [getStreetValue(selectedAddr), selectedAddr.city, selectedAddr.state, selectedAddr.pincode].filter(Boolean).join(', ')
+                        : null;
+                    const amount = priceParam ? parseFloat(priceParam) : 0;
+                    return (
+                        <View style={styles.stepContent}>
+                            <Text style={styles.stepTitle}>Review Booking</Text>
+                            <Text style={{ fontSize: 13, color: Colors.textSecondary, marginBottom: 16, marginTop: -8 }}>Please review your booking details before confirming</Text>
+
+                            {/* Service + Address combined */}
+                            <View style={styles.reviewSection}>
+                                <View style={styles.reviewRow}>
+                                    <Text style={styles.reviewLabel}>Service</Text>
+                                    <Text style={[styles.reviewValue, { color: Colors.primary, fontWeight: '700' }]}>{serviceName}</Text>
+                                </View>
+                                {addrText && (
+                                    <View style={styles.reviewRow}>
+                                        <Text style={styles.reviewLabel}>Address</Text>
+                                        <Text style={[styles.reviewValue, { flex: 1 }]}>{addrText}</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* Schedule */}
+                            <View style={styles.reviewSection}>
+                                <View style={styles.reviewRow}>
+                                    <Text style={styles.reviewLabel}>Date & Time</Text>
+                                    <Text style={[styles.reviewValue, { fontWeight: '700' }]}>{getDisplaySchedule()}</Text>
+                                </View>
+                            </View>
+
+                            {/* Payment Summary */}
+                            <View style={[styles.reviewSection, { borderColor: Colors.primary, borderWidth: 1.5 }]}>
+                                <View style={styles.reviewRow}>
+                                    <Text style={styles.reviewLabel}>Method</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <View style={{ backgroundColor: paymentMethod === 'ONLINE' ? '#e8f5e9' : '#fff3e0', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: paymentMethod === 'ONLINE' ? '#2e7d32' : '#e65100' }}>{paymentMethod}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                                <View style={[styles.reviewRow, { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 8, paddingTop: 12 }]}>
+                                    <Text style={[styles.reviewLabel, { fontSize: 15, fontWeight: '700', color: Colors.textPrimary }]}>Total Amount</Text>
+                                    <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.primary }}>{formatCurrency(amount)}</Text>
+                                </View>
+                            </View>
                         </View>
-                    </View>
-                )}
+                    );
+                })()}
             </ScrollView>
 
             <View style={[styles.footer, { paddingBottom: footerBottomPadding }]}>
@@ -1623,6 +1676,20 @@ const styles = StyleSheet.create({
     },
     asapIcon: { fontSize: 18 },
     asapText: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
+    noSlotsCard: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+        backgroundColor: '#FFF8E1',
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: '#F59E0B',
+        padding: 14,
+        marginTop: 8,
+    },
+    noSlotsIcon: { fontSize: 22 },
+    noSlotsTitle: { fontSize: 14, fontWeight: '700', color: '#92400E', marginBottom: 4 },
+    noSlotsSub: { fontSize: 12, color: '#B45309', lineHeight: 18 },
 
     topUpBadge: {
         backgroundColor: Colors.primary,
@@ -1673,6 +1740,20 @@ const styles = StyleSheet.create({
     codInfoLine: { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 22 },
 
     // Review
+    reviewSection: {
+        backgroundColor: Colors.card,
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    reviewSectionTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: Colors.textPrimary,
+        marginBottom: 12,
+    },
     reviewCard: {
         backgroundColor: Colors.card,
         borderRadius: 16,

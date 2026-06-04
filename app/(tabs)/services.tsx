@@ -960,11 +960,10 @@ const styles = StyleSheet.create({
 
     // Category hero banner
     categoryBanner: {
-        borderRadius: 20,
         overflow: 'hidden',
         marginBottom: 16,
-        height: 160,
-        ...Shadows.card,
+        marginHorizontal: -16,
+        height: 200,
     },
     categoryBannerImage: {
         width: '100%',

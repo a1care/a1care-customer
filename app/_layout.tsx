@@ -1,4 +1,4 @@
-import React from 'react'; 
+import React from 'react';
 import { Stack } from 'expo-router';
 import { QueryProvider } from '@/providers/QueryProvider';
 import {
@@ -291,11 +291,24 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         const currentSegment = (segments as string[])[0];
         const isAtRoot = !segments.length || currentSegment === 'index';
         const inAuthGroup = currentSegment === '(auth)';
-        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq'];
+        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq', 'index'];
         const isExcluded = excludedSegments.includes(currentSegment);
 
         if (!isAuthenticated && !isExcluded) {
-            router.replace('/(auth)/login');
+            // Check if onboarding was already seen — if yes, skip to login
+            AsyncStorage.getItem('onboarding_done').then(done => {
+                if (done) {
+                    router.replace('/(auth)/login');
+                } else {
+                    router.replace('/');
+                }
+            });
+            return;
+        }
+
+        if (!isAuthenticated && isAtRoot) {
+            // Already on onboarding, let it show
+            return;
         } else if (isAuthenticated && user && (inAuthGroup || isAtRoot)) {
             // If registered go to tabs; else go to profile setup
             if (user.isRegistered) {
@@ -332,23 +345,15 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
     console.log('[RootLayout] Starting...');
-    const [fontsLoaded] = useFonts({
+    // Load fonts but don't block rendering — app shows immediately, fonts swap in when ready
+    useFonts({
         Inter_400Regular,
         Inter_500Medium,
         Inter_600SemiBold,
         Inter_700Bold,
     });
 
-    if (!fontsLoaded) {
-        console.log('[RootLayout] Fonts NOT Loaded');
-        return (
-            <View style={{ flex: 1, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' }}>
-                <ActivityIndicator size="large" color="#fff" />
-            </View>
-        );
-    }
-
-    console.log('[RootLayout] Fonts Loaded, Rendering Providers');
+    console.log('[RootLayout] Rendering Providers');
     return (
         <>
             <GestureHandlerRootView style={{ flex: 1 }}>

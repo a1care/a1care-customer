@@ -2,7 +2,7 @@
   "expo": {
     "name": "A1Care 24/7",
     "slug": "a1care-user",
-    "version": "1.0.1",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "newArchEnabled": false,
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#2F80ED"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": false,
@@ -106,11 +106,13 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "origin": false
+      },
       "eas": {
-        "projectId": "57eee4ae-c5d1-4b1c-a8fe-1b032184057c"
+        "projectId": "b1dcfe37-5a36-46a8-aa89-e18151e87b5b"
       }
     },
-    "owner": "vamsireddy0306"
+    "owner": "vrasqus1133"
   }
 }

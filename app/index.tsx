@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
     View,
     Text,
@@ -135,11 +136,13 @@ export default function OnboardingScreen() {
         if (currentIndex < slides.length - 1) {
             flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
         } else {
+            AsyncStorage.setItem('onboarding_done', 'true');
             router.replace("/(auth)/login");
         }
     };
 
     const handleSkip = () => {
+        AsyncStorage.setItem('onboarding_done', 'true');
         router.replace("/(auth)/login");
     };
 

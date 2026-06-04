@@ -100,3 +100,6 @@ replay_pid*.log
 local.properties
 android/.cxx/
 android/**/build/
+
+# Signing/EAS secrets — never commit
+credentials.json

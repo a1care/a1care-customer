@@ -29,6 +29,7 @@
     "expo-notifications": "~0.29.13",
     "expo-router": "~4.0.17",
     "expo-secure-store": "~14.0.1",
+    "expo-splash-screen": "^0.29.24",
     "expo-status-bar": "~2.0.1",
     "firebase": "^12.13.0",
     "lucide-react-native": "^1.14.0",

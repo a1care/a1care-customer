@@ -196,6 +196,7 @@ export default function HomeScreen() {
     const [locCity, setLocCity] = useState(cachedCity || 'Current Location');
     const [locArea, setLocArea] = useState('');
     const [locLoading, setLocLoading] = useState(false);
+    const [showAreaPicker, setShowAreaPicker] = useState(false);
 
     const heroScrollRef = useRef<ScrollView>(null);
     const popularScrollRef = useRef<ScrollView>(null);
@@ -500,16 +501,10 @@ export default function HomeScreen() {
 
     // ── Typewriter placeholder for home search bar ──
     useEffect(() => {
+        // Only the service name animates — "Search for" stays static
         const phrases = services?.length
-            ? services.map(s => `Search for ${s.name}...`)
-            : [
-                'Search symptoms, doctors...',
-                'Search for Doctor at Home...',
-                'Search for Home Nursing...',
-                'Search for Diagnostics...',
-                'Search for Pharmacy...',
-                'Search for Ambulance...',
-            ];
+            ? services.map(s => s.name)
+            : ['Doctor at Home', 'Home Nursing', 'Diagnostics', 'Pharmacy', 'Ambulance'];
         let phraseIdx = 0;
         let charIdx = 0;
         let deleting = false;
@@ -519,11 +514,11 @@ export default function HomeScreen() {
             let delay = 80;
             if (!deleting) {
                 charIdx++;
-                setHomeAnimPlaceholder(phrase.slice(0, charIdx));
+                setHomeAnimPlaceholder(`Search for ${phrase.slice(0, charIdx)}`);
                 if (charIdx === phrase.length) { deleting = true; delay = 1400; }
             } else {
                 charIdx--;
-                setHomeAnimPlaceholder(phrase.slice(0, charIdx));
+                setHomeAnimPlaceholder(`Search for ${phrase.slice(0, charIdx)}`);
                 if (charIdx === 0) { deleting = false; phraseIdx++; delay = 300; }
                 else { delay = 38; }
             }
@@ -722,7 +717,7 @@ export default function HomeScreen() {
                 {/* ── 1. Top Bar (Now part of scroll) ── */}
                 <View style={[styles.stickyHeader, { paddingTop: insets.top + 12 }]}>
                     <View style={styles.headerTop}>
-                        <TouchableOpacity style={styles.locationSelector} onPress={() => handleGetLocation()} disabled={locLoading}>
+                        <TouchableOpacity style={styles.locationSelector} onPress={() => setShowAreaPicker(true)}>
                             <View style={styles.locIconContainer}>
                                 {locLoading
                                     ? <ActivityIndicator size="small" color={Colors.primary} />
@@ -730,10 +725,62 @@ export default function HomeScreen() {
                                 }
                             </View>
                             <View>
-                                <Text style={styles.locCity} numberOfLines={1}>{locArea || 'Current Location'}</Text>
-                                <Text style={styles.locSub} numberOfLines={1}>{locCity}</Text>
+                                <Text style={styles.locCity} numberOfLines={1}>{locArea || 'Select Area'}</Text>
+                                <Text style={styles.locSub} numberOfLines={1}>{locCity !== 'Current Location' ? locCity : 'Tap to choose'}</Text>
                             </View>
                         </TouchableOpacity>
+
+                        {/* Area Picker Modal */}
+                        <Modal visible={showAreaPicker} transparent animationType="slide" onRequestClose={() => setShowAreaPicker(false)}>
+                            <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} activeOpacity={1} onPress={() => setShowAreaPicker(false)} />
+                            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32, position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+                                <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+                                    <View style={{ width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2 }} />
+                                    <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 10, color: '#1a1a1a' }}>Select Your Area</Text>
+                                </View>
+                                {[
+                                    'Safilguda',
+                                    'Neredmet',
+                                    'Malkajgiri',
+                                    'Anand Bagh',
+                                    'Dayanand Nagar',
+                                    'Moula Ali',
+                                    'A.S. Rao Nagar',
+                                    'Sainikpuri',
+                                ].map((area) => (
+                                    <TouchableOpacity
+                                        key={area}
+                                        onPress={async () => {
+                                            setLocArea(area);
+                                            setLocCity('Hyderabad');
+                                            await AsyncStorage.setItem('last_city', 'Hyderabad');
+                                            await AsyncStorage.setItem('last_area', area);
+                                            setShowAreaPicker(false);
+                                        }}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            paddingHorizontal: 24,
+                                            paddingVertical: 14,
+                                            borderBottomWidth: 1,
+                                            borderBottomColor: '#f0f0f0',
+                                            backgroundColor: locArea === area ? '#EBF5FB' : '#fff',
+                                        }}
+                                    >
+                                        <MapPin size={16} color={Colors.primary} style={{ marginRight: 12 }} />
+                                        <Text style={{ fontSize: 15, color: '#1a1a1a', fontWeight: locArea === area ? '700' : '400' }}>{area}</Text>
+                                        {locArea === area && <Text style={{ marginLeft: 'auto', color: Colors.primary, fontSize: 18 }}>✓</Text>}
+                                    </TouchableOpacity>
+                                ))}
+                                <TouchableOpacity
+                                    onPress={() => { setShowAreaPicker(false); handleGetLocation(); }}
+                                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}
+                                >
+                                    <MapPin size={16} color={Colors.primary} style={{ marginRight: 12 }} />
+                                    <Text style={{ fontSize: 15, color: Colors.primary, fontWeight: '600' }}>Use my current location</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </Modal>
 
                         <View style={styles.headerActions}>
                             <TouchableOpacity style={styles.iconCircle} onPress={() => router.push('/(tabs)/notifications')}>

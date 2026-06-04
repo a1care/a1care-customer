@@ -103,15 +103,15 @@ export default function OtpScreen() {
             const user = await authService.getProfile();
             setUser(user);
 
-            // Request location permission after successful OTP verification
-            await requestLocationPermission();
-
             if (user.isRegistered) {
                 triggerLocalNotification('Welcome back!', 'Great to see you again.');
                 router.replace('/(tabs)');
             } else {
                 router.replace('/(auth)/profile-setup');
             }
+
+            // Request location permission after navigation (non-blocking)
+            requestLocationPermission();
         } catch (err: any) {
             let msg = 'Please check the code and try again.';
             if (err.message === 'Network Error') {

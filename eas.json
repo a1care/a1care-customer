@@ -9,15 +9,23 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.a1carehospital.in/api"
+      }
     },
     "production": {
       "ios": {
-        "image": "latest"
+        "image": "latest",
+        "credentialsSource": "remote"
+      },
+      "android": {
+        "credentialsSource": "local"
       },
       "autoIncrement": true,
       "env": {
-        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "EXPO_PUBLIC_API_URL": "https://api.a1carehospital.in/api"
       }
     }
   },
@@ -25,7 +33,12 @@
     "production": {
       "ios": {
         "appleId": "goexpertsapps@gmail.com",
-        "ascAppId": "6765998915"
+        "ascAppId": "6765998915",
+        "appleTeamId": "Z8UNCTCRRH"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "production"
       }
     }
   }
