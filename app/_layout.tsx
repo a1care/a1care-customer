@@ -14,7 +14,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { useConfigStore } from '@/stores/config.store';
 import { useRouter, useSegments } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Image } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Alert, PermissionsAndroid, Platform } from 'react-native'; 
@@ -333,8 +333,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     if (isLoading) {
         console.log('[AuthGuard] Rendering Loading State');
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.primary || '#2F80ED' }}>
-                <ActivityIndicator size="large" color="#fff" />
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+                <Image
+                    source={require('../assets/splash.png')}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="contain"
+                />
             </View>
         );
     }

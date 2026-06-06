@@ -102,7 +102,7 @@ function Timeline({ status }: { status: string }) {
                                 {done ? (
                                     <Text style={styles.timelineCheck}>✓</Text>
                                 ) : active ? (
-                                    <ActivityIndicator size="small" color="#fff" />
+                                    <View style={styles.timelineDotInner} />
                                 ) : null}
                             </View>
                             {idx < STATUS_STEPS.length - 1 && (
@@ -578,6 +578,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     timelineDotActive: { backgroundColor: Colors.primary },
+    timelineDotInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' },
     timelineDotDone: { backgroundColor: Colors.health },
     timelineCheck: { fontSize: 12, fontWeight: '700', color: '#fff' },
     timelineLine: { width: 2, flex: 1, backgroundColor: Colors.border, marginVertical: 2 },
