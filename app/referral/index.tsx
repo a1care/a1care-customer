@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
 import {
     View, Text, TouchableOpacity, Share, StyleSheet,
-    ActivityIndicator, ScrollView, Alert, TextInput,
+    ActivityIndicator, ScrollView, Alert, TextInput, Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { referralService } from '@/services/referral.service';
 import { Colors } from '@/constants/colors';
-import * as Clipboard from 'expo-clipboard';
 
 export default function ReferralScreen() {
     const router = useRouter();
@@ -32,9 +31,9 @@ export default function ReferralScreen() {
         }
     };
 
-    const handleCopy = async () => {
+    const handleCopy = () => {
         if (!data?.referralCode) return;
-        await Clipboard.setStringAsync(data.referralCode);
+        Clipboard.setString(data.referralCode);
         Alert.alert('Copied!', 'Referral code copied to clipboard.');
     };
 
