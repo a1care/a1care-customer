@@ -869,8 +869,11 @@ export default function ServiceDetailScreen() {
                 }
                 setSubmitted(true);
             } catch (err: any) {
-                // Razorpay user-cancel returns code 2 — ignore silently
-                if (err?.code === 2 || err?.code === '2') return;
+                // Razorpay user-cancel returns code 2
+                if (err?.code === 2 || err?.code === '2') {
+                    Alert.alert('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed. You can try again.');
+                    return;
+                }
                 const msg =
                     err?.response?.data?.message ||
                     err?.description ||

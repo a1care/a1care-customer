@@ -226,7 +226,11 @@ export default function DoctorBookingScreen() {
                     },
                 });
             } catch (err: any) {
-                if (err.code !== 2) Alert.alert('Payment Error', err?.description || 'Payment failed. Please try again.');
+                if (err.code === 2) {
+                    Alert.alert('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed.');
+                } else {
+                    Alert.alert('Payment Error', err?.description || 'Payment failed. Please try again.');
+                }
             } finally {
                 setIsProcessingPayment(false);
             }

@@ -115,7 +115,11 @@ export default function FeedbackScreen() {
                             <TouchableOpacity
                                 key={tag}
                                 style={styles.tag}
-                                onPress={() => setComment(prev => prev ? `${prev}, ${tag}` : tag)}
+                                onPress={() => setComment(prev => {
+                                    const tags = prev ? prev.split(', ').map(t => t.trim()) : [];
+                                    if (tags.includes(tag)) return prev;
+                                    return prev ? `${prev}, ${tag}` : tag;
+                                })}
                             >
                                 <Text style={styles.tagText}>+ {tag}</Text>
                             </TouchableOpacity>
