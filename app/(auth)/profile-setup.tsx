@@ -43,6 +43,7 @@ export default function OnboardingScreen() {
     const { setUser } = useAuthStore();
 
     const [name, setName] = useState('');
+    const [referralCode, setReferralCode] = useState('');
     const [gender, setGender] = useState<'Male' | 'Female' | 'Other' | ''>('');
     const [email, setEmail] = useState('');
     const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
@@ -146,6 +147,7 @@ export default function OnboardingScreen() {
             formData.append('gender', gender);
             if (dobString) formData.append('dateOfBirth', dobString);
             formData.append('email', email.trim().toLowerCase());
+            if (referralCode.trim()) formData.append('referralCode', referralCode.trim().toUpperCase());
             formData.append('isRegistered', 'true');
 
             if (selectedImage) {
@@ -420,6 +422,20 @@ export default function OnboardingScreen() {
                                 </TouchableOpacity>
                             ))}
                         </View>
+                    </View>
+
+                    {/* Referral Code (optional) */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Referral Code <Text style={{ color: '#94A3B8', fontWeight: '500' }}>(optional)</Text></Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Friend's referral code"
+                            placeholderTextColor="#9CB3C4"
+                            value={referralCode}
+                            onChangeText={t => setReferralCode(t.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                            autoCapitalize="characters"
+                            maxLength={10}
+                        />
                     </View>
 
                     {/* CTA */}

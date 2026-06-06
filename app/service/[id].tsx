@@ -25,6 +25,7 @@ import { doctorsService } from '@/services/doctors.service';
 import { addressService } from '@/services/address.service';
 import { walletService } from '@/services/wallet.service';
 import { paymentService } from '@/services/payment.service';
+import { couponService } from '@/services/referral.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Button } from '@/components/ui/Button';
@@ -166,6 +167,9 @@ export default function ServiceDetailScreen() {
     const [notes, setNotes] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE' | null>(null);
     const [submittingOnline, setSubmittingOnline] = useState(false);
+    const [couponInput, setCouponInput] = useState('');
+    const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; finalAmount: number } | null>(null);
+    const [couponChecking, setCouponChecking] = useState(false);
     const [isAsap, setIsAsap] = useState(true);
     const [submitted, setSubmitted] = useState(false);
     const submitting = useRef(false);
@@ -802,6 +806,22 @@ export default function ServiceDetailScreen() {
         },
     });
 
+    const handleApplyCoupon = async () => {
+        const code = couponInput.trim().toUpperCase();
+        if (!code) return;
+        const baseAmount = priceParam ? parseFloat(priceParam) : 0;
+        setCouponChecking(true);
+        try {
+            const result = await couponService.preview(code, baseAmount);
+            setCouponApplied({ code: result.code, discount: result.discount, finalAmount: result.finalAmount });
+        } catch (err: any) {
+            Alert.alert('Invalid Coupon', err?.response?.data?.message || 'Coupon code is not valid.');
+            setCouponApplied(null);
+        } finally {
+            setCouponChecking(false);
+        }
+    };
+
     const handleFinalSubmit = async () => {
         if (!isAsap && (!scheduledDate || !scheduledTime)) {
             Alert.alert('Incomplete Schedule', 'Please go back and select a valid date and time.');
@@ -1117,6 +1137,37 @@ export default function ServiceDetailScreen() {
                                 </View>
                             </View>
 
+                            {/* Coupon Code */}
+                            <View style={styles.reviewSection}>
+                                <Text style={[styles.reviewLabel, { marginBottom: 10, fontWeight: '700' }]}>Promo / Coupon Code</Text>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TextInput
+                                        style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: couponApplied ? '#16A34A' : '#E2E8F0', paddingHorizontal: 12, fontSize: 14, fontWeight: '700', color: '#0F172A', letterSpacing: 1 }}
+                                        placeholder="Enter coupon code"
+                                        placeholderTextColor="#94A3B8"
+                                        value={couponInput}
+                                        onChangeText={t => { setCouponInput(t.toUpperCase()); setCouponApplied(null); }}
+                                        autoCapitalize="characters"
+                                        editable={!couponApplied}
+                                    />
+                                    {couponApplied ? (
+                                        <TouchableOpacity onPress={() => { setCouponApplied(null); setCouponInput(''); }} style={{ height: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#FEE2E2', justifyContent: 'center' }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#EF4444' }}>Remove</Text>
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity onPress={handleApplyCoupon} disabled={couponChecking} style={{ height: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: Colors.primary, justifyContent: 'center' }}>
+                                            {couponChecking ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFF' }}>Apply</Text>}
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                                {couponApplied && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#F0FDF4', borderRadius: 8, padding: 10 }}>
+                                        <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
+                                        <Text style={{ fontSize: 13, color: '#16A34A', fontWeight: '600' }}>"{couponApplied.code}" applied — ₹{couponApplied.discount} off!</Text>
+                                    </View>
+                                )}
+                            </View>
+
                             {/* Payment Summary */}
                             <View style={[styles.reviewSection, { borderColor: Colors.primary, borderWidth: 1.5 }]}>
                                 <View style={styles.reviewRow}>
@@ -1127,9 +1178,21 @@ export default function ServiceDetailScreen() {
                                         </View>
                                     </View>
                                 </View>
+                                {couponApplied && (
+                                    <View style={styles.reviewRow}>
+                                        <Text style={styles.reviewLabel}>Original Price</Text>
+                                        <Text style={{ fontSize: 15, color: '#94A3B8', textDecorationLine: 'line-through' }}>{formatCurrency(amount)}</Text>
+                                    </View>
+                                )}
+                                {couponApplied && (
+                                    <View style={styles.reviewRow}>
+                                        <Text style={[styles.reviewLabel, { color: '#16A34A' }]}>Discount</Text>
+                                        <Text style={{ fontSize: 15, fontWeight: '700', color: '#16A34A' }}>-{formatCurrency(couponApplied.discount)}</Text>
+                                    </View>
+                                )}
                                 <View style={[styles.reviewRow, { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 8, paddingTop: 12 }]}>
                                     <Text style={[styles.reviewLabel, { fontSize: 15, fontWeight: '700', color: Colors.textPrimary }]}>Total Amount</Text>
-                                    <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.primary }}>{formatCurrency(amount)}</Text>
+                                    <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.primary }}>{formatCurrency(couponApplied ? couponApplied.finalAmount : amount)}</Text>
                                 </View>
                             </View>
                         </View>

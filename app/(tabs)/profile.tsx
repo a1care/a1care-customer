@@ -231,6 +231,18 @@ export default function ProfileScreen() {
                     />
                 </View>
 
+                {/* Rewards */}
+                <Text style={styles.sectionTitle}>Rewards</Text>
+                <View style={[styles.menuContainer, styles.elevated]}>
+                    <MenuLink
+                        icon={<Ionicons name="gift" size={20} color="#F59E0B" />}
+                        bgColor="#FFFBEB"
+                        title="Refer & Earn"
+                        subtitle="Invite friends, get ₹100 per referral"
+                        onPress={() => router.push("/referral")}
+                    />
+                </View>
+
                 {/* Support Section */}
                 <Text style={styles.sectionTitle}>Support & Help</Text>
                 <View style={[styles.menuContainer, styles.elevated]}>
