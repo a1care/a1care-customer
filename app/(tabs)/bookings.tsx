@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -27,6 +27,7 @@ import {
 
 import { bookingsService } from '@/services/bookings.service';
 import { useAuthStore } from '@/stores/auth.store';
+import { io } from 'socket.io-client';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -47,6 +48,7 @@ const TABS: { id: TabId; label: string }[] = [
 const SERVICE_TAB: Record<string, TabId> = {
     PENDING: 'upcoming',
     BROADCASTED: 'upcoming',
+    RETURNED_TO_ADMIN: 'upcoming',
     ACCEPTED: 'ongoing',
     IN_PROGRESS: 'ongoing',
     COMPLETED: 'completed',
@@ -191,7 +193,7 @@ function AppointmentCard({ appt, onPress }: { appt: DoctorAppointment; onPress?:
 export default function BookingsScreen() {
     const router = useRouter();
     const isFocused = useIsFocused();
-    const { user } = useAuthStore();
+    const { user, isAuthenticated } = useAuthStore();
     const myId = user?._id ? String(user._id) : '';
 
     const [activeTab, setActiveTab] = useState<TabId>('upcoming');
@@ -268,6 +270,19 @@ export default function BookingsScreen() {
         refetchAppt();
     }, [isFocused, refetchSB, refetchAppt]);
 
+    // Socket: refetch bookings on any status update so customer sees live changes
+    const socketRef = useRef<any>(null);
+    const { token } = useAuthStore();
+    useEffect(() => {
+        const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3000';
+        socketRef.current = io(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
+        socketRef.current.on('booking_status_updated', () => {
+            refetchSB();
+            refetchAppt();
+        });
+        return () => { socketRef.current?.disconnect(); };
+    }, [token]);
+
     React.useEffect(() => {
         if (!isFocused) return;
         setAllowCardPress(false);
@@ -307,6 +322,26 @@ export default function BookingsScreen() {
     };
 
     const isEmpty = visibleCount === 0 && !isLoading;
+
+    if (!isAuthenticated) {
+        return (
+            <SafeAreaView style={styles.root} edges={['top']}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+                    <Text style={{ fontSize: 48, marginBottom: 16 }}>📋</Text>
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: '#0D2E4D', textAlign: 'center', marginBottom: 8 }}>Your Bookings</Text>
+                    <Text style={{ fontSize: 14, color: '#4A6E8A', textAlign: 'center', lineHeight: 22, marginBottom: 28 }}>
+                        Sign in to view and track your healthcare bookings.
+                    </Text>
+                    <TouchableOpacity
+                        onPress={() => router.push('/(auth)/login')}
+                        style={{ backgroundColor: '#1A7FD4', borderRadius: 28, paddingHorizontal: 36, paddingVertical: 16, width: '100%', alignItems: 'center' }}
+                    >
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Sign In / Register</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>

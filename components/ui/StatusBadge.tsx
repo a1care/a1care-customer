@@ -11,6 +11,7 @@ type StatusType =
     | 'IN_PROGRESS'
     | 'COMPLETED'
     | 'CANCELLED'
+    | 'RETURNED_TO_ADMIN'
     // Doctor appointment statuses
     | 'Pending'
     | 'Confirmed'
@@ -27,6 +28,7 @@ const STATUS_CONFIG: Record<
     IN_PROGRESS: { bg: '#DBEAFE', text: '#1E40AF', label: 'In Progress', dot: '#3B82F6' },
     COMPLETED: { bg: '#D1FAE5', text: '#065F46', label: 'Completed', dot: '#10B981' },
     CANCELLED: { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled', dot: '#EF4444' },
+    RETURNED_TO_ADMIN: { bg: '#FFF1F2', text: '#9F1239', label: 'Re-scheduling', dot: '#F43F5E' },
     // Doctor appt aliases
     Pending: { bg: '#FEF9C3', text: '#854D0E', label: 'Pending', dot: '#EAB308' },
     Confirmed: { bg: '#D1EFE0', text: '#166534', label: 'Confirmed', dot: '#22C55E' },

@@ -137,13 +137,13 @@ export default function OnboardingScreen() {
             flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
         } else {
             AsyncStorage.setItem('onboarding_done', 'true');
-            router.replace("/(auth)/login");
+            router.replace("/(tabs)");
         }
     };
 
     const handleSkip = () => {
         AsyncStorage.setItem('onboarding_done', 'true');
-        router.replace("/(auth)/login");
+        router.replace("/(tabs)");
     };
 
     return (

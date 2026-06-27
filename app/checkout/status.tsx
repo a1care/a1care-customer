@@ -10,7 +10,7 @@ export default function PaymentStatusScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const { status, txnId, amount, type, description, bookingId } = useLocalSearchParams() as any;
-    const isSuccess = status === "SUCCESS";
+    const isSuccess = status?.toUpperCase() === "SUCCESS";
     const isWallet = type === "WALLET_TOPUP";
 
     useEffect(() => {

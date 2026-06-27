@@ -7,9 +7,11 @@ interface AuthState {
     user: Patient | null;
     isAuthenticated: boolean;
     isLoading: boolean;
+    postLoginReturn: { pathname: string; params?: Record<string, string> } | null;
 
     setToken: (token: string) => void;
     setUser: (user: Patient) => void;
+    setPostLoginReturn: (destination: { pathname: string; params?: Record<string, string> } | null) => void;
     initialize: () => Promise<void>;
     logout: () => Promise<void>;
 }
@@ -19,9 +21,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     user: null,
     isAuthenticated: false,
     isLoading: true,
+    postLoginReturn: null,
 
     setToken: (token) => set({ token, isAuthenticated: true }),
     setUser: (user) => set({ user }),
+    setPostLoginReturn: (destination) => set({ postLoginReturn: destination }),
 
     initialize: async () => {
         set({ isLoading: true });

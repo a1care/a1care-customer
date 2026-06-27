@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Colors } from "@/constants/colors";
 
-const EASEBUZZ_URL = "https://testpay.easebuzz.in/pay/secure";
+const EASEBUZZ_URL = process.env.EXPO_PUBLIC_EASEBUZZ_URL || "https://testpay.easebuzz.in/pay/secure";
 
 function buildAutoSubmitHtml(fields: Record<string, string>) {
   const inputs = Object.entries(fields)

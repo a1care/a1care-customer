@@ -49,7 +49,9 @@ export default function FeedbackScreen() {
                     text: "Done", onPress: () => {
                         qc.invalidateQueries({ queryKey: ['doctor', doctorId] });
                         qc.invalidateQueries({ queryKey: ['reviews', doctorId] });
-                        router.back();
+                        qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+                        qc.invalidateQueries({ queryKey: ['appointments'] });
+                        router.replace('/(tabs)/bookings' as any);
                     }
                 }
             ]);

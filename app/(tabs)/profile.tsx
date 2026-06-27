@@ -54,7 +54,7 @@ function MenuLink({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
     const router = useRouter();
-    const { user, logout } = useAuthStore();
+    const { user, logout, isAuthenticated } = useAuthStore();
     const qc = useQueryClient();
     const [refreshing, setRefreshing] = useState(false);
 
@@ -116,6 +116,26 @@ export default function ProfileScreen() {
     };
 
     const displayUser = profile ?? user;
+
+    if (!isAuthenticated) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+                    <Text style={{ fontSize: 48, marginBottom: 16 }}>👤</Text>
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: '#0D2E4D', textAlign: 'center', marginBottom: 8 }}>Your Profile</Text>
+                    <Text style={{ fontSize: 14, color: '#4A6E8A', textAlign: 'center', lineHeight: 22, marginBottom: 28 }}>
+                        Sign in to access your profile, wallet, health vault and account settings.
+                    </Text>
+                    <TouchableOpacity
+                        onPress={() => router.push('/(auth)/login')}
+                        style={{ backgroundColor: '#1A7FD4', borderRadius: 28, paddingHorizontal: 36, paddingVertical: 16, width: '100%', alignItems: 'center' }}
+                    >
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Sign In / Register</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>

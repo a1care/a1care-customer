@@ -19,6 +19,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { useAuthStore } from '@/stores/auth.store';
+import { authService } from '@/services/auth.service';
 import { servicesService } from '@/services/services.service';
 import { bookingsService } from '@/services/bookings.service';
 import { doctorsService } from '@/services/doctors.service';
@@ -41,6 +43,12 @@ type Step = 'info' | 'doctor' | 'address' | 'schedule' | 'payment' | 'confirm';
 
 const ALL_STEPS: Step[] = ['info', 'doctor', 'address', 'schedule', 'payment', 'confirm'];
 const ALL_STEP_LABELS = ['Service', 'Expert', 'Location', 'Schedule', 'Payment', 'Review'];
+// Steps visible in the stepper (excludes info/doctor which are pre-booking)
+const VISIBLE_STEPS: Step[] = ['address', 'schedule', 'payment', 'confirm'];
+const VISIBLE_STEP_LABELS: Record<Step, string> = {
+    info: 'Service', doctor: 'Expert',
+    address: 'Location', schedule: 'Schedule', payment: 'Payment', confirm: 'Review',
+};
 
 const SLOT_OPTIONS = [
     '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
@@ -86,46 +94,33 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, message = 'Reque
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function StepIndicator({ current, activeSteps }: { current: Step, activeSteps: Step[] }) {
-    const idx = activeSteps.indexOf(current);
+    // Only show stepper after the info step; filter to visible steps that are active
+    const visibleActive = activeSteps.filter(s => VISIBLE_STEPS.includes(s));
+    const idx = visibleActive.indexOf(current);
+    if (idx < 0) return null; // hide on info/doctor steps
     return (
         <View style={styles.stepRow}>
-            {activeSteps.map((s, i) => {
-                const globalIdx = ALL_STEPS.indexOf(s);
-                return (
-                    <React.Fragment key={s}>
-                        <View style={styles.stepItem}>
-                            <View
-                                style={[
-                                    styles.stepDot,
-                                    i < idx ? styles.stepDotDone : {},
-                                    i === idx ? styles.stepDotActive : {},
-                                ]}
-                            >
-                                {i < idx ? (
-                                    <Text style={styles.stepDotCheckmark}>✓</Text>
-                                ) : (
-                                    <Text
-                                        style={[
-                                            styles.stepDotNum,
-                                            i === idx ? styles.stepDotNumActive : {},
-                                        ]}
-                                    >
-                                        {i + 1}
-                                    </Text>
-                                )}
-                            </View>
-                            <Text
-                                style={[styles.stepLabel, i === idx ? styles.stepLabelActive : {}]}
-                            >
-                                {ALL_STEP_LABELS[globalIdx]}
-                            </Text>
+            {visibleActive.map((s, i) => (
+                <React.Fragment key={s}>
+                    <View style={styles.stepItem}>
+                        <View style={[styles.stepDot, i < idx ? styles.stepDotDone : {}, i === idx ? styles.stepDotActive : {}]}>
+                            {i < idx ? (
+                                <Text style={styles.stepDotCheckmark}>✓</Text>
+                            ) : (
+                                <Text style={[styles.stepDotNum, i === idx ? styles.stepDotNumActive : {}]}>
+                                    {i + 1}
+                                </Text>
+                            )}
                         </View>
-                        {i < activeSteps.length - 1 && (
-                            <View style={[styles.stepLine, i < idx ? styles.stepLineDone : {}]} />
-                        )}
-                    </React.Fragment>
-                );
-            })}
+                        <Text style={[styles.stepLabel, i === idx ? styles.stepLabelActive : {}]}>
+                            {VISIBLE_STEP_LABELS[s]}
+                        </Text>
+                    </View>
+                    {i < visibleActive.length - 1 && (
+                        <View style={[styles.stepLine, i < idx ? styles.stepLineDone : {}]} />
+                    )}
+                </React.Fragment>
+            ))}
         </View>
     );
 }
@@ -173,6 +168,12 @@ export default function ServiceDetailScreen() {
     const [isAsap, setIsAsap] = useState(true);
     const [submitted, setSubmitted] = useState(false);
     const submitting = useRef(false);
+
+    const { isAuthenticated, setPostLoginReturn } = useAuthStore();
+    const [showGuestModal, setShowGuestModal] = useState(false);
+    const [guestName, setGuestName] = useState('');
+    const [guestPhone, setGuestPhone] = useState('');
+    const [guestLoading, setGuestLoading] = useState(false);
 
     // ── Back Handler (Android) ──
     React.useEffect(() => {
@@ -889,6 +890,43 @@ export default function ServiceDetailScreen() {
         }
     };
 
+    const handleGuestContinue = async () => {
+        const name = guestName.trim();
+        const phone = guestPhone.replace(/\D/g, '');
+        if (!name) {
+            Alert.alert('Name Required', 'Please enter your name to continue.');
+            return;
+        }
+        if (phone.length < 10) {
+            Alert.alert('Invalid Number', 'Please enter a valid 10-digit mobile number.');
+            return;
+        }
+        setGuestLoading(true);
+        try {
+            await authService.sendOtp(phone);
+            setShowGuestModal(false);
+            setPostLoginReturn({
+                pathname: '/service/[id]',
+                params: {
+                    id: id ?? '',
+                    name: nameParam ?? '',
+                    price: priceParam ?? '',
+                    subName: subName ?? '',
+                    source: source ?? '',
+                    entryMode: entryMode ?? '',
+                    originServiceId: originServiceId ?? '',
+                    originSubServiceId: originSubServiceId ?? '',
+                    originCategory: originCategory ?? '',
+                },
+            });
+            router.push({ pathname: '/(auth)/otp', params: { mobile: phone } });
+        } catch (err: any) {
+            Alert.alert('Failed to Send OTP', err?.response?.data?.message || err?.message || 'Please try again.');
+        } finally {
+            setGuestLoading(false);
+        }
+    };
+
     const serviceName = nameParam ?? `Service`;
 
     if (submitted) {
@@ -1208,6 +1246,7 @@ export default function ServiceDetailScreen() {
                     label={step === 'confirm' ? 'Confirm Booking' : 'Continue →'}
                     onPress={() => {
                         if (step === 'confirm') handleFinalSubmit();
+                        else if (step === 'info' && !isAuthenticated) setShowGuestModal(true);
                         else goToNextStep();
                     }}
                     loading={bookMutation.isPending || submittingOnline}
@@ -1215,6 +1254,79 @@ export default function ServiceDetailScreen() {
                     size="lg"
                 />
             </View>
+
+            {/* ── Guest Checkout Modal ── */}
+            <Modal
+                visible={showGuestModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowGuestModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Enter Your Details</Text>
+                            <TouchableOpacity onPress={() => setShowGuestModal(false)}>
+                                <Ionicons name="close" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={{ fontSize: 14, color: Colors.textSecondary, marginBottom: 20 }}>
+                            Sign in or create an account to complete your booking.
+                        </Text>
+
+                        <Text style={styles.modalInputLabel}>Your Name <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            placeholder="e.g. Rahul Sharma"
+                            value={guestName}
+                            onChangeText={setGuestName}
+                            autoCapitalize="words"
+                            returnKeyType="next"
+                        />
+
+                        <Text style={styles.modalInputLabel}>Mobile Number <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                        <View style={[styles.modalInput, { flexDirection: 'row', alignItems: 'center', paddingVertical: 0 }]}>
+                            <Text style={{ fontSize: 15, color: '#4A6E8A', fontWeight: '600', marginRight: 8 }}>+91</Text>
+                            <TextInput
+                                style={{ flex: 1, fontSize: 15, color: Colors.textPrimary, height: 52 }}
+                                placeholder="98765 43210"
+                                keyboardType="phone-pad"
+                                value={guestPhone}
+                                onChangeText={(t) => setGuestPhone(t.replace(/\D/g, ''))}
+                                maxLength={10}
+                                returnKeyType="done"
+                            />
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.saveAddrBtn, { marginTop: 24 }]}
+                            onPress={handleGuestContinue}
+                            disabled={guestLoading}
+                        >
+                            {guestLoading ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.saveAddrBtnText}>Send OTP & Continue</Text>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={{ marginTop: 16, alignItems: 'center' }}
+                            onPress={() => {
+                                setShowGuestModal(false);
+                                router.push('/(auth)/login');
+                            }}
+                        >
+                            <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '600' }}>
+                                Already have an account? Login
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
 
             {/* ── Add/Edit Address Modal ── */}
             <Modal

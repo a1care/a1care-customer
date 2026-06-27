@@ -105,10 +105,8 @@ export default function OtpScreen() {
 
             if (user.isRegistered) {
                 triggerLocalNotification('Welcome back!', 'Great to see you again.');
-                router.replace('/(tabs)');
-            } else {
-                router.replace('/(auth)/profile-setup');
             }
+            // _layout.tsx routing handles navigation after auth state updates
 
             // Request location permission after navigation (non-blocking)
             requestLocationPermission();

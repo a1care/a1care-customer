@@ -14,21 +14,22 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { useConfigStore } from '@/stores/config.store';
 import { useRouter, useSegments } from 'expo-router';
-import { ActivityIndicator, View, Image } from 'react-native';
+import { ActivityIndicator, View, Image, Text, Animated } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Alert, PermissionsAndroid, Platform } from 'react-native'; 
+import { Alert, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
-// import messaging from '@react-native-firebase/messaging';
-const messaging = () => ({
-    requestPermission: async () => 1,
-    getToken: async () => 'mock-token',
-    onMessage: (cb: any) => () => {},
-    onNotificationOpenedApp: (cb: any) => {},
-    getInitialNotification: async () => null,
-    onTokenRefresh: (cb: any) => () => {},
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+    }),
 });
-(messaging as any).AuthorizationStatus = { AUTHORIZED: 1, PROVISIONAL: 2 };
 import api from '@/services/api';
 import { notificationsService } from '@/services/notifications.service';
 import * as Location from 'expo-location';
@@ -41,28 +42,29 @@ const LOCATION_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-    const { isAuthenticated, isLoading, user, initialize } = useAuthStore();
+    const { isAuthenticated, isLoading, user, initialize, postLoginReturn, setPostLoginReturn } = useAuthStore();
     const { fetchConfig, config } = useConfigStore();
     const router = useRouter();
     const segments = useSegments();
     const [hasRequestedPostLoginPermissions, setHasRequestedPostLoginPermissions] = React.useState(false);
+    const [onboardingChecked, setOnboardingChecked] = React.useState(false);
+    const [onboardingDone, setOnboardingDone] = React.useState(false);
+    const [routerReady, setRouterReady] = React.useState(false);
 
     useEffect(() => {
-        console.log('[AuthGuard] Initializing...');
         initialize();
         fetchConfig();
+        AsyncStorage.getItem('onboarding_done').then(done => {
+            setOnboardingDone(!!done);
+            setOnboardingChecked(true);
+        });
     }, []);
 
 
     // OS-level permission dialog only — safe to call before login (no API calls).
     const requestNotificationPermissionOnly = async () => {
         try {
-            if (Platform.OS === 'android' && Platform.Version >= 33) {
-                await PermissionsAndroid.request(
-                    PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-                );
-            }
-            await messaging().requestPermission();
+            await Notifications.requestPermissionsAsync();
         } catch (e) {
             console.log('[Permissions] Notification permission request failed:', e);
         }
@@ -70,24 +72,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const requestNotificationPermission = async () => {
         try {
-            if (Platform.OS === 'android' && Platform.Version >= 33) {
-                const granted = await PermissionsAndroid.request(
-                    PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-                );
-                if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
-            }
+            const { status } = await Notifications.requestPermissionsAsync();
+            if (status !== 'granted') return;
 
-            const authStatus = await messaging().requestPermission();
-            const enabled =
-                authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-                authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-            if (enabled) {
-                const fcmToken = await messaging().getToken();
-                if (fcmToken) {
-                    await api.put('/notifications/fcm-token/patient', { fcmToken });
-                    console.log('[FCM] Token registered:', fcmToken);
-                }
+            const tokenData = await Notifications.getDevicePushTokenAsync();
+            const fcmToken = tokenData.data;
+            if (fcmToken) {
+                await api.put('/notifications/fcm-token/patient', { fcmToken });
             }
         } catch (e) {
             console.log("[FCM] Registry Error:", e);
@@ -160,56 +151,31 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     };
 
     useEffect(() => {
-        if (isAuthenticated) {
-            const unsubscribe = messaging().onMessage(async remoteMessage => {
-                console.log('[FCM] Foreground message received:', remoteMessage);
-                const title = remoteMessage.notification?.title || "A1Care";
-                const body = remoteMessage.notification?.body || "You have a new notification";
-                await notificationsService.addLocalNotification({
-                    title,
-                    body,
-                    refType: (remoteMessage.data?.refType as string) || 'Broadcast',
-                    data: remoteMessage.data as Record<string, string> | undefined,
-                });
-                Alert.alert(
-                    title,
-                    body,
-                    [
-                        {
-                            text: "View",
-                            onPress: () => {
-                                if (remoteMessage.data?.screen) {
-                                    router.push(remoteMessage.data.screen as any);
-                                }
-                            }
-                        },
-                        { text: "Dismiss", style: "cancel" }
-                    ]
-                );
+        if (!isAuthenticated) return;
+
+        // Foreground notification handler
+        const foregroundSub = Notifications.addNotificationReceivedListener(async notification => {
+            const title = notification.request.content.title || "A1Care";
+            const body = notification.request.content.body || "You have a new notification";
+            const data = notification.request.content.data as Record<string, string> | undefined;
+            await notificationsService.addLocalNotification({
+                title,
+                body,
+                refType: (data?.refType as string) || 'Broadcast',
+                data,
             });
+        });
 
-            messaging().onNotificationOpenedApp(remoteMessage => {
-                console.log('[FCM] Notification opened app:', remoteMessage.notification);
-                if (remoteMessage.data?.screen) {
-                    router.push(remoteMessage.data.screen as any);
-                }
-            });
+        // Notification tap handler (app in background/foreground)
+        const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
+            const data = response.notification.request.content.data as Record<string, string> | undefined;
+            if (data?.screen) router.push(data.screen as any);
+        });
 
-            messaging()
-                .getInitialNotification()
-                .then(remoteMessage => {
-                    if (remoteMessage) {
-                        console.log('[FCM] App opened from quit state:', remoteMessage.notification);
-                        if (remoteMessage.data?.screen) {
-                            setTimeout(() => {
-                                router.push(remoteMessage.data?.screen as any);
-                            }, 500);
-                        }
-                    }
-                });
-
-            return unsubscribe;
-        }
+        return () => {
+            foregroundSub.remove();
+            responseSub.remove();
+        };
     }, [isAuthenticated]);
 
     useEffect(() => {
@@ -264,22 +230,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         if (!isAuthenticated) return;
-        return messaging().onTokenRefresh(fcmToken => {
-            if (fcmToken) {
-                api.put('/notifications/fcm-token/patient', { fcmToken });
-                console.log('[FCM] Token refreshed:', fcmToken);
-            }
+        // Re-register push token on refresh (e.g. after app reinstall)
+        const tokenSub = Notifications.addPushTokenListener(({ data: fcmToken }) => {
+            if (fcmToken) api.put('/notifications/fcm-token/patient', { fcmToken });
         });
+        return () => tokenSub.remove();
     }, [isAuthenticated]);
 
     useEffect(() => {
-        console.log('[AuthGuard] State Changed:', { isAuthenticated, isLoading, segments, maintenance: config?.maintenanceMode });
-        if (isLoading) return;
+        if (isLoading || !onboardingChecked) return;
 
         const isMaintenancePage = (segments as string[])[0] === 'maintenance';
         if (config?.maintenanceMode) {
             if (!isMaintenancePage) {
-                console.log('[AuthGuard] Redirecting to maintenance');
                 router.replace('/maintenance' as any);
             }
             return;
@@ -291,26 +254,26 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         const currentSegment = (segments as string[])[0];
         const isAtRoot = !segments.length || currentSegment === 'index';
         const inAuthGroup = currentSegment === '(auth)';
-        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq', 'index'];
-        const isExcluded = excludedSegments.includes(currentSegment);
+        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq', 'index', '(tabs)', 'service'];
+        // Treat unresolved route (empty segments) as excluded to avoid premature redirect
+        const isExcluded = !segments.length || excludedSegments.includes(currentSegment);
 
         if (!isAuthenticated && !isExcluded) {
-            // Check if onboarding was already seen — if yes, skip to login
-            AsyncStorage.getItem('onboarding_done').then(done => {
-                if (done) {
-                    router.replace('/(auth)/login');
-                } else {
-                    router.replace('/');
-                }
-            });
+            // Unauthenticated users always land on tabs to browse freely (Apple 5.1.1)
+            router.replace('/(tabs)');
             return;
         }
 
         if (!isAuthenticated && isAtRoot) {
-            // Already on onboarding, let it show
+            // If onboarding already seen, skip to tabs. Otherwise show onboarding.
+            if (onboardingDone) {
+                router.replace('/(tabs)');
+            } else {
+                setRouterReady(true);
+            }
             return;
         } else if (isAuthenticated && user && (inAuthGroup || isAtRoot)) {
-            // If registered go to tabs; else go to profile setup
+            // If registered go to tabs (or back to service if returning from guest checkout); else profile setup
             if (user.isRegistered) {
                 const run = async () => {
                     if (!hasRequestedPostLoginPermissions) {
@@ -319,37 +282,73 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                         await requestNotificationPermission();
                         setHasRequestedPostLoginPermissions(true);
                     }
-                    console.log('[AuthGuard] Redirecting to tabs');
-                    router.replace('/(tabs)');
+                    const dest = useAuthStore.getState().postLoginReturn;
+                    if (dest) {
+                        useAuthStore.getState().setPostLoginReturn(null);
+                        router.replace(dest as any);
+                    } else {
+                        router.replace('/(tabs)');
+                    }
                 };
                 run();
             } else {
-                console.log('[AuthGuard] Redirecting to profile-setup');
                 router.replace('/(auth)/profile-setup');
             }
         }
-    }, [isAuthenticated, isLoading, user, segments, config?.maintenanceMode, hasRequestedPostLoginPermissions]);
 
-    if (isLoading) {
-        console.log('[AuthGuard] Rendering Loading State');
-        return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-                <Image
-                    source={require('../assets/splash.png')}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="contain"
-                />
-            </View>
-        );
-    }
+        setRouterReady(true);
+    }, [isAuthenticated, isLoading, user, segments, config?.maintenanceMode, hasRequestedPostLoginPermissions, onboardingDone, onboardingChecked]);
 
-    console.log('[AuthGuard] Rendering Children');
-    return <>{children}</>;
+    const showSplash = isLoading || !onboardingChecked || !routerReady;
+
+    const scaleAnim = React.useRef(new Animated.Value(0.75)).current;
+    const opacityAnim = React.useRef(new Animated.Value(0)).current;
+
+    React.useEffect(() => {
+        if (showSplash) {
+            scaleAnim.setValue(0.75);
+            opacityAnim.setValue(0);
+            Animated.parallel([
+                Animated.spring(scaleAnim, {
+                    toValue: 1,
+                    friction: 5,
+                    tension: 60,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(opacityAnim, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }
+    }, [showSplash]);
+
+    return (
+        <>
+            {children}
+            {showSplash && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF', zIndex: 9999, justifyContent: 'center', alignItems: 'center' }}>
+                    <Animated.View style={{ alignItems: 'center', transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
+                        <Image
+                            source={require('../assets/splash-icon.png')}
+                            style={{ width: 220, height: 220, resizeMode: 'contain', marginBottom: 24 }}
+                        />
+                        <Text style={{ fontSize: 36, fontWeight: '900' }}>
+                            <Text style={{ color: '#1A7FD4' }}>A1</Text>
+                            <Text style={{ color: '#27AE60' }}>Care</Text>
+                            <Text style={{ color: '#1A7FD4' }}> 24/7</Text>
+                        </Text>
+                        <Text style={{ fontSize: 14, color: '#888', marginTop: 8, letterSpacing: 1 }}>Healthcare at Your Doorstep</Text>
+                    </Animated.View>
+                    <ActivityIndicator size="large" color="#1A7FD4" style={{ position: 'absolute', bottom: 80 }} />
+                </View>
+            )}
+        </>
+    );
 }
 
 export default function RootLayout() {
-    console.log('[RootLayout] Starting...');
-    // Load fonts but don't block rendering — app shows immediately, fonts swap in when ready
     useFonts({
         Inter_400Regular,
         Inter_500Medium,
@@ -357,7 +356,6 @@ export default function RootLayout() {
         Inter_700Bold,
     });
 
-    console.log('[RootLayout] Rendering Providers');
     return (
         <>
             <GestureHandlerRootView style={{ flex: 1 }}>

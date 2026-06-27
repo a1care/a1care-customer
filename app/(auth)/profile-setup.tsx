@@ -72,7 +72,7 @@ export default function OnboardingScreen() {
 
     const sanitizeName = (value: string) =>
         value
-            .replace(/[^A-Za-z\s]/g, '')
+            .replace(/[^A-Za-z\s.'\-]/g, '')
             .replace(/\s{2,}/g, ' ')
             .replace(/^\s+/, '');
 
@@ -112,7 +112,7 @@ export default function OnboardingScreen() {
     }, [showThinking]);
 
     const handleComplete = async () => {
-        const nameRegex = /^[A-Za-z]+(?:\s[A-Za-z]+)*$/;
+        const nameRegex = /^[A-Za-z][A-Za-z\s.'\-]{0,58}[A-Za-z.]$/;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const errors: Record<string, boolean> = {};
 

@@ -132,6 +132,12 @@ export default function LoginScreen() {
                     <Text style={styles.disclaimer}>
                         By continuing, you agree to our <Text onPress={() => router.push('/terms')} style={{ color: "#1A7FD4", fontWeight: "700" }}>Terms</Text> and <Text onPress={() => router.push('/privacy')} style={{ color: "#1A7FD4", fontWeight: "700" }}>Privacy Policy</Text>
                     </Text>
+
+                    <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={{ marginTop: 8, alignItems: 'center', paddingVertical: 10 }}>
+                        <Text style={{ fontSize: 14, color: "#4A6E8A", fontWeight: "600" }}>
+                            Browse as Guest →
+                        </Text>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Trust badges */}
