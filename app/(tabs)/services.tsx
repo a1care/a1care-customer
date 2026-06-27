@@ -519,7 +519,7 @@ export default function ServicesScreen() {
                         <Text style={styles.headerTitle}>Browse Services</Text>
                         <Text style={styles.headerRootSub}>Quality care, right at your doorstep</Text>
                     </View>
-                    <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8}>
+                    <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8} onPress={() => router.push('/(tabs)/notifications')}>
                         <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
                     </TouchableOpacity>
                 </View>

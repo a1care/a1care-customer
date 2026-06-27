@@ -210,6 +210,7 @@ export default function BookingsScreen() {
         queryFn: bookingsService.getMyServiceBookings,
         enabled: !!myId,
         retry: 2,
+        refetchInterval: 30000, // auto-refresh every 30 seconds
     });
 
     const {
@@ -222,6 +223,7 @@ export default function BookingsScreen() {
         queryFn: bookingsService.getMyAppointments,
         enabled: !!myId,
         retry: 1,
+        refetchInterval: 30000, // auto-refresh every 30 seconds
     });
 
     const myServiceBookings = useMemo(() => {

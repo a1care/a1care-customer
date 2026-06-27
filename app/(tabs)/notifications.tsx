@@ -185,17 +185,27 @@ export default function NotificationsScreen() {
 
     const handlePress = (n: any) => {
         if (!n.isRead) markOneMutation.mutate(n._id);
-        
+        const screen = n.data?.screen;
+        if (screen) {
+            router.push(screen as any);
+            return;
+        }
         switch (n.refType) {
             case 'DoctorAppointment':
             case 'ServiceRequest':
-                router.push('/bookings');
+                router.push('/(tabs)/bookings' as any);
                 break;
             case 'Wallet':
-                router.push('/wallet');
+                router.push('/wallet/index' as any);
                 break;
             case 'Ticket':
-                router.push('/support');
+                router.push('/support/chat' as any);
+                break;
+            case 'Broadcast':
+            case 'Auth':
+                // No navigation — tap just marks as read
+                break;
+            default:
                 break;
         }
     };
