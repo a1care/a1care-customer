@@ -37,6 +37,7 @@ import { formatCurrency } from '@/utils/formatters';
 import type { Address } from '@/types';
 import RazorpayCheckout from 'react-native-razorpay';
 import { triggerLocalNotification } from '@/utils/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 type Step = 'info' | 'doctor' | 'address' | 'schedule' | 'payment' | 'confirm';

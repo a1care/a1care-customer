@@ -9,7 +9,8 @@ import { useQueryClient } from "@tanstack/react-query";
 export default function PaymentStatusScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
-    const { status, txnId, amount, type, description, bookingId } = useLocalSearchParams() as any;
+    const { status, txnId, amount, type, description, bookingId, paidAt } = useLocalSearchParams() as any;
+    const txnDate = paidAt ? new Date(Number(paidAt)) : new Date();
     const isSuccess = status?.toUpperCase() === "SUCCESS";
     const isWallet = type === "WALLET_TOPUP";
 
@@ -99,7 +100,7 @@ export default function PaymentStatusScreen() {
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Date & Time</Text>
                         <Text style={styles.detailValue}>
-                            {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {txnDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </Text>
                     </View>
                     <View style={styles.divider} />

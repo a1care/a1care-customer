@@ -93,6 +93,7 @@ export default function WalletScreen() {
                     amount: String(order.amount),
                     type: 'WALLET_TOPUP',
                     description: 'Wallet Top-up via Razorpay',
+                    paidAt: Date.now().toString(),
                 },
             });
         },

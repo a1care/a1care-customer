@@ -108,7 +108,7 @@ export default function DoctorDetailScreen() {
                         <View style={styles.statItem}>
                             <View style={styles.ratingRow}>
                                 <Star size={18} color="#F2C94C" fill="#F2C94C" />
-                                <Text style={styles.statNum}>{Number(doctor.rating || 5).toFixed(1)}</Text>
+                                <Text style={styles.statNum}>{doctor.rating ? Number(doctor.rating).toFixed(1) : 'New'}</Text>
                             </View>
                             <Text style={styles.statLabel}>Rating</Text>
                         </View>
@@ -187,7 +187,7 @@ export default function DoctorDetailScreen() {
             <View style={styles.footer}>
                 <Button
                     label="Book Appointment"
-                    onPress={() => router.push({ pathname: '/doctor/book', params: { id: doctor._id, name: doctor.name } })}
+                    onPress={() => router.push({ pathname: '/doctor/book', params: { id: doctor._id, serviceName: doctor.name } })}
                     variant="primary"
                     size="lg"
                     fullWidth

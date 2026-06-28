@@ -48,12 +48,14 @@ const TABS: { id: TabId; label: string }[] = [
 const SERVICE_TAB: Record<string, TabId> = {
     PENDING: 'upcoming',
     BROADCASTED: 'upcoming',
+    PARTNER_ASSIGNED: 'upcoming',
     RETURNED_TO_ADMIN: 'upcoming',
     ACCEPTED: 'ongoing',
     IN_PROGRESS: 'ongoing',
     COMPLETED: 'completed',
     CANCELLED: 'cancelled',
 };
+const getServiceTab = (status: string): TabId => SERVICE_TAB[status] ?? 'upcoming';
 
 const APPT_TAB: Record<string, TabId> = {
     Pending: 'upcoming',
@@ -139,7 +141,7 @@ function ServiceCard({ booking, onPress }: { booking: ServiceRequest; onPress: (
             </View>
             <View style={styles.cardDivider} />
             <BookingMetaRow
-                dateText={formatDateTime(booking.createdAt)}
+                dateText={formatDateTime((booking as any).scheduledTime || (booking as any).scheduledSlot?.startTime || booking.createdAt)}
                 paymentText={paymentLabel}
             />
         </TouchableOpacity>
@@ -296,7 +298,7 @@ export default function BookingsScreen() {
     const isError = sbErr || apptErr;
 
     const filteredServiceBookings = myServiceBookings.filter(
-        (b) => SERVICE_TAB[b.status] === activeTab
+        (b) => getServiceTab(b.status) === activeTab
     );
     const filteredAppts = myAppointments.filter(
         (a) => APPT_TAB[a.status ?? 'Pending'] === activeTab
@@ -318,7 +320,7 @@ export default function BookingsScreen() {
     ].sort((a, b) => b.ts - a.ts);
 
     const tabCount = (tab: TabId) => {
-        const sbCount = myServiceBookings.filter((b) => SERVICE_TAB[b.status] === tab).length;
+        const sbCount = myServiceBookings.filter((b) => getServiceTab(b.status) === tab).length;
         const apptCount = myAppointments.filter((a) => APPT_TAB[a.status ?? 'Pending'] === tab).length;
         return sbCount + apptCount;
     };

@@ -1,7 +1,6 @@
 // Local backend default. Override via EXPO_PUBLIC_API_URL when needed.
 // For Android emulator, switch to http://10.0.2.2:3000/api if localhost does not resolve.
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
-console.log('DEBUG: BASE_URL in constants/api.ts is:', BASE_URL);
 
 export const API_BASE_URL = BASE_URL;
 

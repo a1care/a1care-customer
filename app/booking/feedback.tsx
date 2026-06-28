@@ -51,6 +51,7 @@ export default function FeedbackScreen() {
                         qc.invalidateQueries({ queryKey: ['reviews', doctorId] });
                         qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
                         qc.invalidateQueries({ queryKey: ['appointments'] });
+                        qc.invalidateQueries({ queryKey: ['service-booking', bookingId] });
                         router.replace('/(tabs)/bookings' as any);
                     }
                 }
@@ -113,19 +114,22 @@ export default function FeedbackScreen() {
 
                     {/* Quick Tags */}
                     <View style={styles.tagsContainer}>
-                        {QUICK_TAGS.map(tag => (
-                            <TouchableOpacity
-                                key={tag}
-                                style={styles.tag}
-                                onPress={() => setComment(prev => {
-                                    const tags = prev ? prev.split(', ').map(t => t.trim()) : [];
-                                    if (tags.includes(tag)) return prev;
-                                    return prev ? `${prev}, ${tag}` : tag;
-                                })}
-                            >
-                                <Text style={styles.tagText}>+ {tag}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {QUICK_TAGS.map(tag => {
+                            const isSelected = comment.split(', ').map(t => t.trim()).includes(tag);
+                            return (
+                                <TouchableOpacity
+                                    key={tag}
+                                    style={[styles.tag, isSelected && { backgroundColor: '#1A7FD4', borderColor: '#1A7FD4' }]}
+                                    onPress={() => setComment(prev => {
+                                        const tags = prev ? prev.split(', ').map(t => t.trim()) : [];
+                                        if (tags.includes(tag)) return tags.filter(t => t !== tag).join(', ');
+                                        return prev ? `${prev}, ${tag}` : tag;
+                                    })}
+                                >
+                                    <Text style={[styles.tagText, isSelected && { color: '#fff' }]}>{isSelected ? '✓ ' : '+ '}{tag}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
 
                     {/* Comment Box */}

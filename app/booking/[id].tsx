@@ -30,12 +30,13 @@ import { triggerLocalNotification } from '@/utils/notifications';
 const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
 
 // ─── Status config ────────────────────────────────────────────────────────────
-const STATUS_STEPS: Array<{ status: string; label: string; key: 'pending' | 'broadcasted' | 'accepted' | 'in_progress' | 'completed'; desc: string }> = [
-    { status: 'PENDING', key: 'pending', label: 'Pending', desc: 'Waiting for admin to assign a provider' },
-    { status: 'BROADCASTED', key: 'broadcasted', label: 'Searching Provider', desc: 'We are matching you with the nearest available provider' },
+const STATUS_STEPS: Array<{ status: string; label: string; key: string; desc: string }> = [
+    { status: 'PENDING', key: 'pending', label: 'Pending', desc: 'Waiting for a provider to be assigned' },
+    { status: 'PARTNER_ASSIGNED', key: 'partner_assigned', label: 'Provider Assigned', desc: 'A provider has been assigned and is confirming' },
+    { status: 'BROADCASTED', key: 'broadcasted', label: 'Searching Provider', desc: 'Finding the nearest available provider' },
     { status: 'ACCEPTED', key: 'accepted', label: 'Accepted', desc: 'A provider has accepted your request' },
     { status: 'IN_PROGRESS', key: 'in_progress', label: 'In Progress', desc: 'Provider is on the way' },
-    { status: 'COMPLETED', key: 'completed', label: 'Completed', desc: 'Service has been completed successfully' },
+    { status: 'COMPLETED', key: 'completed', label: 'Completed', desc: 'Service completed successfully' },
 ];
 
 const STATUS_ORDER = STATUS_STEPS.map((s) => s.status);
@@ -43,23 +44,29 @@ const STATUS_ORDER = STATUS_STEPS.map((s) => s.status);
 // ─── Status progression banner ────────────────────────────────────────────────
 const STATUS_BG: Record<string, string> = {
     PENDING: '#FEF9C3',
+    PARTNER_ASSIGNED: '#E0F2FE',
     BROADCASTED: '#F3E8FF',
     ACCEPTED: '#D1EFE0',
     IN_PROGRESS: '#DBEAFE',
     COMPLETED: '#D1FAE5',
     CANCELLED: '#FEE2E2',
+    RETURNED_TO_ADMIN: '#FEF3C7',
 };
 
 function StatusHero({ status }: { status: string }) {
     const step = STATUS_STEPS.find((s) => s.status === status);
     const bg = STATUS_BG[status] ?? '#F3F4F6';
     const HeroIcon =
+        status === 'RETURNED_TO_ADMIN' ? Clock3 :
+        status === 'CANCELLED' ? XCircle :
         step?.key === 'pending' ? Clock3 :
+        step?.key === 'partner_assigned' ? ShieldCheck :
         step?.key === 'broadcasted' ? Radio :
         step?.key === 'accepted' ? ShieldCheck :
         step?.key === 'in_progress' ? Truck :
         step?.key === 'completed' ? CheckCircle2 :
         Search;
+    const heroLabel = status === 'RETURNED_TO_ADMIN' ? 'Re-scheduling' : step?.label ?? status.replace(/_/g, ' ');
     return (
         <View style={[styles.statusHero, { backgroundColor: bg }]}>
             <View style={styles.statusHeroIconWrap}>
@@ -195,7 +202,7 @@ export default function BookingDetailScreen() {
             qc.invalidateQueries({ queryKey: ['service-booking', id] });
             Alert.alert('Thank You!', 'Your rating helps us improve.');
         },
-        onError: () => { setShowRatingModal(false); },
+        onError: () => { Alert.alert('Rating Failed', 'Unable to submit your rating. Please try again.'); },
     });
 
     const getAddressText = (b: any) => {
