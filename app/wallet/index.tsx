@@ -48,7 +48,8 @@ export default function WalletScreen() {
             refetch();
             
             const onBackPress = () => {
-                router.push('/profile');
+                if (router.canGoBack()) router.back();
+                else router.replace('/(tabs)/profile' as any);
                 return true;
             };
             const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
@@ -117,7 +118,7 @@ export default function WalletScreen() {
         <SafeAreaView style={styles.root} edges={['top']}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
-                <TouchableOpacity onPress={() => router.push('/profile')} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/profile' as any)} style={styles.backBtn}>
                     <Text style={styles.backText}>←</Text>
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>My Wallet</Text>

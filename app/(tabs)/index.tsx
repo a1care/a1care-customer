@@ -475,7 +475,6 @@ export default function HomeScreen() {
         queryKey: ['health-packages'],
         queryFn: async () => {
             const res = await api.get(Endpoints.HEALTH_PACKAGES);
-            console.log('DEBUG: Health Packages API response:', res.data?.data?.length, 'items found');
             return res.data.data as any[];
         },
     });
@@ -566,6 +565,12 @@ export default function HomeScreen() {
     };
 
     const handleBannerPress = (slide: any) => {
+        // Knowledge base banners open the detail modal
+        if (slide.isKB || slide.description) {
+            setSelectedKB(slide);
+            setIsKBModalOpen(true);
+            return;
+        }
         const target = slide.path || '/services';
 
         // Handle web links
@@ -601,8 +606,10 @@ export default function HomeScreen() {
     };
 
     const handleQuickServiceOpen = async (item: any) => {
+        setFastTrackLoading(item.id);
         const label = String(item?.label || '').toLowerCase();
         const isAmbulance = label.includes('ambulance') || label.includes('emergency');
+        try {
         const withTimeout = async <T,>(promise: Promise<T>, ms = 7000) => {
             let timer: ReturnType<typeof setTimeout> | null = null;
             const timeoutPromise = new Promise<T>((_, reject) => {
@@ -655,6 +662,12 @@ export default function HomeScreen() {
             pathname: '/services',
             params: { category: item.label, serviceId: item.id, subServiceId: '', from: 'home' }
         });
+        } catch (err) {
+            console.log('[QuickService] Error:', err);
+            router.push({ pathname: '/services', params: { category: item.label, serviceId: item.id, subServiceId: '', from: 'home' } });
+        } finally {
+            setFastTrackLoading(null);
+        }
     };
 
     // Dynamic Hospital OP Link - Ultra-fast separate booking flow

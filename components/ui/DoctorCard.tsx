@@ -11,6 +11,7 @@ interface DoctorCardProps {
     experience: string;
     price: number;
     workingHours?: string;
+    imageUrl?: string;
     onPress: () => void;
     fullWidth?: boolean;
 }
@@ -22,6 +23,7 @@ export function DoctorCard({
     experience,
     price,
     workingHours,
+    imageUrl,
     onPress,
     fullWidth = false,
 }: DoctorCardProps) {
@@ -34,7 +36,10 @@ export function DoctorCard({
             <View style={styles.topRow}>
                 <View style={styles.avatarContainer}>
                     <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>{name.charAt(0)}</Text>
+                        {imageUrl
+                            ? <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', borderRadius: 999 }} />
+                            : <Text style={styles.avatarText}>{name.charAt(0)}</Text>
+                        }
                     </View>
                     <View style={styles.verifiedBadge}>
                         <ShieldCheck size={10} color="#fff" />

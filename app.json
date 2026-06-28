@@ -2,7 +2,7 @@
   "expo": {
     "name": "A1Care 24/7",
     "slug": "a1care-user",
-    "version": "2.0.0",
+    "version": "2.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "newArchEnabled": false,
@@ -26,7 +26,7 @@
       }
     },
     "android": {
-      "versionCode": 50,
+      "versionCode": 100,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

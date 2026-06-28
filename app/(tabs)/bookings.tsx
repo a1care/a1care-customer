@@ -416,7 +416,7 @@ export default function BookingsScreen() {
                         </>
                     ) : isEmpty ? (
                         <EmptyState
-                            icon={activeTab === 'cancelled' ? 'No updates' : 'No bookings yet'}
+                            icon={activeTab === 'cancelled' ? '🚫' : activeTab === 'ongoing' ? '⏳' : activeTab === 'completed' ? '✅' : '📋'}
                             title={`No ${activeTab} bookings`}
                             subtitle={
                                 activeTab === 'upcoming'

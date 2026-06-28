@@ -24,6 +24,8 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '@/services/auth.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { triggerLocalNotification } from '@/utils/notifications';
@@ -43,6 +45,11 @@ export default function OnboardingScreen() {
     const { setUser } = useAuthStore();
 
     const [name, setName] = useState('');
+    useEffect(() => {
+        AsyncStorage.getItem('guest_prefill_name').then(n => {
+            if (n) { setName(n); AsyncStorage.removeItem('guest_prefill_name'); }
+        });
+    }, []);
     const [referralCode, setReferralCode] = useState('');
     const [gender, setGender] = useState<'Male' | 'Female' | 'Other' | ''>('');
     const [email, setEmail] = useState('');
@@ -112,7 +119,7 @@ export default function OnboardingScreen() {
     }, [showThinking]);
 
     const handleComplete = async () => {
-        const nameRegex = /^[A-Za-z][A-Za-z\s.'\-]{0,58}[A-Za-z.]$/;
+        const nameRegex = /^[A-Za-z][A-Za-z\s.'\-]{0,58}[A-Za-z.]$|^[A-Za-z]{2}$/; // allow 2-char names like "Jo"
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const errors: Record<string, boolean> = {};
 

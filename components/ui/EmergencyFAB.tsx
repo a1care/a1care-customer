@@ -36,7 +36,7 @@ export function EmergencyFAB({ bottom = 100 }: EmergencyButtonProps) {
     }, []);
 
     const handlePress = () => {
-        Linking.openURL('tel:108'); // Direct Emergency line
+        Linking.openURL('tel:112'); // India unified emergency number
     };
 
     return (

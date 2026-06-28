@@ -904,6 +904,8 @@ export default function ServiceDetailScreen() {
         setGuestLoading(true);
         try {
             await authService.sendOtp(phone);
+            // Save guest name so profile-setup can pre-fill it after OTP verification
+            await AsyncStorage.setItem('guest_prefill_name', name);
             setShowGuestModal(false);
             setPostLoginReturn({
                 pathname: '/service/[id]',
@@ -1127,20 +1129,35 @@ export default function ServiceDetailScreen() {
                     <View style={styles.stepContent}>
                         <Text style={styles.stepTitle}>Choose Payment Method</Text>
                         <View style={{ gap: 12 }}>
-                            {[
-                                { id: 'WALLET', label: 'A1 Wallet', sub: `Balance: ${formatCurrency(wallet?.balance ?? 0)}`, icon: 'wallet-outline', color: Colors.health },
-                                { id: 'ONLINE', label: 'Online Payment', sub: 'UPI, Cards, Netbanking', icon: 'card-outline', color: Colors.primary },
-                                { id: 'COD', label: 'Cash on Pay', sub: 'Pay after service', icon: 'cash-outline', color: '#166534' },
-                            ].map(opt => (
-                                <TouchableOpacity key={opt.id} onPress={() => setPaymentMethod(opt.id as any)} style={[styles.payMethodCard, paymentMethod === opt.id && { borderColor: opt.color, borderWidth: 2.5 }]}>
-                                    <Ionicons name={opt.icon as any} size={24} color={paymentMethod === opt.id ? opt.color : Colors.textSecondary} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.payMethodTitle}>{opt.label}</Text>
-                                        <Text style={styles.payMethodSub}>{opt.sub}</Text>
-                                    </View>
-                                    <View style={[styles.radioOuter, paymentMethod === opt.id && { borderColor: opt.color }]}>{paymentMethod === opt.id && <View style={[styles.radioInner, { backgroundColor: opt.color }]} />}</View>
-                                </TouchableOpacity>
-                            ))}
+                            {(() => {
+                                const price = priceParam ? parseFloat(priceParam) : 0;
+                                const walletBalance = wallet?.balance ?? 0;
+                                const walletInsufficient = walletBalance < price;
+                                return [
+                                    { id: 'WALLET', label: 'A1 Wallet', sub: walletInsufficient ? `Insufficient Balance (₹${walletBalance}) — Add Money →` : `Balance: ${formatCurrency(walletBalance)}`, icon: 'wallet-outline', color: Colors.health, disabled: walletInsufficient },
+                                    { id: 'ONLINE', label: 'Online Payment', sub: 'UPI, Cards, Netbanking', icon: 'card-outline', color: Colors.primary, disabled: false },
+                                    { id: 'COD', label: 'Cash on Pay', sub: 'Pay after service', icon: 'cash-outline', color: '#166534', disabled: false },
+                                ].map(opt => (
+                                    <TouchableOpacity
+                                        key={opt.id}
+                                        onPress={() => {
+                                            if (opt.disabled) {
+                                                router.push('/wallet/index' as any);
+                                                return;
+                                            }
+                                            setPaymentMethod(opt.id as any);
+                                        }}
+                                        style={[styles.payMethodCard, paymentMethod === opt.id && { borderColor: opt.color, borderWidth: 2.5 }, opt.disabled && { opacity: 0.6 }]}
+                                    >
+                                        <Ionicons name={opt.icon as any} size={24} color={paymentMethod === opt.id ? opt.color : Colors.textSecondary} />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.payMethodTitle}>{opt.label}</Text>
+                                            <Text style={[styles.payMethodSub, opt.disabled && { color: '#EF4444' }]}>{opt.sub}</Text>
+                                        </View>
+                                        {!opt.disabled && <View style={[styles.radioOuter, paymentMethod === opt.id && { borderColor: opt.color }]}>{paymentMethod === opt.id && <View style={[styles.radioInner, { backgroundColor: opt.color }]} />}</View>}
+                                    </TouchableOpacity>
+                                ));
+                            })()}
                         </View>
                     </View>
                 )}

@@ -120,14 +120,7 @@ export default function NotificationsScreen() {
 
     const unreadCount = localList.filter(n => !n.isRead).length;
 
-    // Automatic mark read on entry
-    useFocusEffect(
-        useCallback(() => {
-            if (unreadCount > 0 && !markAllMutation.isPending) {
-                markAllMutation.mutate();
-            }
-        }, [unreadCount])
-    );
+    // Don't auto-mark all read on open — user should tap to read
 
     // Mutations
     const markAllMutation = useMutation({

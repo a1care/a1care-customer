@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
+import { useAuthStore } from '@/stores/auth.store';
 import { bookingsService } from '@/services/bookings.service';
 import { addressService } from '@/services/address.service';
 import { reviewsService } from '@/services/reviews.service';
@@ -135,6 +136,7 @@ export default function BookingDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const qc = useQueryClient();
+    const { token } = useAuthStore();
     const [isManualRefreshing, setIsManualRefreshing] = React.useState(false);
     const [isCancelling, setIsCancelling] = React.useState(false);
 
@@ -160,7 +162,7 @@ export default function BookingDetailScreen() {
     // Socket — join booking room for real-time status updates
     React.useEffect(() => {
         if (!id) return;
-        const socket = io(SOCKET_URL);
+        const socket = io(SOCKET_URL, { auth: { token }, transports: ['polling', 'websocket'] });
         socketRef.current = socket;
         socket.on('connect', () => socket.emit('join_room', id));
         socket.on('booking_status_updated', (data: { bookingId: string; status: string }) => {
