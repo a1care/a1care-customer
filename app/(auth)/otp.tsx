@@ -23,8 +23,14 @@ const OTP_LENGTH = 6;
 
 export default function OtpScreen() {
     const router = useRouter();
-    const { mobile } = useLocalSearchParams<{ mobile: string }>();
+    const params = useLocalSearchParams<{ mobile: string }>();
+    const mobile = Array.isArray(params.mobile) ? params.mobile[0] : params.mobile;
     const { setToken, setUser } = useAuthStore();
+
+    // Guard: redirect back if navigated to OTP without a mobile number
+    React.useEffect(() => {
+        if (!mobile) router.replace('/(auth)/login');
+    }, [mobile]);
 
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
     const [loading, setLoading] = useState(false);
@@ -98,9 +104,18 @@ export default function OtpScreen() {
         setLoading(true);
         try {
             const res = await authService.verifyOtp(mobile, code);
-            const token = res.data.token;
+            // ApiResponse wraps data: { token } inside res.data.data
+            const token = res.data?.data?.token ?? res.data?.token;
+            if (!token) throw new Error('No token received from server');
             setToken(token);
-            const user = await authService.getProfile();
+            let user;
+            try {
+                user = await authService.getProfile();
+            } catch (profileErr) {
+                // Token saved but profile fetch failed — clear broken state
+                setToken('');
+                throw new Error('Login succeeded but profile could not be loaded. Please try again.');
+            }
             setUser(user);
 
             if (user.isRegistered) {
@@ -186,7 +201,7 @@ export default function OtpScreen() {
                             style={styles.hiddenOtpInput}
                             value={otp.join('')}
                             onChangeText={handleChange}
-                            keyboardType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
+                            keyboardType='phone-pad'
                             textContentType="oneTimeCode"
                             autoComplete={Platform.OS === 'ios' ? 'one-time-code' : 'sms-otp'}
                             importantForAutofill="yes"

@@ -33,11 +33,11 @@ export default function LoginScreen() {
 
     const handleSendOtp = async () => {
         const cleaned = mobile.replace(/\D/g, '');
-        if (cleaned.length < 10) {
+        if (!/^[6-9]\d{9}$/.test(cleaned)) {
             Toast.show({
                 type: 'error',
                 text1: 'Invalid Number',
-                text2: 'Please enter a valid 10-digit mobile number.',
+                text2: 'Please enter a valid 10-digit Indian mobile number.',
                 position: 'top'
             });
             return;
@@ -100,7 +100,7 @@ export default function LoginScreen() {
                             <Text style={styles.prefix}>+91</Text>
                             <TextInput
                                 style={styles.flexInput}
-                                placeholder="98765 43210"
+                                placeholder="9876543210"
                                 keyboardType="phone-pad"
                                 value={mobile}
                                 onChangeText={(text) => setMobile(text.replace(/\D/g, ''))}

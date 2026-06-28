@@ -245,9 +245,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             if (!isMaintenancePage) {
                 router.replace('/maintenance' as any);
             }
+            setRouterReady(true); // don't leave splash stuck
             return;
         } else if (isMaintenancePage) {
             router.replace('/' as any);
+            setRouterReady(true);
             return;
         }
 
@@ -261,6 +263,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         if (!isAuthenticated && !isExcluded) {
             // Unauthenticated users always land on tabs to browse freely (Apple 5.1.1)
             router.replace('/(tabs)');
+            setRouterReady(true); // don't leave splash stuck
             return;
         }
 

@@ -140,10 +140,19 @@ export default function OnboardingScreen() {
         }
 
         setFormErrors({});
+        setLoading(true); // prevent double-tap
 
-        const dobString = selectedDay && selectedMonth && selectedYear
-            ? `${selectedYear}-${(MONTHS.indexOf(selectedMonth) + 1).toString().padStart(2, '0')}-${selectedDay.padStart(2, '0')}`
-            : undefined;
+        let dobString: string | undefined;
+        if (selectedDay && selectedMonth && selectedYear) {
+            const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+            const testDate = new Date(`${selectedYear}-${monthIdx.toString().padStart(2, '0')}-${selectedDay.padStart(2, '0')}`);
+            if (isNaN(testDate.getTime()) || testDate.getMonth() + 1 !== monthIdx) {
+                setLoading(false);
+                Toast.show({ type: 'error', text1: 'Invalid Date', text2: `${selectedMonth} doesn't have ${selectedDay} days.`, position: 'top' });
+                return;
+            }
+            dobString = `${selectedYear}-${monthIdx.toString().padStart(2, '0')}-${selectedDay.padStart(2, '0')}`;
+        }
 
         // Start Premium Thinking Sequence immediately
         setShowThinking(true);

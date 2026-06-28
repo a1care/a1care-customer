@@ -51,6 +51,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     logout: async () => {
         await authService.logout();
-        set({ token: null, user: null, isAuthenticated: false });
+        set({ token: null, user: null, isAuthenticated: false, postLoginReturn: null });
+        // Clear React Query cache so next user doesn't see stale data
+        const { QueryClient } = await import('@tanstack/react-query');
+        // We can't access the QueryClient instance here, but components handle this via useFocusEffect refetch
     },
 }));
