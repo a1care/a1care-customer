@@ -67,11 +67,11 @@ export const bookingsService = {
         doctorId: string,
         data: { date: string; startingTime: string; endingTime: string; totalAmount?: number; paymentMode?: 'ONLINE' | 'OFFLINE' | 'WALLET'; isGatewayPayment?: boolean; serviceName?: string }
     ) => {
-        const payload = { 
-            ...data, 
-            paymentMode: data.paymentMode === 'WALLET' ? 'ONLINE' : data.paymentMode, 
+        const payload = {
+            ...data,
+            paymentMode: data.paymentMode === 'WALLET' ? 'ONLINE' : data.paymentMode,
             isGatewayPayment: data.isGatewayPayment || data.paymentMode === 'ONLINE',
-            paymentStatus: (data.paymentMode === 'ONLINE' || data.paymentMode === 'WALLET') ? 'COMPLETED' : 'PENDING' 
+            // paymentStatus intentionally omitted — backend sets it after payment verification
         };
         const res = await api.post<ApiResponse<DoctorAppointment>>(
             Endpoints.BOOK_DOCTOR(doctorId),

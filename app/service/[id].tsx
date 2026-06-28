@@ -423,8 +423,10 @@ export default function ServiceDetailScreen() {
 
     const deleteAddressMutation = useMutation({
         mutationFn: addressService.delete,
-        onSuccess: () => {
+        onSuccess: (_: any, deletedId: string) => {
             qc.invalidateQueries({ queryKey: ['addresses'] });
+            // H7: if deleted address was selected, clear selection
+            if (selectedAddressId === deletedId) setSelectedAddressId('');
             Alert.alert('Success', 'Address deleted successfully');
         },
     });
@@ -556,18 +558,28 @@ export default function ServiceDetailScreen() {
     const { data: addresses, isLoading: addrLoading, isError: addrErr, refetch: refetchAddr } = useQuery({
         queryKey: ['addresses'],
         queryFn: addressService.getAll,
+        enabled: isAuthenticated, // H8: don't fire 401s for guests
     });
 
     const { data: wallet } = useQuery({
         queryKey: ['wallet'],
         queryFn: walletService.getWallet,
+        enabled: isAuthenticated, // H8: don't fire 401s for guests
     });
 
-    const { data: service, isLoading: serviceLoading } = useQuery({
+    const { data: service, isLoading: serviceLoading, isError: serviceError, refetch: refetchService } = useQuery({
         queryKey: ['child-service', id],
         queryFn: () => servicesService.getChildServiceById(id!),
         enabled: !!id,
     });
+
+    // H5: auto-select first address when addresses load
+    React.useEffect(() => {
+        if (addresses?.length && !selectedAddressId) {
+            const primary = addresses.find((a: any) => a.isPrimary) ?? addresses[0];
+            setSelectedAddressId(primary._id);
+        }
+    }, [addresses]);
 
     const isDoctorService = React.useMemo(() => {
         const name = `${service?.name ?? ''} ${nameParam ?? ''} ${subName ?? ''}`.toLowerCase();
@@ -694,7 +706,7 @@ export default function ServiceDetailScreen() {
             const isHosp = service.fulfillmentMode === 'HOSPITAL_VISIT' || (subName && /hospital/i.test(subName));
             if (isHosp) {
                 setIsAsap(false);
-                setScheduledDate(new Date().toISOString().split('T')[0]);
+                setScheduledDate(todayYmd); // H9: use local date not UTC
             }
         }
     }, [service, step, activeSteps, subName]);
@@ -777,6 +789,8 @@ export default function ServiceDetailScreen() {
                 });
             }
 
+            const basePrice = priceParam ? parseFloat(priceParam) : 0;
+            const finalPrice = couponApplied?.finalAmount ?? basePrice;
             return bookingsService.createServiceBooking({
                 childServiceId: id!,
                 addressId: isHosp ? undefined : addr?._id,
@@ -784,8 +798,9 @@ export default function ServiceDetailScreen() {
                 scheduledTime: buildScheduledTime(),
                 bookingType: isAsap ? 'ON_DEMAND' : 'SCHEDULED',
                 fulfillmentMode: (service?.fulfillmentMode) ?? (isHosp ? 'HOSPITAL_VISIT' : 'HOME_VISIT'),
-                price: priceParam ? parseFloat(priceParam) : 0,
+                price: finalPrice,
                 paymentMode: paymentMethod === 'COD' ? 'OFFLINE' : paymentMethod === 'WALLET' ? 'WALLET' : 'ONLINE',
+                ...(couponApplied ? { couponCode: couponApplied.code, discount: couponApplied.discount } : {}),
             });
         },
         onSuccess: (booking: any) => {
@@ -830,12 +845,34 @@ export default function ServiceDetailScreen() {
             return;
         }
 
-        if (paymentMethod === 'ONLINE') {
+        const payableAmount = couponApplied?.finalAmount ?? (priceParam ? parseFloat(priceParam) : 0);
+
+        if (paymentMethod === 'WALLET') {
+            try {
+                setSubmittingOnline(true);
+                const order = await paymentService.createOrder({
+                    amount: payableAmount,
+                    type: "BOOKING",
+                });
+                await paymentService.payWithWallet(order._id);
+                bookMutation.mutate();
+            } catch (err: any) {
+                const msg =
+                    err?.response?.data?.message ||
+                    err?.message ||
+                    'Wallet payment failed. Please check your balance and try again.';
+                Alert.alert('Payment Error', msg);
+            } finally {
+                setSubmittingOnline(false);
+            }
+        } else if (paymentMethod === 'ONLINE') {
+            let createdBookingId: string | null = null;
             try {
                 setSubmittingOnline(true);
                 const booking = await bookMutation.mutateAsync();
+                createdBookingId = booking._id;
                 const order = await paymentService.createOrder({
-                    amount: priceParam ? parseFloat(priceParam) : 0,
+                    amount: payableAmount,
                     type: "BOOKING",
                     referenceId: booking._id
                 });
@@ -871,9 +908,12 @@ export default function ServiceDetailScreen() {
                 }
                 setSubmitted(true);
             } catch (err: any) {
-                // Razorpay user-cancel returns code 2
+                // Razorpay user-cancel returns code 2 — cancel the orphaned booking
                 if (err?.code === 2 || err?.code === '2') {
-                    Alert.alert('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed. You can try again.');
+                    if (createdBookingId) {
+                        bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
+                    }
+                    Alert.alert('Payment Cancelled', 'You cancelled the payment. Your booking has been removed. You can try again.');
                     return;
                 }
                 const msg =
@@ -955,12 +995,21 @@ export default function ServiceDetailScreen() {
         );
     }
 
-    if (serviceLoading || addrLoading || !step) {
+    // H12: show error state if service fails to load
+    if (serviceError) {
+        return (
+            <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+                <ErrorState message="Failed to load service details" onRetry={refetchService} />
+            </SafeAreaView>
+        );
+    }
+
+    if (serviceLoading || !step) {
         return (
             <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={{ marginTop: 12, color: Colors.muted }}>Preparing Booking Desk...</Text>
+                    <Text style={{ marginTop: 12, color: Colors.muted }}>Loading service...</Text>
                 </View>
             </SafeAreaView>
         );
@@ -1024,6 +1073,14 @@ export default function ServiceDetailScreen() {
                 {step === 'address' && (
                     <View style={styles.stepContent}>
                         <Text style={styles.stepTitle}>📍 Service Location</Text>
+                        {/* H11: empty address guidance */}
+                        {!addrLoading && (!addresses || addresses.length === 0) && (
+                            <View style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
+                                <Ionicons name="location-outline" size={40} color={Colors.muted} />
+                                <Text style={{ fontWeight: '700', color: Colors.textPrimary }}>No saved addresses</Text>
+                                <Text style={{ color: Colors.muted, textAlign: 'center', fontSize: 13 }}>Add your home address to get services delivered to your doorstep.</Text>
+                            </View>
+                        )}
                         {addresses?.map(a => {
                             const config = getAddressIcon(a.label || 'Home');
                             const isActive = selectedAddressId === a._id;

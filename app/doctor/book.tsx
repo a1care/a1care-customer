@@ -111,7 +111,7 @@ export default function DoctorBookingScreen() {
                 paymentMode: paymentMethod === 'WALLET' ? 'ONLINE' : 'OFFLINE',
                 serviceName: chosenSpecialization || "Doctor Consultation"
             }),
-        onSuccess: () => {
+        onSuccess: (booking: any) => {
             const prettyDate = new Date(`${selectedDate}T00:00:00`).toLocaleDateString([], {
                 weekday: 'short',
                 day: 'numeric',
@@ -123,10 +123,13 @@ export default function DoctorBookingScreen() {
                 'Appointment Booking Placed',
                 `Your appointment with Dr. ${doctor?.name} is placed for ${prettyDate} at ${prettyTime}.`
             );
-            Alert.alert('Appointment Booking Placed', `Your appointment with Dr. ${doctor?.name} is placed for ${prettyDate} at ${prettyTime}.`, [
-                { text: 'View Bookings', onPress: () => router.push('/bookings') },
-                { text: 'OK', onPress: () => router.replace('/(tabs)') },
-            ]);
+            qc.invalidateQueries({ queryKey: ['appointments'] });
+            // D2: navigate to appointment detail instead of generic alert
+            if (booking?._id) {
+                router.replace({ pathname: '/doctor/appointment/[id]', params: { id: booking._id } } as any);
+            } else {
+                router.replace('/(tabs)/bookings' as any);
+            }
             qc.invalidateQueries({ queryKey: ['appointments'] });
         },
         onError: (err: any) => {

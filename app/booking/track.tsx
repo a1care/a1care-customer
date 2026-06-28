@@ -86,8 +86,8 @@ export default function TrackingScreen() {
                 </View>
             ) : (
                 <View style={{ flex: 1 }}>
-                    <WebView 
-                        source={{ uri: `https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${location.latitude},${location.longitude}&zoom=17` }}
+                    <WebView
+                        source={{ uri: `https://www.google.com/maps/embed/v1/place?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${location.latitude},${location.longitude}&zoom=17` }}
                         style={{ flex: 1 }}
                     />
                     
