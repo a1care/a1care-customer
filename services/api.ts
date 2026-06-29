@@ -52,6 +52,9 @@ api.interceptors.response.use(
 
         if (error.response?.status === 401) {
             await tokenStorage.removeItem('auth_token');
+            // Clear auth store so UI reflects logged-out state immediately
+            const { useAuthStore } = await import('@/stores/auth.store');
+            useAuthStore.getState().logout();
         }
         return Promise.reject(error);
     }

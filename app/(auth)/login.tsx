@@ -45,7 +45,7 @@ export default function LoginScreen() {
         setLoading(true);
         try {
             // Real OTP integration
-            console.log("[Login] Sending OTP for:", cleaned);
+            
             await authService.sendOtp(cleaned);
             
             Toast.show({

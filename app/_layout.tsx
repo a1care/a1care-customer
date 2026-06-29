@@ -66,7 +66,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         try {
             await Notifications.requestPermissionsAsync();
         } catch (e) {
-            console.log('[Permissions] Notification permission request failed:', e);
+            if (__DEV__) console.log('[Permissions] Notification permission request failed:', e);
         }
     };
 
@@ -81,7 +81,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                 await api.put('/notifications/fcm-token/patient', { fcmToken });
             }
         } catch (e) {
-            console.log("[FCM] Registry Error:", e);
+            if (__DEV__) console.log("[FCM] Registry Error:", e);
         }
     };
 
@@ -107,7 +107,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                 );
             }
         } catch (e) {
-            console.log('[Location] permission request failed:', e);
+            if (__DEV__) console.log('[Location] permission request failed:', e);
         }
     };
 
@@ -146,7 +146,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                 [LAST_LOCATION_SYNC_TS_KEY, String(Date.now())],
             ]);
         } catch (e) {
-            console.log('[Location] sync failed:', e);
+            if (__DEV__) console.log('[Location] sync failed:', e);
         }
     };
 
@@ -167,9 +167,15 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         });
 
         // Notification tap handler (app in background/foreground)
+        const ALLOWED_SCREENS = [
+            '/(tabs)/bookings', '/(tabs)/notifications', '/(tabs)/profile',
+            '/wallet/index', '/wallet_history', '/booking/', '/doctor/appointment/',
+        ];
         const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
             const data = response.notification.request.content.data as Record<string, string> | undefined;
-            if (data?.screen) router.push(data.screen as any);
+            if (data?.screen && ALLOWED_SCREENS.some(s => (data.screen as string).startsWith(s))) {
+                router.push(data.screen as any);
+            }
         });
 
         return () => {

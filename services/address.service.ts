@@ -22,7 +22,7 @@ export const addressService = {
     },
 
     delete: async (addressId: string) => {
-        const res = await api.patch<ApiResponse<Address>>(
+        const res = await api.delete<ApiResponse<Address>>(
             Endpoints.DELETE_ADDRESS(addressId)
         );
         return res.data.data;

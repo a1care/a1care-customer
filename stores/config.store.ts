@@ -44,8 +44,8 @@ interface ConfigState {
 import { API_BASE_URL } from '../constants/api';
 
 const API_URL = API_BASE_URL;
-console.log('DEBUG: API_URL in config.store.ts is:', API_URL);
-const FALLBACK_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyCQp47kwCVpsPbgSWB-c9HrlsqyiLwe06o';
+
+const FALLBACK_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
     config: null,

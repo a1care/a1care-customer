@@ -37,25 +37,30 @@ export default function EasebuzzCheckout() {
     return buildAutoSubmitHtml(filtered);
   }, [params]);
 
-  const handleNav = (url: string) => {
-    const low = url.toLowerCase();
-    const isSuccess = low.includes("success") || low.includes("payment/success");
-    const isFailed = low.includes("fail") || low.includes("failure") || low.includes("cancel");
-    if (!isSuccess && !isFailed) return;
+  const EASEBUZZ_DOMAINS = ['testpay.easebuzz.in', 'pay.easebuzz.in', 'dashboard.easebuzz.in'];
 
-    router.replace({
-      pathname: "/checkout/status",
-      params: {
-        status: isSuccess ? "success" : "failed",
-        type: "WALLET_TOPUP",
-      },
-    } as any);
+  const handleNav = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      // Only react to redirects from Easebuzz domains
+      if (!EASEBUZZ_DOMAINS.some(d => parsed.hostname.endsWith(d))) return;
+      const path = parsed.pathname.toLowerCase();
+      const isSuccess = path.endsWith('/success') || path.includes('/payment/success');
+      const isFailed = path.endsWith('/failure') || path.endsWith('/fail') || path.endsWith('/cancel');
+      if (!isSuccess && !isFailed) return;
+      router.replace({
+        pathname: "/checkout/status",
+        params: { status: isSuccess ? "success" : "failed", type: "WALLET_TOPUP" },
+      } as any);
+    } catch {
+      // invalid URL — ignore
+    }
   };
 
   return (
     <SafeAreaView style={styles.root}>
       <WebView
-        originWhitelist={["*"]}
+        originWhitelist={["https://testpay.easebuzz.in", "https://pay.easebuzz.in", "https://dashboard.easebuzz.in", "about:*"]}
         source={{ html }}
         startInLoadingState
         renderLoading={() => (
