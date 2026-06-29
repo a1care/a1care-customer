@@ -160,7 +160,6 @@ export default function ServiceDetailScreen() {
     const todayYmd = useMemo(() => toLocalYMD(new Date()), []);
     const [scheduledDate, setScheduledDate] = useState(todayYmd);
     const [scheduledTime, setScheduledTime] = useState('');
-    const [notes, setNotes] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE' | null>(null);
     const [submittingOnline, setSubmittingOnline] = useState(false);
     const [couponInput, setCouponInput] = useState('');
@@ -168,6 +167,7 @@ export default function ServiceDetailScreen() {
     const [couponChecking, setCouponChecking] = useState(false);
     const [isAsap, setIsAsap] = useState(true);
     const [submitted, setSubmitted] = useState(false);
+    const [submittedBookingId, setSubmittedBookingId] = useState<string | null>(null);
     const submitting = useRef(false);
 
     const { isAuthenticated, setPostLoginReturn } = useAuthStore();
@@ -815,7 +815,7 @@ export default function ServiceDetailScreen() {
                 }
             }
             if (paymentMethod !== 'ONLINE') sendBookingNotification(booking);
-            if (paymentMethod !== 'ONLINE') setSubmitted(true);
+            if (paymentMethod !== 'ONLINE') { setSubmitted(true); setSubmittedBookingId(booking?._id ?? null); }
         },
         onError: (err: any) => {
             submitting.current = false;
@@ -981,14 +981,19 @@ export default function ServiceDetailScreen() {
                     <Text style={styles.successSub}>
                         {service?.fulfillmentMode === 'HOSPITAL_VISIT' ? 'Your appointment at A1care Hospital has been scheduled.' : 'Your home-care request has been placed.'}
                     </Text>
+                    {submittedBookingId && (
+                        <Text style={{ fontSize: 12, color: Colors.muted, marginBottom: 8 }}>
+                            Booking ID: #{submittedBookingId.slice(-8).toUpperCase()}
+                        </Text>
+                    )}
                     <View style={styles.codConfirmBox}>
-                        {/* <Text style={styles.codConfirmIcon}>{paymentMethod === 'WALLET' ? '👛' : paymentMethod === 'ONLINE' ? '💳' : '💵'}</Text> */}
                         <View>
-                            <Text style={styles.codConfirmTitle}>{paymentMethod === 'WALLET' ? 'Paid via Wallet' : paymentMethod === 'ONLINE' ? 'Online Paid' : 'Cash on Pay'}</Text>
+                            <Text style={styles.codConfirmTitle}>{paymentMethod === 'WALLET' ? 'Paid via Wallet' : paymentMethod === 'ONLINE' ? 'Paid Online' : 'Pay by Cash'}</Text>
                             <Text style={styles.codConfirmSub}>Thank you for choosing A1Care</Text>
                         </View>
                     </View>
                     <Button label="Track My Booking" onPress={() => router.push('/(tabs)/bookings')} variant="primary" style={{ marginBottom: 12 }} fullWidth />
+                    <Button label="Book Again" onPress={() => router.replace({ pathname: '/service/[id]', params: { id: id ?? '', name: nameParam ?? '', price: priceParam ?? '', subName: subName ?? '', source: 'home', entryMode: 'direct' } } as any)} variant="outline" style={{ marginBottom: 12 }} fullWidth />
                     <Button label="Back to Home" onPress={() => router.push('/(tabs)')} variant="outline" fullWidth />
                 </View>
             </SafeAreaView>
