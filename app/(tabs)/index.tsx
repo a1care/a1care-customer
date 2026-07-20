@@ -180,7 +180,7 @@ let cachedCity = "";
 export default function HomeScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { user } = useAuthStore();
+    const { user, isAuthenticated } = useAuthStore();
     const [refreshing, setRefreshing] = useState(false);
     const [activeHero, setActiveHero] = useState(0);
     const [activePopular, setActivePopular] = useState(0);
@@ -320,7 +320,7 @@ export default function HomeScreen() {
             if (status !== 'granted') {
                 if (!isBackground) {
                     setLocCity('Permission Denied');
-                    setLocArea('Enable location in settings');
+                    setLocArea('Enable in settings');
                 }
                 return;
             }
@@ -340,18 +340,64 @@ export default function HomeScreen() {
                 );
             }
 
-            const geocoded = await withTimeout(
-                Location.reverseGeocodeAsync({
-                    latitude: pos.coords.latitude,
-                    longitude: pos.coords.longitude,
-                }),
-                10000,
-                'Address lookup timed out'
-            );
-            const [geo] = geocoded;
+            let city = 'Your City';
+            let area = '';
 
-            const city = geo.city || geo.region || 'Your City';
-            const area = geo.district || geo.subregion || geo.street || '';
+            if (Platform.OS === 'web') {
+                // reverseGeocodeAsync was removed in SDK 49 on web — use Nominatim directly
+                try {
+                    const resp = await withTimeout(
+                        fetch(
+                            `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
+                            { headers: { 'Accept-Language': 'en' } }
+                        ),
+                        8000,
+                        'Nominatim timed out'
+                    );
+                    const data = await resp.json();
+                    const addr = data?.address || {};
+                    city = addr.city || addr.town || addr.village || addr.county || addr.state || 'Your City';
+                    area = addr.suburb || addr.neighbourhood || addr.quarter || addr.road || '';
+                } catch (_nmErr) {
+                    city = `${pos.coords.latitude.toFixed(2)}°N`;
+                    area = `${pos.coords.longitude.toFixed(2)}°E`;
+                }
+            } else {
+                // Native: try expo reverseGeocodeAsync first, fall back to Nominatim
+                try {
+                    const geocoded = await withTimeout(
+                        Location.reverseGeocodeAsync({
+                            latitude: pos.coords.latitude,
+                            longitude: pos.coords.longitude,
+                        }),
+                        8000,
+                        'Address lookup timed out'
+                    );
+                    if (geocoded && geocoded.length > 0) {
+                        const geo = geocoded[0];
+                        city = geo.city || geo.region || 'Your City';
+                        area = geo.district || geo.subregion || geo.street || '';
+                    }
+                } catch (_geoErr) {
+                    try {
+                        const resp = await withTimeout(
+                            fetch(
+                                `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
+                                { headers: { 'Accept-Language': 'en' } }
+                            ),
+                            8000,
+                            'Nominatim timed out'
+                        );
+                        const data = await resp.json();
+                        const addr = data?.address || {};
+                        city = addr.city || addr.town || addr.village || addr.county || addr.state || 'Your City';
+                        area = addr.suburb || addr.neighbourhood || addr.quarter || addr.road || '';
+                    } catch (_nmErr) {
+                        city = `${pos.coords.latitude.toFixed(2)}°N`;
+                        area = `${pos.coords.longitude.toFixed(2)}°E`;
+                    }
+                }
+            }
 
             setLocCity(city);
             setLocArea(area);
@@ -362,8 +408,8 @@ export default function HomeScreen() {
             await AsyncStorage.setItem("last_area", area);
         } catch (e) {
             if (!isBackground) {
-                setLocCity('Location Error');
-                setLocArea('Tap to retry');
+                setLocCity('Tap to retry');
+                setLocArea('Location Error');
             }
         } finally {
             if (!isBackground) setLocLoading(false);
@@ -449,11 +495,13 @@ export default function HomeScreen() {
     const { data: ongoingBookings, refetch: refetchBookings } = useQuery({
         queryKey: ['pending-bookings'],
         queryFn: bookingsService.getPendingServiceBookings,
+        enabled: isAuthenticated,
     });
 
     const { data: roles } = useQuery({
         queryKey: ['roles'],
         queryFn: doctorsService.getRoles,
+        enabled: isAuthenticated,
     });
 
     const doctorRoleId = roles?.find(r => r.name.toLowerCase().includes('doctor'))?._id;
@@ -461,12 +509,13 @@ export default function HomeScreen() {
     const { data: allDoctors, refetch: refetchDoctors } = useQuery({
         queryKey: ['doctors', doctorRoleId],
         queryFn: () => doctorsService.getByRole(doctorRoleId!),
-        enabled: !!doctorRoleId,
+        enabled: isAuthenticated && !!doctorRoleId,
     });
 
     const { data: notifications, refetch: refetchNotifications } = useQuery({
         queryKey: ['notifications'],
         queryFn: () => notificationsService.getAll(1),
+        enabled: isAuthenticated,
     });
 
     const unreadCount = notifications?.unreadCount ?? 0;
@@ -869,7 +918,6 @@ export default function HomeScreen() {
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
                                     {topDoctors.map(d => (
                                         <DoctorCard
-                                            id={d._id}
                                             key={d._id}
                                             name={d.name || "Doctor"}
                                             specialization={d.specialization?.join(", ") || "Specialist"}
@@ -1113,10 +1161,13 @@ export default function HomeScreen() {
                                                     pathname: '/service/[id]',
                                                     params: {
                                                         id: item._id,
+                                                        name: item.name,
+                                                        price: String(item.price || 0),
+                                                        subName: '',
                                                         from: 'home',
                                                         entryMode: 'direct',
-                                                        originServiceId: '',
-                                                        originSubServiceId: '',
+                                                        originServiceId: String(item.serviceId || ''),
+                                                        originSubServiceId: String(item.subServiceId || ''),
                                                         originCategory: '',
                                                     }
                                                 })}
@@ -1173,7 +1224,6 @@ export default function HomeScreen() {
                             >
                                 {topDoctors.length > 0 ? topDoctors.map(d => (
                                     <DoctorCard
-                                        id={d._id}
                                         key={d._id}
                                         name={d.name || "Doctor"}
                                         specialization={d.specialization?.join(", ") || "Specialist"}
@@ -1375,7 +1425,7 @@ export default function HomeScreen() {
                                     showsHorizontalScrollIndicator={false}
                                     contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
                                 >
-                                    {dynamicKnowledgeBanners.map((banner) => (
+                                    {dynamicKnowledgeBanners.map((banner: any) => (
                                         <TouchableOpacity
                                             key={banner.id}
                                             activeOpacity={0.9}

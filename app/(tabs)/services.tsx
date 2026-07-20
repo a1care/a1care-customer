@@ -209,7 +209,7 @@ export default function ServicesScreen() {
     // ── Tab Bar Interaction ──
     // Reset to root services when the Services tab is pressed in the bottom bar
     useEffect(() => {
-        const unsubscribe = navigation.addListener('tabPress', () => {
+        const unsubscribe = (navigation as any).addListener('tabPress', () => {
             // Reset state
             setLevel('services');
             setSelectedService(null);
@@ -221,41 +221,6 @@ export default function ServicesScreen() {
         });
         return unsubscribe;
     }, [navigation, router]);
-
-    // ── Typewriter placeholder animation ──
-    useEffect(() => {
-        if (level !== 'services') return;
-        const baseNames = services?.map(s => `Search for ${s.name}...`) || [
-            'Search for Doctor at Home...',
-            'Search for Home Nursing...',
-            'Search for Physiotherapy...',
-            'Search for Diagnostics...',
-            'Search for Pharmacy...',
-            'Search for Ambulance...',
-        ];
-        let phraseIdx = 0;
-        let charIdx = 0;
-        let deleting = false;
-        let timeoutId: ReturnType<typeof setTimeout>;
-
-        const tick = () => {
-            const phrase = baseNames[phraseIdx % baseNames.length];
-            let delay = 80;
-            if (!deleting) {
-                charIdx++;
-                setAnimPlaceholder(phrase.slice(0, charIdx));
-                if (charIdx === phrase.length) { deleting = true; delay = 1400; }
-            } else {
-                charIdx--;
-                setAnimPlaceholder(phrase.slice(0, charIdx));
-                if (charIdx === 0) { deleting = false; phraseIdx++; delay = 300; }
-                else { delay = 38; }
-            }
-            timeoutId = setTimeout(tick, delay);
-        };
-        timeoutId = setTimeout(tick, 600);
-        return () => clearTimeout(timeoutId);
-    }, [level, services]);
 
     // ── Back Handler (Android hardware back button) ──
     useEffect(() => {
@@ -320,6 +285,41 @@ export default function ServicesScreen() {
         retry: 2,
         staleTime: 30_000,
     });
+
+    // ── Typewriter placeholder animation ──
+    useEffect(() => {
+        if (level !== 'services') return;
+        const baseNames = services?.map(s => `Search for ${s.name}...`) || [
+            'Search for Doctor at Home...',
+            'Search for Home Nursing...',
+            'Search for Physiotherapy...',
+            'Search for Diagnostics...',
+            'Search for Pharmacy...',
+            'Search for Ambulance...',
+        ];
+        let phraseIdx = 0;
+        let charIdx = 0;
+        let deleting = false;
+        let timeoutId: ReturnType<typeof setTimeout>;
+
+        const tick = () => {
+            const phrase = baseNames[phraseIdx % baseNames.length];
+            let delay = 80;
+            if (!deleting) {
+                charIdx++;
+                setAnimPlaceholder(phrase.slice(0, charIdx));
+                if (charIdx === phrase.length) { deleting = true; delay = 1400; }
+            } else {
+                charIdx--;
+                setAnimPlaceholder(phrase.slice(0, charIdx));
+                if (charIdx === 0) { deleting = false; phraseIdx++; delay = 300; }
+                else { delay = 38; }
+            }
+            timeoutId = setTimeout(tick, delay);
+        };
+        timeoutId = setTimeout(tick, 600);
+        return () => clearTimeout(timeoutId);
+    }, [level, services]);
 
     // ── Handle Initial Deep Link ──
     useEffect(() => {
@@ -541,6 +541,9 @@ export default function ServicesScreen() {
                             <Text style={styles.headerSub}>{(selectedService?.name ?? category ?? '')} › {(selectedSub?.name ?? subCategory ?? '')}</Text>
                         )}
                     </View>
+                    <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8} onPress={() => router.push('/(tabs)/notifications')}>
+                        <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
+                    </TouchableOpacity>
                 </View>
             )}
 

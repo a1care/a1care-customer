@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -8,6 +8,8 @@ import {
     ActivityIndicator,
     TouchableOpacity,
     Alert,
+    Platform,
+    Animated,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -24,11 +26,15 @@ import {
     Ticket,
     Activity,
     Users,
+    Trash2,
+    ChevronLeft,
 } from 'lucide-react-native';
 import { Colors, Shadows } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNotificationStore } from '@/stores/notification.store';
 import { useCallback } from 'react';
+import { useAuthStore } from '@/stores/auth.store';
+import { showToast } from '@/utils/toast';
 
 // ── Icon/Color Mapping ───────────────────────────────────────────────────
 const TYPE_META: Record<string, { icon: any; color: string; bgColor: string }> = {
@@ -86,6 +92,22 @@ const mergeNotifications = (remoteList: any[], localList: any[]) => {
     return out;
 };
 
+const NotificationsSkeleton = ({ pulseAnim }: { pulseAnim: Animated.Value }) => {
+    return (
+        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Animated.View 
+                    key={i} 
+                    style={[
+                        styles.card, 
+                        { opacity: pulseAnim, backgroundColor: '#E2E8F0', height: 86, elevation: 0 }
+                    ]}
+                />
+            ))}
+        </ScrollView>
+    );
+};
+
 export default function NotificationsScreen() {
     const router = useRouter();
     const qc = useQueryClient();
@@ -93,11 +115,24 @@ export default function NotificationsScreen() {
     const [localList, setLocalList] = useState<any[]>([]);
     const [isPullRefreshing, setIsPullRefreshing] = useState(false);
 
+    const { isAuthenticated } = useAuthStore();
+
+    const pulseAnim = React.useRef(new Animated.Value(0.3)).current;
+    React.useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true })
+            ])
+        ).start();
+    }, []);
+
     const { data, isLoading, refetch } = useQuery({
         queryKey: ['notifications'],
         queryFn: () => notificationsService.getAll(1),
         retry: 1,
         staleTime: 30 * 1000,
+        enabled: isAuthenticated,
     });
 
     useEffect(() => {
@@ -172,8 +207,24 @@ export default function NotificationsScreen() {
             qc.invalidateQueries({ queryKey: ['notifications'] });
         },
         onError: () => {
-            Alert.alert("Error", "Failed to clear notifications");
+            showToast.error('Error', 'Failed to clear notifications');
         }
+    });
+
+    const deleteOneMutation = useMutation({
+        mutationFn: async (id: string) => {
+            if (!String(id).startsWith('local-')) {
+                await notificationsService.markRead(id);
+            }
+        },
+        onMutate: (id: string) => {
+            setLocalList(prev => {
+                const updated = prev.filter(n => n._id !== id);
+                setUnreadCount(updated.filter(n => !n.isRead).length);
+                return updated;
+            });
+            notificationsService.markLocalRead(id);
+        },
     });
 
     const handlePress = (n: any) => {
@@ -189,30 +240,39 @@ export default function NotificationsScreen() {
                 router.push('/(tabs)/bookings' as any);
                 break;
             case 'Wallet':
-                router.push('/wallet/index' as any);
+                router.push('/wallet' as any);
                 break;
             case 'Ticket':
-                router.push('/support/chat' as any);
+                router.push('/support/index' as any);
                 break;
             case 'Broadcast':
             case 'Auth':
-                // No navigation — tap just marks as read
+                showToast.info(n.title || 'Notification', n.body || undefined);
                 break;
             default:
+                if (n.title || n.body) {
+                    showToast.info(n.title || 'Notification', n.body || undefined);
+                }
                 break;
         }
     };
 
     const handleClearAll = () => {
         if (localList.length === 0) return;
-        Alert.alert(
-            "Clear Notifications",
-            "Are you sure you want to delete all notifications? This cannot be undone.",
-            [
-                { text: "Cancel", style: "cancel" },
-                { text: "Clear All", style: "destructive", onPress: () => clearAllMutation.mutate() }
-            ]
-        );
+        if (Platform.OS === 'web') {
+            if (window.confirm('Are you sure you want to delete all notifications? This cannot be undone.')) {
+                clearAllMutation.mutate();
+            }
+        } else {
+            Alert.alert(
+                "Clear Notifications",
+                "Are you sure you want to delete all notifications? This cannot be undone.",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Clear All", style: "destructive", onPress: () => clearAllMutation.mutate() }
+                ]
+            );
+        }
     };
 
     const handleManualRefresh = async () => {
@@ -229,7 +289,10 @@ export default function NotificationsScreen() {
             <LinearGradient colors={['#F8FAFE', '#FFFFFF']} style={StyleSheet.absoluteFillObject} />
 
             <View style={styles.header}>
-                <View>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.backBtn}>
+                    <ChevronLeft size={20} color="#1E293B" />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
                     <Text style={styles.headerTitle}>Alerts & Updates</Text>
                     <Text style={styles.headerSub}>
                         {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
@@ -264,9 +327,7 @@ export default function NotificationsScreen() {
             </View>
 
             {isLoading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                </View>
+                <NotificationsSkeleton pulseAnim={pulseAnim} />
             ) : (
                 <ScrollView
                     contentContainerStyle={styles.list}
@@ -289,13 +350,20 @@ export default function NotificationsScreen() {
                                 </View>
                                 <View style={styles.content}>
                                     <View style={styles.row}>
-                                        <Text style={styles.title}>{n.title}</Text>
-                                        {!n.isRead && <View style={styles.dot} />}
+                                        <Text style={[styles.title, { flex: 1 }]}>{n.title}</Text>
+                                        <TouchableOpacity
+                                            onPress={(e) => { e.stopPropagation(); deleteOneMutation.mutate(n._id); }}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            style={{ marginLeft: 8 }}
+                                        >
+                                            <Trash2 size={14} color={Colors.muted} />
+                                        </TouchableOpacity>
                                     </View>
                                     <Text style={styles.body} numberOfLines={2}>{n.body}</Text>
                                     <View style={styles.footer}>
                                         <Clock size={11} color={Colors.muted} />
                                         <Text style={styles.time}>{timeAgo(n.createdAt)}</Text>
+                                        {!n.isRead && <View style={styles.dot} />}
                                     </View>
                                 </View>
                             </TouchableOpacity>
@@ -312,6 +380,16 @@ const styles = StyleSheet.create({
     root: { flex: 1 },
     center: { flex: 1, justifyContent: 'center' },
     header: { flexDirection: 'row', justifyContent: 'space-between', padding: 20 },
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+        alignSelf: 'center',
+    },
     headerTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A' },
     headerSub: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
     markAllText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
@@ -326,6 +404,7 @@ const styles = StyleSheet.create({
         padding: 16, marginBottom: 12, elevation: 1 
     },
     cardUnread: { backgroundColor: '#F8FBFF', borderWidth: 1, borderColor: '#EBF3FD' },
+    deleteBtn: { padding: 4 },
     iconBox: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     content: { flex: 1, marginLeft: 12 },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },

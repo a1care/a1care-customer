@@ -105,7 +105,7 @@ export default function OtpScreen() {
         try {
             const res = await authService.verifyOtp(mobile, code);
             // ApiResponse wraps data: { token } inside res.data.data
-            const token = res.data?.data?.token ?? res.data?.token;
+            const token = res.data?.token;
             if (!token) throw new Error('No token received from server');
             setToken(token);
             let user;
@@ -225,7 +225,7 @@ export default function OtpScreen() {
                     </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={handleVerify} disabled={loading} activeOpacity={0.85}>
+                <TouchableOpacity onPress={() => handleVerify()} disabled={loading} activeOpacity={0.85}>
                     <LinearGradient
                         colors={["#1A7FD4", "#0D5FA0"]}
                         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}

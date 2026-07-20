@@ -6,8 +6,8 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
-    Alert,
     Dimensions,
+    Alert,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,10 +18,12 @@ import api from '@/services/api';
 import { Endpoints } from '@/constants/api';
 import { bookingsService } from '@/services/bookings.service';
 import { paymentService } from '@/services/payment.service';
+import { walletService } from '@/services/wallet.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { formatCurrency } from '@/utils/formatters';
 import { addressService } from '@/services/address.service';
+import { showToast } from '@/utils/toast';
 
 const { width } = Dimensions.get('window');
 
@@ -31,7 +33,14 @@ export default function HealthPackageDetail() {
     const qc = useQueryClient();
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [paymentMode, setPaymentMode] = useState<'OFFLINE' | 'ONLINE' | 'WALLET'>('OFFLINE');
     const source = Array.isArray(from) ? from[0] : from;
+
+    // Fetch wallet balance
+    const { data: wallet } = useQuery({
+        queryKey: ['wallet'],
+        queryFn: walletService.getWallet,
+    });
 
     // Dynamic back logic
     const handleBack = () => {
@@ -62,7 +71,7 @@ export default function HealthPackageDetail() {
             const res = await api.get(Endpoints.HEALTH_PACKAGE_DETAIL(id!));
             return res.data.data;
         },
-        enabled: !!id,
+        enabled: !!id && id !== '[id]',
     });
 
     const { data: addresses } = useQuery({
@@ -73,11 +82,11 @@ export default function HealthPackageDetail() {
     const primaryAddress = addresses?.find(a => a.isPrimary) || addresses?.[0];
 
     const bookMutation = useMutation({
-        mutationFn: async (paymentMode: 'ONLINE' | 'OFFLINE') => {
+        mutationFn: async (mode: 'ONLINE' | 'OFFLINE' | 'WALLET') => {
             return await bookingsService.createServiceBooking({
                 healthPackageId: id!,
                 price: pkg.price,
-                paymentMode,
+                paymentMode: mode === 'WALLET' ? 'WALLET' : mode,
                 addressId: primaryAddress?._id,
                 bookingType: 'SCHEDULED',
                 fulfillmentMode: 'HOME_VISIT',
@@ -92,39 +101,57 @@ export default function HealthPackageDetail() {
             }
         },
         onError: (err: any) => {
-            Alert.alert("Booking Failed", err?.response?.data?.message || "Something went wrong. Please try again.");
+            showToast.error("Booking Failed", err?.response?.data?.message || "Something went wrong. Please try again.");
         }
     });
 
-    const handleBooking = async (mode: 'ONLINE' | 'OFFLINE') => {
-        if (mode === 'ONLINE') {
+    const handleBooking = async (mode: 'ONLINE' | 'OFFLINE' | 'WALLET') => {
+        if (mode === 'WALLET') {
+            const walletBalance = wallet?.balance ?? 0;
+            if (walletBalance < pkg.price) {
+                Alert.alert(
+                    'Insufficient Balance',
+                    `Your wallet balance (₹${walletBalance}) is not enough for this payment (₹${pkg.price}). Please top up or choose another payment method.`,
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
             try {
                 setSubmitting(true);
-                console.log(`[PackageDetail] Starting online payment for: ${id} | Price: ${pkg.price}`);
-                // 1. Create Booking (Pending)
+                const booking = await bookMutation.mutateAsync('WALLET');
+                const order = await paymentService.createOrder({
+                    amount: pkg.price,
+                    type: "BOOKING",
+                    referenceId: booking._id,
+                });
+                await paymentService.payWithWallet(order._id);
+                qc.invalidateQueries({ queryKey: ['wallet'] });
+                qc.invalidateQueries({ queryKey: ['service-bookings'] });
+                qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+                setSubmitted(true);
+            } catch (err: any) {
+                const msg = err?.response?.data?.message || err?.message || 'Wallet payment failed.';
+                Alert.alert('Payment Error', msg);
+            } finally {
+                setSubmitting(false);
+            }
+        } else if (mode === 'ONLINE') {
+            try {
+                setSubmitting(true);
                 const booking = await bookMutation.mutateAsync('ONLINE');
-                console.log(`[PackageDetail] Booking created: ${booking._id}. Now creating payment order...`);
-
-                // 2. Create Order
                 const order = await paymentService.createOrder({
                     amount: pkg.price,
                     type: "BOOKING",
                     referenceId: booking._id
                 });
-                console.log(`[PackageDetail] Order created: ${order._id}. Now initiating gateway...`);
-
-                // 3. Initiate
                 const params = await paymentService.initiatePayment(order._id);
-                console.log(`[PackageDetail] Gateway initiation success. Redirecting to Easebuzz...`);
-
-                // 4. Checkout
                 router.push({
                     pathname: "/checkout/easebuzz" as any,
                     params: { ...params }
                 });
             } catch (err: any) {
-                console.error("Package Payment Error:", err);
-                Alert.alert("Payment Error", "Unable to start online payment. Please use COD.");
+                const msg = err?.response?.data?.message || err?.message || "Unable to start online payment. Please try again.";
+                showToast.error("Payment Error", msg);
             } finally {
                 setSubmitting(false);
             }
@@ -271,6 +298,74 @@ export default function HealthPackageDetail() {
                     )}
                 </View>
 
+                {/* Payment Method */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Payment Method</Text>
+                    <View style={{ gap: 12 }}>
+
+                        {/* Cash */}
+                        <TouchableOpacity
+                            style={[styles.payCard, paymentMode === 'OFFLINE' && styles.payCardActive]}
+                            onPress={() => setPaymentMode('OFFLINE')}
+                        >
+                            <View style={[styles.payIconBox, { backgroundColor: paymentMode === 'OFFLINE' ? Colors.primary : '#E8F4FD' }]}>
+                                <Ionicons name="cash-outline" size={22} color={paymentMode === 'OFFLINE' ? '#fff' : Colors.primary} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.payCardLabel}>Pay at Home</Text>
+                                <Text style={styles.payCardSub}>Pay cash when sample is collected</Text>
+                            </View>
+                            <View style={[styles.radio, paymentMode === 'OFFLINE' && styles.radioActive]}>
+                                {paymentMode === 'OFFLINE' && <View style={styles.radioInner} />}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* A1 Wallet */}
+                        <TouchableOpacity
+                            style={[styles.payCard, paymentMode === 'WALLET' && styles.payCardActive]}
+                            onPress={() => setPaymentMode('WALLET')}
+                        >
+                            <View style={[styles.payIconBox, { backgroundColor: paymentMode === 'WALLET' ? '#16A34A' : '#ECFDF5' }]}>
+                                <Ionicons name="wallet-outline" size={22} color={paymentMode === 'WALLET' ? '#fff' : '#16A34A'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.payCardLabel}>A1 Wallet</Text>
+                                <Text style={styles.payCardSub}>Balance: {formatCurrency(wallet?.balance ?? 0)}</Text>
+                            </View>
+                            <View style={[styles.radio, paymentMode === 'WALLET' && styles.radioActive]}>
+                                {paymentMode === 'WALLET' && <View style={styles.radioInner} />}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Online */}
+                        <TouchableOpacity
+                            style={[styles.payCard, paymentMode === 'ONLINE' && styles.payCardActive]}
+                            onPress={() => setPaymentMode('ONLINE')}
+                        >
+                            <View style={[styles.payIconBox, { backgroundColor: paymentMode === 'ONLINE' ? '#7C3AED' : '#F3EEFF' }]}>
+                                <Ionicons name="card-outline" size={22} color={paymentMode === 'ONLINE' ? '#fff' : '#7C3AED'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.payCardLabel}>Pay Online</Text>
+                                <Text style={styles.payCardSub}>UPI, Card, Net Banking via Easebuzz</Text>
+                            </View>
+                            <View style={[styles.radio, paymentMode === 'ONLINE' && styles.radioActive]}>
+                                {paymentMode === 'ONLINE' && <View style={styles.radioInner} />}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Wallet insufficient warning */}
+                        {paymentMode === 'WALLET' && (wallet?.balance ?? 0) < pkg.price && (
+                            <View style={styles.walletWarning}>
+                                <Ionicons name="warning-outline" size={14} color="#92400E" />
+                                <Text style={styles.walletWarningText}>
+                                    Insufficient balance (₹{wallet?.balance ?? 0}). Please top up or choose another method.
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+
                 <View style={{ height: 100 }} />
             </ScrollView>
 
@@ -284,25 +379,19 @@ export default function HealthPackageDetail() {
                     style={[styles.bookBtn, (submitting || !primaryAddress) && { opacity: 0.7 }]}
                     onPress={() => {
                         if (!primaryAddress) {
-                            Alert.alert("Address Required", "Please add a collection address before booking.");
+                            showToast.warn("Address Required", "Please add a collection address before booking.");
                             return;
                         }
-                        Alert.alert(
-                            "Confirm Booking",
-                            "Choose your payment method",
-                            [
-                                { text: "Cash on pay", onPress: () => handleBooking('OFFLINE') },
-                                { text: "Pay Online", onPress: () => handleBooking('ONLINE') },
-                                { text: "Cancel", style: 'cancel' }
-                            ]
-                        )
+                        handleBooking(paymentMode);
                     }}
                     disabled={submitting}
                 >
                     {submitting ? (
                         <ActivityIndicator color="#fff" />
                     ) : (
-                        <Text style={styles.bookBtnText}>Book Now</Text>
+                        <Text style={styles.bookBtnText}>
+                            {paymentMode === 'ONLINE' ? 'Pay Online' : paymentMode === 'WALLET' ? 'Pay from Wallet' : 'Book Now'}
+                        </Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -465,4 +554,49 @@ const styles = StyleSheet.create({
         ...Shadows.card,
     },
     successBtnText: { color: '#fff', fontSize: FontSize.base, fontWeight: '700' },
+
+    // Payment method cards
+    payCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 16,
+        backgroundColor: Colors.card,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        gap: 14,
+        ...Shadows.small,
+    },
+    payCardActive: { borderColor: Colors.primary, backgroundColor: '#F0F7FF' },
+    payIconBox: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    payCardLabel: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textPrimary },
+    payCardSub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+    radio: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 2,
+        borderColor: Colors.border,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    radioActive: { borderColor: Colors.primary },
+    radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary },
+    walletWarning: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        backgroundColor: '#FEF3C7',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+    },
+    walletWarningText: { flex: 1, fontSize: 12, color: '#92400E', fontWeight: '600', lineHeight: 17 },
 });

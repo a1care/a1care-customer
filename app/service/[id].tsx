@@ -176,6 +176,35 @@ export default function ServiceDetailScreen() {
     const [guestPhone, setGuestPhone] = useState('');
     const [guestLoading, setGuestLoading] = useState(false);
 
+    const { data: addresses, isLoading: addrLoading, isError: addrErr, refetch: refetchAddr } = useQuery({
+        queryKey: ['addresses'],
+        queryFn: addressService.getAll,
+        enabled: isAuthenticated, // H8: don't fire 401s for guests
+    });
+
+    const { data: wallet } = useQuery({
+        queryKey: ['wallet'],
+        queryFn: walletService.getWallet,
+        enabled: isAuthenticated,
+        refetchInterval: 30000, // keep balance fresh every 30s while the user is booking
+    });
+
+    const { data: service, isLoading: serviceLoading, isError: serviceError, refetch: refetchService } = useQuery({
+        queryKey: ['child-service', id],
+        queryFn: () => servicesService.getChildServiceById(id!),
+        enabled: !!id && id !== '[id]',
+    });
+
+    // Reset stale WALLET selection if balance drops below service price
+    React.useEffect(() => {
+        if (paymentMethod !== 'WALLET') return;
+        const price = priceParam ? parseFloat(priceParam) : 0;
+        const payable = couponApplied?.finalAmount ?? price;
+        if ((wallet?.balance ?? 0) < payable) {
+            setPaymentMethod(null);
+        }
+    }, [wallet?.balance]);
+
     // ── Back Handler (Android) ──
     React.useEffect(() => {
         if (Platform.OS === 'android') {
@@ -555,23 +584,6 @@ export default function ServiceDetailScreen() {
     };
 
 
-    const { data: addresses, isLoading: addrLoading, isError: addrErr, refetch: refetchAddr } = useQuery({
-        queryKey: ['addresses'],
-        queryFn: addressService.getAll,
-        enabled: isAuthenticated, // H8: don't fire 401s for guests
-    });
-
-    const { data: wallet } = useQuery({
-        queryKey: ['wallet'],
-        queryFn: walletService.getWallet,
-        enabled: isAuthenticated, // H8: don't fire 401s for guests
-    });
-
-    const { data: service, isLoading: serviceLoading, isError: serviceError, refetch: refetchService } = useQuery({
-        queryKey: ['child-service', id],
-        queryFn: () => servicesService.getChildServiceById(id!),
-        enabled: !!id,
-    });
 
     // H5: auto-select first address when addresses load
     React.useEffect(() => {
@@ -814,8 +826,8 @@ export default function ServiceDetailScreen() {
                     return;
                 }
             }
-            if (paymentMethod !== 'ONLINE') sendBookingNotification(booking);
-            if (paymentMethod !== 'ONLINE') { setSubmitted(true); setSubmittedBookingId(booking?._id ?? null); }
+            if (paymentMethod !== 'ONLINE' && paymentMethod !== 'WALLET') sendBookingNotification(booking);
+            if (paymentMethod !== 'ONLINE' && paymentMethod !== 'WALLET') { setSubmitted(true); setSubmittedBookingId(booking?._id ?? null); }
         },
         onError: (err: any) => {
             submitting.current = false;
@@ -848,15 +860,33 @@ export default function ServiceDetailScreen() {
         const payableAmount = couponApplied?.finalAmount ?? (priceParam ? parseFloat(priceParam) : 0);
 
         if (paymentMethod === 'WALLET') {
+            const walletBalance = wallet?.balance ?? 0;
+            if (walletBalance < payableAmount) {
+                Alert.alert(
+                    'Insufficient Balance',
+                    `Your wallet balance (₹${walletBalance}) is not enough for this payment (₹${payableAmount}). Please add funds or choose another payment method.`,
+                    [{ text: 'OK', onPress: () => setStep('payment') }]
+                );
+                return;
+            }
+            let createdBookingId: string | null = null;
             try {
                 setSubmittingOnline(true);
+                const booking = await bookMutation.mutateAsync();
+                createdBookingId = booking._id;
                 const order = await paymentService.createOrder({
                     amount: payableAmount,
                     type: "BOOKING",
+                    referenceId: booking._id,
                 });
                 await paymentService.payWithWallet(order._id);
-                bookMutation.mutate();
+                sendBookingNotification(booking);
+                setSubmitted(true);
+                setSubmittedBookingId(booking?._id ?? null);
             } catch (err: any) {
+                if (createdBookingId) {
+                    bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
+                }
                 const msg =
                     err?.response?.data?.message ||
                     err?.message ||
@@ -876,50 +906,23 @@ export default function ServiceDetailScreen() {
                     type: "BOOKING",
                     referenceId: booking._id
                 });
-                const razorData = await paymentService.initiateRazorpay(order._id);
-                const options = {
-                    key: razorData.key,
-                    amount: razorData.razorOrder.amount,
-                    currency: 'INR',
-                    name: 'A1Care 24/7',
-                    description: `Payment for Order #${order.txnId}`,
-                    order_id: razorData.razorOrder.id,
-                    prefill: {
-                        email: razorData.customer.email || '',
-                        contact: razorData.customer.contact || '',
-                        name: razorData.customer.name || ''
-                    },
-                    theme: { color: Colors.primary }
-                };
-                if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
-                    throw new Error('Online payment is unavailable in this build. Please use the installed app (not Expo Go).');
-                }
-                const data = await RazorpayCheckout.open(options) as any;
-                await paymentService.verifyRazorpay({
-                    razorpay_order_id: data.razorpay_order_id,
-                    razorpay_payment_id: data.razorpay_payment_id,
-                    razorpay_signature: data.razorpay_signature,
-                    orderId: order._id
-                });
-                sendBookingNotification(booking);
-                if (shouldUseDoctorAppointment && booking?._id) {
-                    router.replace({ pathname: '/doctor/appointment/[id]', params: { id: booking._id } });
-                    return;
-                }
-                setSubmitted(true);
-            } catch (err: any) {
-                // Razorpay user-cancel returns code 2 — cancel the orphaned booking
-                if (err?.code === 2 || err?.code === '2') {
-                    if (createdBookingId) {
-                        bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
+                const params = await paymentService.initiatePayment(order._id);
+                router.push({
+                    pathname: "/checkout/easebuzz" as any,
+                    params: {
+                        ...params,
+                        type: 'BOOKING',
+                        amount: String(order.amount),
+                        bookingId: booking._id,
+                        bookingType: 'Service',
                     }
-                    Alert.alert('Payment Cancelled', 'You cancelled the payment. Your booking has been removed. You can try again.');
-                    return;
+                });
+            } catch (err: any) {
+                if (createdBookingId) {
+                    bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
                 }
                 const msg =
                     err?.response?.data?.message ||
-                    err?.description ||
-                    err?.error?.description ||
                     err?.message ||
                     'Payment failed. Please try again.';
                 Alert.alert('Payment Error', msg);
@@ -1038,14 +1041,57 @@ export default function ServiceDetailScreen() {
             >
                 {step === 'info' && service && (
                     <View style={styles.stepContent}>
-                        <View style={styles.heroSection}>
-                            <View style={styles.heroIconBg}><Text style={{ fontSize: 42 }}>⚕️</Text></View>
-                            <Text style={styles.heroTitle}>{service.name}</Text>
-                            <Text style={styles.heroDesc}>{service.description || 'Professional health services.'}</Text>
+                        {/* Premium Card Header */}
+                        <View style={[styles.card, { marginBottom: 20 }]}>
+                            <View style={{ alignItems: 'center' }}>
+                                <View style={[styles.heroIconBg, { backgroundColor: '#EFF6FF', marginBottom: 16 }]}>
+                                    <Ionicons name="medical" size={40} color={Colors.primary} />
+                                </View>
+                                <Text style={styles.heroTitle}>{service.name}</Text>
+                                <Text style={styles.heroDesc}>{service.description || 'Professional healthcare service delivered in the safety and comfort of your home.'}</Text>
+                            </View>
+
+                            <View style={[styles.cardDivider, { marginVertical: 18 }]} />
+
+                            {/* Service Details Grid */}
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <View style={styles.infoItem}>
+                                    <Text style={styles.infoLabel}>CATEGORY</Text>
+                                    <Text style={styles.infoValue}>{subName || 'General Health'}</Text>
+                                </View>
+                                <View style={styles.infoItem}>
+                                    <Text style={styles.infoLabel}>CONSULTATION FEE</Text>
+                                    <Text style={[styles.infoValue, { color: Colors.primary, fontWeight: '900' }]}>{formatCurrency(priceParam ? parseFloat(priceParam) : 0)}</Text>
+                                </View>
+                            </View>
                         </View>
-                        <View style={styles.infoGrid}>
-                            <View style={styles.infoItem}><Text style={styles.infoLabel}>CATEGORY</Text><Text style={styles.infoValue}>{subName || 'Health'}</Text></View>
-                            <View style={styles.infoItem}><Text style={styles.infoLabel}>PRICE</Text><Text style={styles.infoValue}>{formatCurrency(priceParam ? parseFloat(priceParam) : 0)}</Text></View>
+
+                        {/* Why Choose Us / Service Perks */}
+                        <View style={[styles.card, { marginBottom: 20 }]}>
+                            <Text style={[styles.cardTitle, { marginBottom: 16 }]}>Service Inclusions</Text>
+                            <View style={{ gap: 14 }}>
+                                {[
+                                    { title: 'Verified Medical Experts', desc: 'Consultations by certified & registered professionals only.', icon: 'shield-checkmark-outline', color: '#10B981' },
+                                    { title: 'At-Home Comfort', desc: 'Avoid long hospital queues. Receive complete care at your doorstep.', icon: 'home-outline', color: '#3B82F6' },
+                                    { title: '24/7 Clinical Support', desc: 'Post-service follow-up queries and constant support.', icon: 'chatbubbles-outline', color: '#F59E0B' },
+                                ].map((perk, index) => (
+                                    <View key={index} style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                                        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: perk.color + '15', justifyContent: 'center', alignItems: 'center', marginTop: 2 }}>
+                                            <Ionicons name={perk.icon as any} size={18} color={perk.color} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E293B' }}>{perk.title}</Text>
+                                            <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2, lineHeight: 16 }}>{perk.desc}</Text>
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Trust Badge */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4 }}>
+                            <Ionicons name="shield-checkmark" size={16} color="#64748B" />
+                            <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Safe & Secure Healthcare Bookings</Text>
                         </View>
                     </View>
                 )}
@@ -1205,7 +1251,7 @@ export default function ServiceDetailScreen() {
                                         key={opt.id}
                                         onPress={() => {
                                             if (opt.disabled) {
-                                                router.push('/wallet/index' as any);
+                                                router.push('/wallet' as any);
                                                 return;
                                             }
                                             setPaymentMethod(opt.id as any);
@@ -1391,18 +1437,6 @@ export default function ServiceDetailScreen() {
                             ) : (
                                 <Text style={styles.saveAddrBtnText}>Send OTP & Continue</Text>
                             )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={{ marginTop: 16, alignItems: 'center' }}
-                            onPress={() => {
-                                setShowGuestModal(false);
-                                router.push('/(auth)/login');
-                            }}
-                        >
-                            <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '600' }}>
-                                Already have an account? Login
-                            </Text>
                         </TouchableOpacity>
                     </View>
                 </KeyboardAvoidingView>

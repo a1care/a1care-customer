@@ -6,10 +6,12 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
+    Alert,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { bookingsService } from '@/services/bookings.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
@@ -113,6 +115,7 @@ function Timeline({ status }: { status: string }) {
 export default function AppointmentDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
+    const queryClient = useQueryClient();
 
     const { data: appt, isLoading, isError, refetch } = useQuery({
         queryKey: ['doctor-appointment', id],
@@ -126,6 +129,45 @@ export default function AppointmentDetailScreen() {
             router.back();
         } else {
             router.replace('/bookings');
+        }
+    };
+
+    const cancelMutation = useMutation({
+        mutationFn: () => bookingsService.updateAppointmentStatus(appt!._id, 'Cancelled'),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['appointments'] });
+            queryClient.invalidateQueries({ queryKey: ['doctor-appointment', id] });
+            refetch();
+        },
+        onError: (error: any) => {
+            const msg = error?.response?.data?.message || error?.message || 'Failed to cancel appointment';
+            if (Platform.OS === 'web') {
+                window.alert('Error: ' + msg);
+            } else {
+                Alert.alert('Error', msg);
+            }
+        },
+    });
+
+    const handleCancel = () => {
+        if (Platform.OS === 'web') {
+            // Alert.alert callbacks don't fire on web — use window.confirm instead
+            if (window.confirm('Are you sure you want to cancel this appointment?')) {
+                cancelMutation.mutate();
+            }
+        } else {
+            Alert.alert(
+                'Cancel Appointment',
+                'Are you sure you want to cancel this appointment?',
+                [
+                    { text: 'No', style: 'cancel' },
+                    {
+                        text: 'Yes, Cancel',
+                        style: 'destructive',
+                        onPress: () => cancelMutation.mutate(),
+                    },
+                ]
+            );
         }
     };
 
@@ -278,35 +320,40 @@ export default function AppointmentDetailScreen() {
                         </View>
                     )}
 
+                    {(appt.status === 'Completed' || appt.status === 'Cancelled') && (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Book Appointment Again</Text>
+                            <Text style={styles.descText}>
+                                Schedule another consultation with Dr. {typeof appt.doctorId === 'object' ? appt.doctorId.name : 'this doctor'}.
+                            </Text>
+                            <Button
+                                label="Book Again"
+                                onPress={() => {
+                                    const dr = appt.doctorId;
+                                    const drId = typeof dr === 'object' ? dr?._id : dr;
+                                    const svcName = appt.serviceName || 'Doctor Consultation';
+                                    router.push({
+                                        pathname: `/doctor/book`,
+                                        params: {
+                                            id: drId || '',
+                                            serviceName: svcName
+                                        }
+                                    } as any);
+                                }}
+                                variant="primary"
+                                size="md"
+                                style={{ marginTop: 12 }}
+                            />
+                        </View>
+                    )}
+
                     {(appt.status === 'Pending' || appt.status === 'Confirmed') && (
                         <View style={styles.card}>
                             <Text style={styles.cardTitle}>Manage Appointment</Text>
                             <Button
-                                label="Cancel Appointment"
-                                icon={<XCircle size={18} color="#fff" />}
-                                onPress={() => {
-                                    import('react-native').then(({ Alert }) => {
-                                        Alert.alert(
-                                            'Cancel Appointment',
-                                            'Are you sure you want to cancel this appointment?',
-                                            [
-                                                { text: 'No', style: 'cancel' },
-                                                {
-                                                    text: 'Yes, Cancel',
-                                                    style: 'destructive',
-                                                    onPress: async () => {
-                                                        try {
-                                                            await bookingsService.updateAppointmentStatus(appt._id, 'Cancelled');
-                                                            refetch();
-                                                        } catch (error: any) {
-                                                            Alert.alert('Error', error?.response?.data?.message || 'Failed to cancel appointment');
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        );
-                                    });
-                                }}
+                                label={cancelMutation.isPending ? 'Cancelling...' : 'Cancel Appointment'}
+                                icon={cancelMutation.isPending ? <ActivityIndicator size="small" color="#fff" /> : <XCircle size={18} color="#fff" />}
+                                onPress={handleCancel}
                                 variant="danger"
                                 size="md"
                                 fullWidth

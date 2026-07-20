@@ -6,7 +6,7 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
-    Alert,
+    Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -14,9 +14,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { servicesService } from '@/services/services.service';
 import { bookingsService } from '@/services/bookings.service';
+import { walletService } from '@/services/wallet.service';
+import { paymentService } from '@/services/payment.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Button } from '@/components/ui/Button';
+import { triggerLocalNotification } from '@/utils/notifications';
+import { showToast } from '@/utils/toast';
 
 const DEPARTMENTS = [
     { id: 'ortho', name: 'Orthopaedics', icon: 'body-outline' },
@@ -97,15 +101,22 @@ export default function HospitalBookingScreen() {
     const todayYmd = useMemo(() => toLocalYMD(new Date()), []);
     const [selectedDate, setSelectedDate] = useState(todayYmd);
     const [selectedTime, setSelectedTime] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState<'OFFLINE'>('OFFLINE');
+    const [paymentMethod, setPaymentMethod] = useState<'OFFLINE' | 'ONLINE' | 'WALLET'>('OFFLINE');
     const [step, setStep] = useState<'details' | 'payment'>('details');
     const [submitted, setSubmitted] = useState(false);
+    const [submittingOnline, setSubmittingOnline] = useState(false);
+
+    // Fetch wallet balance
+    const { data: wallet } = useQuery({
+        queryKey: ['wallet'],
+        queryFn: walletService.getWallet,
+    });
 
     // Fetch service detail
     const { data: service, isLoading } = useQuery({
         queryKey: ['child-service', id],
         queryFn: () => servicesService.getChildServiceById(id!),
-        enabled: !!id,
+        enabled: !!id && id !== '[id]',
     });
 
     // Date generation for next 7 days (local timezone-safe)
@@ -157,27 +168,108 @@ export default function HospitalBookingScreen() {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['service-bookings'] });
             qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+            triggerLocalNotification(
+                'OP Token Booked',
+                selectedTime
+                    ? `Your OP token is confirmed for ${formatLocalDateLabel(selectedDate)} at ${selectedTime}.`
+                    : `Your OP token is confirmed for ${formatLocalDateLabel(selectedDate)}.`
+            );
             setSubmitted(true);
         },
         onError: (err: any) => {
             const msg = err?.response?.data?.message || err.message || 'Booking failed';
-            Alert.alert('Booking Error', msg);
+            showToast.error('Booking Failed', msg);
         }
     });
 
     const handleConfirm = async () => {
         if (step === 'details') {
             if (!selectedDept && !selectedSymptom) {
-                Alert.alert('Select Reason', 'Please select a department or symptom to proceed.');
+                showToast.warn('Select Reason', 'Please select a department or symptom to proceed.');
                 return;
             }
             if (!selectedTime) {
-                Alert.alert('Select Time', 'Please select a preferred time slot.');
+                showToast.warn('Select Time Slot', 'Please select a preferred time slot.');
                 return;
             }
             setStep('payment');
         } else {
-            bookMutation.mutate();
+            const payableAmount = service?.price || 0;
+
+            if (paymentMethod === 'WALLET') {
+                const walletBalance = wallet?.balance ?? 0;
+                if (walletBalance < payableAmount) {
+                    Alert.alert(
+                        'Insufficient Balance',
+                        `Your wallet balance (₹${walletBalance}) is not enough for this payment (₹${payableAmount}). Please add funds or choose another payment method.`,
+                        [{ text: 'OK' }]
+                    );
+                    return;
+                }
+                let createdBookingId: string | null = null;
+                try {
+                    setSubmittingOnline(true);
+                    const booking = await bookMutation.mutateAsync();
+                    createdBookingId = booking._id;
+                    const order = await paymentService.createOrder({
+                        amount: payableAmount,
+                        type: "BOOKING",
+                        referenceId: booking._id,
+                    });
+                    await paymentService.payWithWallet(order._id);
+                    triggerLocalNotification(
+                        'OP Token Booked',
+                        selectedTime
+                            ? `Your OP token is confirmed for ${formatLocalDateLabel(selectedDate)} at ${selectedTime}. Paid ₹${payableAmount} from wallet.`
+                            : `Your OP token is confirmed for ${formatLocalDateLabel(selectedDate)}.`
+                    );
+                    qc.invalidateQueries({ queryKey: ['wallet'] });
+                    qc.invalidateQueries({ queryKey: ['service-bookings'] });
+                    qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+                    setSubmitted(true);
+                } catch (err: any) {
+                    if (createdBookingId) {
+                        bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
+                    }
+                    const msg = err?.response?.data?.message || err?.message || 'Wallet payment failed. Please check your balance and try again.';
+                    Alert.alert('Payment Error', msg);
+                } finally {
+                    setSubmittingOnline(false);
+                }
+            } else if (paymentMethod === 'ONLINE') {
+                let createdBookingId: string | null = null;
+                try {
+                    setSubmittingOnline(true);
+                    const booking = await bookMutation.mutateAsync();
+                    createdBookingId = booking._id;
+                    const order = await paymentService.createOrder({
+                        amount: payableAmount,
+                        type: "BOOKING",
+                        referenceId: booking._id
+                    });
+                    const params = await paymentService.initiatePayment(order._id);
+                    router.push({
+                        pathname: "/checkout/easebuzz" as any,
+                        params: {
+                            ...params,
+                            type: 'BOOKING',
+                            amount: String(order.amount),
+                            bookingId: booking._id,
+                            bookingType: 'Service',
+                        }
+                    });
+                } catch (err: any) {
+                    if (createdBookingId) {
+                        bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
+                    }
+                    const msg = err?.response?.data?.message || err?.message || 'Payment failed. Please try again.';
+                    Alert.alert('Payment Error', msg);
+                } finally {
+                    setSubmittingOnline(false);
+                }
+            } else {
+                bookMutation.mutate();
+            }
         }
     };
 
@@ -352,26 +444,59 @@ export default function HospitalBookingScreen() {
                     </>
                 ) : (
                     <View style={{ gap: 20 }}>
+
+                        {/* Payment Method: Cash at Hospital */}
                         <TouchableOpacity
-                            style={[styles.payCard, styles.activePayCard]}
+                            style={[styles.payCard, paymentMethod === 'OFFLINE' && styles.activePayCard]}
                             onPress={() => setPaymentMethod('OFFLINE')}
                         >
-                            <View style={[styles.payIcon, { backgroundColor: Colors.primary }]}>
-                                <Ionicons
-                                    name="cash-outline"
-                                    size={24}
-                                    color="#fff"
-                                />
+                            <View style={[styles.payIcon, { backgroundColor: paymentMethod === 'OFFLINE' ? Colors.primary : '#E8F4FD' }]}>
+                                <Ionicons name="cash-outline" size={24} color={paymentMethod === 'OFFLINE' ? '#fff' : Colors.primary} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.payTitle}>Pay at Hospital</Text>
-                                <Text style={styles.paySub}>Pay directly at the OP desk</Text>
+                                <Text style={styles.paySub}>Pay cash directly at the OP desk</Text>
                             </View>
-                            <View style={[styles.radio, styles.radioActive]}>
-                                <View style={styles.radioInner} />
+                            <View style={[styles.radio, paymentMethod === 'OFFLINE' && styles.radioActive]}>
+                                {paymentMethod === 'OFFLINE' && <View style={styles.radioInner} />}
                             </View>
                         </TouchableOpacity>
 
+                        {/* Payment Method: A1 Wallet */}
+                        <TouchableOpacity
+                            style={[styles.payCard, paymentMethod === 'WALLET' && styles.activePayCard]}
+                            onPress={() => setPaymentMethod('WALLET')}
+                        >
+                            <View style={[styles.payIcon, { backgroundColor: paymentMethod === 'WALLET' ? '#16A34A' : '#ECFDF5' }]}>
+                                <Ionicons name="wallet-outline" size={24} color={paymentMethod === 'WALLET' ? '#fff' : '#16A34A'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.payTitle}>A1 Wallet</Text>
+                                <Text style={styles.paySub}>Balance: ₹{(wallet?.balance ?? 0).toFixed(2)}</Text>
+                            </View>
+                            <View style={[styles.radio, paymentMethod === 'WALLET' && styles.radioActive]}>
+                                {paymentMethod === 'WALLET' && <View style={styles.radioInner} />}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Payment Method: Online */}
+                        <TouchableOpacity
+                            style={[styles.payCard, paymentMethod === 'ONLINE' && styles.activePayCard]}
+                            onPress={() => setPaymentMethod('ONLINE')}
+                        >
+                            <View style={[styles.payIcon, { backgroundColor: paymentMethod === 'ONLINE' ? '#7C3AED' : '#F3EEFF' }]}>
+                                <Ionicons name="card-outline" size={24} color={paymentMethod === 'ONLINE' ? '#fff' : '#7C3AED'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.payTitle}>Pay Online</Text>
+                                <Text style={styles.paySub}>UPI, Card, Net Banking via Easebuzz</Text>
+                            </View>
+                            <View style={[styles.radio, paymentMethod === 'ONLINE' && styles.radioActive]}>
+                                {paymentMethod === 'ONLINE' && <View style={styles.radioInner} />}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Booking Summary */}
                         <View style={styles.summaryBox}>
                             <Text style={styles.summaryTitle}>Booking Summary</Text>
                             <View style={styles.summaryRow}>
@@ -382,6 +507,11 @@ export default function HospitalBookingScreen() {
                                 <Text style={[styles.summaryLabel, { fontWeight: '700', color: Colors.textPrimary }]}>Total Payable</Text>
                                 <Text style={[styles.summaryVal, { color: Colors.primary, fontSize: 18 }]}>₹{service?.price || 200}</Text>
                             </View>
+                            {paymentMethod === 'WALLET' && (wallet?.balance ?? 0) < (service?.price || 200) && (
+                                <View style={{ marginTop: 10, backgroundColor: '#FEF3C7', padding: 10, borderRadius: 10 }}>
+                                    <Text style={{ color: '#92400E', fontSize: 12, fontWeight: '600' }}>⚠️ Insufficient wallet balance. Please top up or choose another method.</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
                 )}
@@ -390,9 +520,16 @@ export default function HospitalBookingScreen() {
 
             <View style={styles.bottomBar}>
                 <Button
-                    label={bookMutation.isPending ? "Confirming..." : step === 'details' ? "Proceed to Payment" : "Complete OP Booking"}
+                    label={
+                        submittingOnline ? "Processing..." :
+                        bookMutation.isPending ? "Confirming..." :
+                        step === 'details' ? "Proceed to Payment" :
+                        paymentMethod === 'ONLINE' ? "Pay Online" :
+                        paymentMethod === 'WALLET' ? "Pay from Wallet" :
+                        "Complete OP Booking"
+                    }
                     onPress={handleConfirm}
-                    disabled={bookMutation.isPending}
+                    disabled={bookMutation.isPending || submittingOnline}
                     fullWidth
                     size="lg"
                 />

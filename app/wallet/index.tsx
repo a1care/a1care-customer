@@ -11,6 +11,7 @@ import {
     Modal,
     TextInput,
     BackHandler,
+    Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,12 +25,36 @@ import { FontSize } from '@/constants/spacing';
 import { ErrorState } from '@/components/ui/EmptyState';
 import { formatCurrency } from '@/utils/formatters';
 
+const WalletSkeleton = ({ pulseAnim }: { pulseAnim: Animated.Value }) => {
+    return (
+        <View style={{ flex: 1 }}>
+            <Animated.View style={[styles.balanceCard, { opacity: pulseAnim, backgroundColor: '#E2E8F0', minHeight: 180 }]} />
+            <Text style={styles.sectionTitle}>Recent Transactions</Text>
+            <View style={{ gap: 12, marginTop: 10 }}>
+                {[1, 2, 3].map((i) => (
+                    <Animated.View key={i} style={{ opacity: pulseAnim, height: 75, backgroundColor: '#E2E8F0', borderRadius: 16 }} />
+                ))}
+            </View>
+        </View>
+    );
+};
+
 export default function WalletScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const qc = useQueryClient();
     const [isAddModalVisible, setIsAddModalVisible] = React.useState(false);
     const [amountInput, setAmountInput] = React.useState('');
+
+    const pulseAnim = React.useRef(new Animated.Value(0.3)).current;
+    React.useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true })
+            ])
+        ).start();
+    }, []);
 
     const {
         data: wallet,
@@ -60,45 +85,23 @@ export default function WalletScreen() {
     const addMoneyMutation = useMutation({
         mutationFn: async (amount: number) => {
             const order = await paymentService.createOrder({ amount, type: "WALLET_TOPUP" });
-            const razorData = await paymentService.initiateRazorpay(order._id);
-            const data = await RazorpayCheckout.open({
-                key: razorData.key,
-                amount: razorData.razorOrder.amount,
-                currency: 'INR',
-                name: 'A1Care 24/7',
-                description: 'Wallet Top-up',
-                order_id: razorData.razorOrder.id,
-                prefill: {
-                    email: razorData.customer.email || '',
-                    contact: razorData.customer.contact || '',
-                    name: razorData.customer.name || '',
-                },
-                theme: { color: Colors.primary },
-            });
-            await paymentService.verifyRazorpay({
-                razorpay_order_id: (data as any).razorpay_order_id,
-                razorpay_payment_id: (data as any).razorpay_payment_id,
-                razorpay_signature: (data as any).razorpay_signature,
-                orderId: order._id,
-            });
-            return order;
+            const params = await paymentService.initiatePayment(order._id);
+            return { order, params };
         },
-        onSuccess: (order) => {
+        onSuccess: ({ order, params }) => {
             qc.invalidateQueries({ queryKey: ['wallet'] });
             router.push({
-                pathname: '/checkout/status' as any,
+                pathname: '/checkout/easebuzz' as any,
                 params: {
-                    status: 'SUCCESS',
-                    txnId: order.txnId,
-                    amount: String(order.amount),
+                    ...params,
                     type: 'WALLET_TOPUP',
-                    description: 'Wallet Top-up via Razorpay',
-                    paidAt: Date.now().toString(),
+                    amount: String(order.amount),
                 },
             });
         },
         onError: (err: any) => {
-            if (err.code !== 2) Alert.alert('Payment Error', err?.description || 'Unable to add money. Please try again.');
+            const msg = err?.response?.data?.message || err?.message || 'Unable to add money. Please try again.';
+            Alert.alert('Payment Error', msg);
         },
     });
 
@@ -132,9 +135,7 @@ export default function WalletScreen() {
                 refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[Colors.primary]} />}
             >
                 {isLoading ? (
-                    <View style={styles.center}>
-                        <ActivityIndicator size="large" color={Colors.primary} />
-                    </View>
+                    <WalletSkeleton pulseAnim={pulseAnim} />
                 ) : isError ? (
                     <ErrorState message="Could not load wallet details" onRetry={refetch} />
                 ) : (

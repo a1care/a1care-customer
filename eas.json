@@ -20,7 +20,7 @@
         "credentialsSource": "remote"
       },
       "android": {
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       },
       "autoIncrement": true,
       "env": {

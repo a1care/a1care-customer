@@ -6,7 +6,6 @@ import {
     TouchableOpacity,
     ScrollView,
     ActivityIndicator,
-    Alert,
     RefreshControl,
     Modal,
     TextInput,
@@ -25,6 +24,7 @@ import * as Location from 'expo-location';
 import { addressService } from '@/services/address.service';
 import { Colors, Shadows } from '@/constants/colors';
 import type { Address } from '@/types';
+import { showToast } from '@/utils/toast';
 
 export default function AddressesScreen() {
     const router = useRouter();
@@ -117,6 +117,11 @@ export default function AddressesScreen() {
         mutationFn: (id: string) => addressService.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['addresses'] });
+            showToast.success('Deleted', 'Address deleted successfully.');
+        },
+        onError: (error: any) => {
+            const msg = error?.response?.data?.message || error?.message || 'Failed to delete address';
+            showToast.error('Delete Failed', msg);
         },
     });
 
@@ -138,10 +143,10 @@ export default function AddressesScreen() {
             queryClient.invalidateQueries({ queryKey: ['addresses'] });
             setIsModalVisible(false);
             resetForm();
-            Alert.alert('Success', `Address ${editingAddressId ? 'updated' : 'added'} successfully`);
+            showToast.success('Saved', `Address ${editingAddressId ? 'updated' : 'added'} successfully`);
         },
         onError: (error: any) => {
-            Alert.alert('Error', error.response?.data?.message || 'Failed to save address');
+            showToast.error('Save Failed', error.response?.data?.message || 'Failed to save address');
         },
     });
 
@@ -195,7 +200,7 @@ export default function AddressesScreen() {
 
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Location Permission Needed', 'Please allow location access to auto-fill your address.');
+                showToast.warn('Location Permission Needed', 'Please allow location access to auto-fill your address.');
                 return;
             }
 
@@ -217,12 +222,36 @@ export default function AddressesScreen() {
             const lng = position.coords.longitude;
             setLocationCoords({ lat, lng });
 
-            const geocoded = await withTimeout(
-                Location.reverseGeocodeAsync({ latitude: lat, longitude: lng }),
-                10000,
-                'Address lookup timed out'
-            );
-            const geo = geocoded?.[0];
+            let geo: any = null;
+            if (Platform.OS === 'web') {
+                try {
+                    const resp = await withTimeout(
+                        fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+                            headers: { 'Accept-Language': 'en' }
+                        }),
+                        10000,
+                        'Address lookup timed out'
+                    );
+                    const data = await resp.json();
+                    const addr = data?.address || {};
+                    geo = {
+                        name: addr.suburb || addr.neighbourhood || addr.quarter || '',
+                        street: addr.road || '',
+                        district: addr.city || addr.town || addr.village || addr.county || '',
+                        subregion: addr.suburb || addr.neighbourhood || '',
+                        city: addr.city || addr.town || addr.village || '',
+                        region: addr.state || '',
+                        postalCode: addr.postcode || ''
+                    };
+                } catch (_e) { /* keep geo null */ }
+            } else {
+                const geocoded = await withTimeout(
+                    Location.reverseGeocodeAsync({ latitude: lat, longitude: lng }),
+                    10000,
+                    'Address lookup timed out'
+                );
+                geo = geocoded?.[0];
+            }
 
             if (!geo) {
                 setIsAutoDetectDone(false);
@@ -289,10 +318,17 @@ export default function AddressesScreen() {
     };
 
     const handleDelete = (id: string) => {
-        Alert.alert('Delete Address', 'Are you sure you want to delete this address?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate(id) },
-        ]);
+        if (Platform.OS === 'web') {
+            // Alert.alert button callbacks don't fire on web — use window.confirm instead
+            if (window.confirm('Are you sure you want to delete this address?')) {
+                deleteMutation.mutate(id);
+            }
+        } else {
+            Alert.alert('Delete Address', 'Are you sure you want to delete this address?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate(id) },
+            ]);
+        }
     };
 
     if (isLoading) {

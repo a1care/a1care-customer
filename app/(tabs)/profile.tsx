@@ -10,6 +10,7 @@ import {
     StyleSheet,
     RefreshControl,
     Image,
+    Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +21,7 @@ import { addressService } from '@/services/address.service';
 import { walletService } from '@/services/wallet.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { showToast } from '@/utils/toast';
 
 // ─── Menu item row ────────────────────────────────────────────────────────────
 function MenuLink({
@@ -79,40 +81,49 @@ export default function ProfileScreen() {
     const deleteMutation = useMutation({
         mutationFn: authService.requestDeletion,
         onSuccess: (data: any) => {
-            Alert.alert("Success", data.message || "Deletion request submitted. Admin will review your request.");
+            showToast.success('Request Submitted', data.message || 'Deletion request submitted. Admin will review your request.');
         },
         onError: (err: any) => {
-            Alert.alert("Error", err.response?.data?.message || "Failed to submit deletion request.");
+            showToast.error('Error', err.response?.data?.message || 'Failed to submit deletion request.');
         }
     });
 
     const handleDeleteAccount = () => {
-        Alert.alert(
-            'Delete Account',
-            'Your account data will be preserved as per legal requirements, but you will no longer have access to this account. Admin needs to approve your request. Are you sure?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Request Deletion',
-                    style: 'destructive',
-                    onPress: () => deleteMutation.mutate(),
-                },
-            ]
-        );
+        const msg = 'Your account data will be preserved as per legal requirements, but you will no longer have access. Admin needs to approve your request. Are you sure?';
+        if (Platform.OS === 'web') {
+            if (window.confirm(msg)) {
+                deleteMutation.mutate();
+            }
+        } else {
+            Alert.alert(
+                'Delete Account',
+                msg,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Request Deletion', style: 'destructive', onPress: () => deleteMutation.mutate() },
+                ]
+            );
+        }
     };
 
     const handleLogout = () => {
-        Alert.alert('Logout', 'Are you sure you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Logout',
-                style: 'destructive',
-                onPress: async () => {
-                    await logout();
-                    router.replace('/(auth)/login');
+        if (Platform.OS === 'web') {
+            if (window.confirm('Are you sure you want to logout?')) {
+                logout().then(() => router.replace('/(auth)/login'));
+            }
+        } else {
+            Alert.alert('Logout', 'Are you sure you want to logout?', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await logout();
+                        router.replace('/(auth)/login');
+                    },
                 },
-            },
-        ]);
+            ]);
+        }
     };
 
     const displayUser = profile ?? user;

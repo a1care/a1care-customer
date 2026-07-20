@@ -25,6 +25,9 @@ const getDoctorImage = (doctor: any) =>
 const normalizeDoctor = <T extends Record<string, any>>(doctor: T): T => ({
     ...doctor,
     profileImage: toAbsoluteImageUrl(getDoctorImage(doctor)),
+    // Backend stores fee in consultationFee, homeConsultationFee, or onlineConsultationFee.
+    // Resolve to a single consultationFee for the frontend.
+    consultationFee: doctor?.consultationFee ?? doctor?.homeConsultationFee ?? doctor?.onlineConsultationFee ?? 0,
 });
 
 const normalizeSlots = (raw: any): TimeSlot[] => {

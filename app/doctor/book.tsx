@@ -6,12 +6,12 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
-    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import RazorpayCheckout from 'react-native-razorpay';
+import { Ionicons } from '@expo/vector-icons';
 import { doctorsService } from '@/services/doctors.service';
 import { bookingsService } from '@/services/bookings.service';
 import { walletService } from '@/services/wallet.service';
@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/EmptyState';
 import { formatCurrency } from '@/utils/formatters';
 import { triggerLocalNotification } from '@/utils/notifications';
+import { showToast } from '@/utils/toast';
 
 const toLocalYMD = (date: Date) => {
     const y = date.getFullYear();
@@ -124,29 +125,40 @@ export default function DoctorBookingScreen() {
                 `Your appointment with Dr. ${doctor?.name} is placed for ${prettyDate} at ${prettyTime}.`
             );
             qc.invalidateQueries({ queryKey: ['appointments'] });
-            // D2: navigate to appointment detail instead of generic alert
-            if (booking?._id) {
-                router.replace({ pathname: '/doctor/appointment/[id]', params: { id: booking._id } } as any);
-            } else {
-                router.replace('/(tabs)/bookings' as any);
-            }
-            qc.invalidateQueries({ queryKey: ['appointments'] });
+            // Navigate to the booking success congratulations screen
+            router.replace({
+                pathname: '/doctor/booking-success' as any,
+                params: {
+                    bookingId: booking?._id || '',
+                    doctorName: doctor?.name || '',
+                    date: selectedDate,
+                    timeSlot: prettyTime,
+                    amount: String(doctor?.consultationFee ?? 0),
+                    paymentMode: 'COD',
+                },
+            });
         },
         onError: (err: any) => {
-            Alert.alert('Booking Failed', err?.response?.data?.message ?? 'Could not book appointment. Please try again.');
+            showToast.error('Booking Failed', err?.response?.data?.message ?? 'Could not book appointment. Please try again.');
         },
     });
 
     const handleBook = async () => {
         if (!selectedSlot) {
-            Alert.alert('Select Slot', 'Please choose a time slot to continue.');
+            showToast.warn('Select Slot', 'Please choose a time slot to continue.');
             return;
         }
 
+        // Resolve fee from all possible backend fields
+        const fee = doctor?.consultationFee ?? 0;
+
         if (paymentMethod === 'WALLET') {
-            const fee = doctor?.consultationFee ?? 0;
+            if (fee <= 0) {
+                showToast.error('Fee Unavailable', 'Consultation fee is not set for this doctor. Please try Cash on Pay.');
+                return;
+            }
             if ((wallet?.balance ?? 0) < fee) {
-                Alert.alert('Insufficient Balance', 'Your wallet balance is lower than the consultation fee. Please top up or use another method.');
+                showToast.warn('Insufficient Balance', 'Your wallet balance is lower than the consultation fee. Please top up or use another method.');
                 return;
             }
             try {
@@ -172,10 +184,13 @@ export default function DoctorBookingScreen() {
                         type: 'BOOKING',
                         description: `Consultation with Dr. ${doctor?.name}`,
                         bookingId: booking._id,
+                        date: selectedDate,
+                        timeSlot: selectedSlot ? formatSlotTimeLocal(selectedSlot.startingTime) : '',
+                        providerName: doctor?.name || '',
                     },
                 });
             } catch (err: any) {
-                Alert.alert('Payment Failed', err?.response?.data?.message || 'Could not complete wallet payment.');
+                showToast.error('Payment Failed', err?.response?.data?.message || 'Could not complete wallet payment.');
             } finally {
                 setIsProcessingPayment(false);
             }
@@ -183,6 +198,10 @@ export default function DoctorBookingScreen() {
         }
 
         if (paymentMethod === 'ONLINE') {
+            if (fee <= 0) {
+                showToast.error('Fee Unavailable', 'Consultation fee is not set for this doctor. Please try Cash on Pay.');
+                return;
+            }
             try {
                 setIsProcessingPayment(true);
                 const booking = await bookingsService.bookDoctor(id!, {
@@ -192,7 +211,6 @@ export default function DoctorBookingScreen() {
                     paymentMode: 'ONLINE',
                     serviceName: chosenSpecialization || 'Doctor Consultation',
                 });
-                const fee = doctor?.consultationFee ?? 0;
                 const order = await paymentService.createOrder({ amount: fee, type: 'BOOKING', referenceId: booking._id });
                 const razorData = await paymentService.initiateRazorpay(order._id);
                 const data = await RazorpayCheckout.open({
@@ -226,13 +244,16 @@ export default function DoctorBookingScreen() {
                         type: 'BOOKING',
                         description: `Consultation with Dr. ${doctor?.name}`,
                         bookingId: booking._id,
+                        date: selectedDate,
+                        timeSlot: selectedSlot ? formatSlotTimeLocal(selectedSlot.startingTime) : '',
+                        providerName: doctor?.name || '',
                     },
                 });
             } catch (err: any) {
                 if (err.code === 2) {
-                    Alert.alert('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed.');
+                    showToast.warn('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed.');
                 } else {
-                    Alert.alert('Payment Error', err?.description || 'Payment failed. Please try again.');
+                    showToast.error('Payment Error', err?.description || 'Payment failed. Please try again.');
                 }
             } finally {
                 setIsProcessingPayment(false);
@@ -341,28 +362,67 @@ export default function DoctorBookingScreen() {
                 {/* Payment Method Selector */}
                 <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Payment Method</Text>
                 <View style={styles.paymentMethods}>
-                    {([
-                        { key: 'COD', label: 'Cash on Pay', sub: 'Pay at clinic / home after consultation' },
-                        { key: 'WALLET', label: 'Wallet', sub: `Balance: ${formatCurrency(wallet?.balance ?? 0)}` },
-                        { key: 'ONLINE', label: 'Pay Online', sub: 'Razorpay — UPI, Card, Net Banking' },
-                    ] as const).map(({ key, label, sub }) => {
-                        const active = paymentMethod === key;
-                        return (
-                            <TouchableOpacity
-                                key={key}
-                                style={[styles.payCard, active && styles.payCardActive]}
-                                onPress={() => setPaymentMethod(key)}
-                            >
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.payLabel}>{label}</Text>
-                                    <Text style={styles.paySub}>{sub}</Text>
-                                </View>
-                                <View style={[styles.radio, active && styles.radioActive]}>
-                                    {active && <View style={styles.radioInner} />}
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
+
+                    {/* Cash at Clinic */}
+                    <TouchableOpacity
+                        style={[styles.payCard, paymentMethod === 'COD' && styles.payCardActive]}
+                        onPress={() => setPaymentMethod('COD')}
+                    >
+                        <View style={[styles.payIconBox, { backgroundColor: paymentMethod === 'COD' ? Colors.primary : '#E8F4FD' }]}>
+                            <Ionicons name="cash-outline" size={22} color={paymentMethod === 'COD' ? '#fff' : Colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.payLabel}>Pay at Clinic</Text>
+                            <Text style={styles.paySub}>Pay cash after consultation</Text>
+                        </View>
+                        <View style={[styles.radio, paymentMethod === 'COD' && styles.radioActive]}>
+                            {paymentMethod === 'COD' && <View style={styles.radioInner} />}
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* A1 Wallet */}
+                    <TouchableOpacity
+                        style={[styles.payCard, paymentMethod === 'WALLET' && styles.payCardActive]}
+                        onPress={() => setPaymentMethod('WALLET')}
+                    >
+                        <View style={[styles.payIconBox, { backgroundColor: paymentMethod === 'WALLET' ? '#16A34A' : '#ECFDF5' }]}>
+                            <Ionicons name="wallet-outline" size={22} color={paymentMethod === 'WALLET' ? '#fff' : '#16A34A'} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.payLabel}>A1 Wallet</Text>
+                            <Text style={styles.paySub}>Balance: {formatCurrency(wallet?.balance ?? 0)}</Text>
+                        </View>
+                        <View style={[styles.radio, paymentMethod === 'WALLET' && styles.radioActive]}>
+                            {paymentMethod === 'WALLET' && <View style={styles.radioInner} />}
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Online Payment */}
+                    <TouchableOpacity
+                        style={[styles.payCard, paymentMethod === 'ONLINE' && styles.payCardActive]}
+                        onPress={() => setPaymentMethod('ONLINE')}
+                    >
+                        <View style={[styles.payIconBox, { backgroundColor: paymentMethod === 'ONLINE' ? '#7C3AED' : '#F3EEFF' }]}>
+                            <Ionicons name="card-outline" size={22} color={paymentMethod === 'ONLINE' ? '#fff' : '#7C3AED'} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.payLabel}>Pay Online</Text>
+                            <Text style={styles.paySub}>UPI, Card, Net Banking via Easebuzz</Text>
+                        </View>
+                        <View style={[styles.radio, paymentMethod === 'ONLINE' && styles.radioActive]}>
+                            {paymentMethod === 'ONLINE' && <View style={styles.radioInner} />}
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Insufficient wallet warning */}
+                    {paymentMethod === 'WALLET' && (wallet?.balance ?? 0) < (doctor?.consultationFee ?? 0) && (
+                        <View style={styles.walletWarning}>
+                            <Ionicons name="warning-outline" size={14} color="#92400E" />
+                            <Text style={styles.walletWarningText}>
+                                Insufficient wallet balance (₹{wallet?.balance ?? 0}). Please top up or choose another method.
+                            </Text>
+                        </View>
+                    )}
                 </View>
 
                 <View style={{ height: 180 }} />
@@ -504,10 +564,28 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.card,
         borderWidth: 1.5,
         borderColor: Colors.border,
-        gap: 16,
+        gap: 14,
     },
-    payCardActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight + '20' },
+    payCardActive: { borderColor: Colors.primary, backgroundColor: '#F0F7FF' },
+    payIconBox: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     payIcon: { fontSize: 24 },
+    walletWarning: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        backgroundColor: '#FEF3C7',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+    },
+    walletWarningText: { flex: 1, fontSize: 12, color: '#92400E', fontWeight: '600', lineHeight: 17 },
     payLabel: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textPrimary },
     paySub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
     radio: {

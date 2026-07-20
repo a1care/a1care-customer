@@ -22,7 +22,8 @@ export const addressService = {
     },
 
     delete: async (addressId: string) => {
-        const res = await api.delete<ApiResponse<Address>>(
+        // Backend uses PATCH /:addressId for soft-delete (isDeleted: true)
+        const res = await api.patch<ApiResponse<Address>>(
             Endpoints.DELETE_ADDRESS(addressId)
         );
         return res.data.data;
@@ -31,14 +32,6 @@ export const addressService = {
     makePrimary: async (addressId: string) => {
         const res = await api.put<ApiResponse<Address>>(
             Endpoints.MAKE_PRIMARY_ADDRESS(addressId)
-        );
-        return res.data.data;
-    },
-
-    /** Alias for makePrimary — used by Profile screen */
-    setPrimary: async (addressId: string) => {
-        const res = await api.patch<ApiResponse<Address>>(
-            `${Endpoints.ADDRESS}/${addressId}/primary`
         );
         return res.data.data;
     },

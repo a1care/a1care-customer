@@ -7,7 +7,7 @@ import {
     StyleSheet,
     ActivityIndicator,
     Modal,
-    Alert,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -26,6 +26,7 @@ import { ErrorState } from '@/components/ui/EmptyState';
 import { formatDateTime } from '@/utils/formatters';
 import { MapPin, MessageSquare, XCircle, Clock3, Radio, ShieldCheck, Truck, CheckCircle2, Search } from 'lucide-react-native';
 import { triggerLocalNotification } from '@/utils/notifications';
+import { showToast } from '@/utils/toast';
 
 const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
 
@@ -146,6 +147,7 @@ export default function BookingDetailScreen() {
     const { token } = useAuthStore();
     const [isManualRefreshing, setIsManualRefreshing] = React.useState(false);
     const [isCancelling, setIsCancelling] = React.useState(false);
+    const [showCancelConfirmModal, setShowCancelConfirmModal] = React.useState(false);
 
     // Rating modal state
     const [showRatingModal, setShowRatingModal] = React.useState(false);
@@ -200,9 +202,9 @@ export default function BookingDetailScreen() {
         onSuccess: () => {
             setShowRatingModal(false);
             qc.invalidateQueries({ queryKey: ['service-booking', id] });
-            Alert.alert('Thank You!', 'Your rating helps us improve.');
+            showToast.success('Thank You!', 'Your rating helps us improve.');
         },
-        onError: () => { Alert.alert('Rating Failed', 'Unable to submit your rating. Please try again.'); },
+        onError: () => { showToast.error('Rating Failed', 'Unable to submit your rating. Please try again.'); },
     });
 
     const getAddressText = (b: any) => {
@@ -341,12 +343,12 @@ export default function BookingDetailScreen() {
                         </View>
                     ) : null}
 
-                    {/* Live Support / Tracking */}
-                    {booking.status === 'ACCEPTED' || booking.status === 'IN_PROGRESS' ? (
-                        <View style={styles.card}>
-                            <Text style={styles.cardTitle}>Live Support</Text>
-                            <View style={styles.actionGrid}>
-                                <TouchableOpacity 
+                    {/* Chat with Provider — available for every booking status */}
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>Contact Provider</Text>
+                        <View style={styles.actionGrid}>
+                            {(booking.status === 'ACCEPTED' || booking.status === 'IN_PROGRESS') && (
+                                <TouchableOpacity
                                     style={styles.actionBtn}
                                     onPress={() => router.push({
                                         pathname: '/booking/track' as any,
@@ -358,23 +360,25 @@ export default function BookingDetailScreen() {
                                     </View>
                                     <Text style={styles.actionLabel}>Track Live</Text>
                                 </TouchableOpacity>
+                            )}
 
-                                <TouchableOpacity 
-                                    style={styles.actionBtn}
-                                    onPress={() => router.push({
-                                        pathname: '/booking/chat' as any,
-                                        params: { id: booking._id, name: (booking as any).assignedProviderId?.name || 'Provider' }
-                                    })}
-                                >
-                                    <View style={[styles.actionIcon, { backgroundColor: '#F0FDF4' }]}>
-                                        <MessageSquare size={22} color="#15803D" />
-                                    </View>
-                                    <Text style={styles.actionLabel}>Chat</Text>
-                                </TouchableOpacity>
-
-                            </View>
+                            <TouchableOpacity
+                                style={styles.actionBtn}
+                                onPress={() => router.push({
+                                    pathname: '/booking/chat' as any,
+                                    params: {
+                                        id: booking._id,
+                                        name: (booking as any).assignedProviderId?.name || (booking as any).partnerId?.name || 'Service Provider'
+                                    }
+                                })}
+                            >
+                                <View style={[styles.actionIcon, { backgroundColor: '#F0FDF4' }]}>
+                                    <MessageSquare size={22} color="#15803D" />
+                                </View>
+                                <Text style={styles.actionLabel}>Chat</Text>
+                            </TouchableOpacity>
                         </View>
-                    ) : null}
+                    </View>
 
                     {/* Actions */}
                     {booking.status === 'PENDING' || booking.status === 'BROADCASTED' || booking.status === 'ACCEPTED' ? (
@@ -384,32 +388,7 @@ export default function BookingDetailScreen() {
                                 label={isCancelling ? 'Cancelling...' : 'Cancel Booking'}
                                 icon={<XCircle size={18} color="#fff" />}
                                 onPress={() => {
-                                    import('react-native').then(({ Alert }) => {
-                                        Alert.alert(
-                                            'Cancel Booking',
-                                            'Are you sure you want to cancel this booking?',
-                                            [
-                                                { text: 'No', style: 'cancel' },
-                                                {
-                                                    text: 'Yes, Cancel',
-                                                    style: 'destructive',
-                                                    onPress: async () => {
-                                                        if (isCancelling) return;
-                                                        try {
-                                                            setIsCancelling(true);
-                                                            await bookingsService.updateServiceBookingStatus(booking._id, 'CANCELLED');
-                                                            await refetch();
-                                                            triggerLocalNotification('Booking Cancelled', 'Your service booking has been cancelled.');
-                                                        } catch (error: any) {
-                                                            Alert.alert('Error', error?.response?.data?.message || 'Failed to cancel booking');
-                                                        } finally {
-                                                            setIsCancelling(false);
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        );
-                                    });
+                                    setShowCancelConfirmModal(true);
                                 }}
                                 variant="danger"
                                 size="md"
@@ -438,6 +417,51 @@ export default function BookingDetailScreen() {
                                 })}
                                 variant="outline"
                                 size="sm"
+                                style={{ marginTop: 12 }}
+                            />
+                        </View>
+                    )}
+
+                    {(booking.status === 'COMPLETED' || booking.status === 'CANCELLED') && (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Book Service Again</Text>
+                            <Text style={styles.codReminderText}>
+                                Need this service again? Re-book with a single click.
+                            </Text>
+                            <Button
+                                label="Book Again"
+                                onPress={() => {
+                                    const svc = (booking as any).childServiceId;
+                                    const pkg = (booking as any).healthPackageId;
+
+                                    if (svc) {
+                                        // Child service booking → go to service detail
+                                        const svcId = typeof svc === 'object' ? svc?._id : svc;
+                                        if (!svcId) {
+                                            showToast.error('Error', 'Service details are no longer available.');
+                                            return;
+                                        }
+                                        router.push({
+                                            pathname: '/service/[id]' as any,
+                                            params: { id: svcId }
+                                        });
+                                    } else if (pkg) {
+                                        // Health package booking → go to package detail
+                                        const pkgId = typeof pkg === 'object' ? pkg?._id : pkg;
+                                        if (!pkgId) {
+                                            showToast.error('Error', 'Package details are no longer available.');
+                                            return;
+                                        }
+                                        router.push({
+                                            pathname: '/package/[id]' as any,
+                                            params: { id: pkgId }
+                                        });
+                                    } else {
+                                        showToast.error('Error', 'Could not find the original service to re-book.');
+                                    }
+                                }}
+                                variant="primary"
+                                size="md"
                                 style={{ marginTop: 12 }}
                             />
                         </View>
@@ -494,6 +518,59 @@ export default function BookingDetailScreen() {
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => setShowRatingModal(false)}>
                                 <Text style={styles.ratingSkipLink}>Maybe later</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Cancel Confirmation Modal ── */}
+            <Modal
+                visible={showCancelConfirmModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowCancelConfirmModal(false)}
+            >
+                <View style={styles.confirmOverlay}>
+                    <View style={styles.confirmBox}>
+                        <View style={styles.confirmIconContainer}>
+                            <XCircle size={40} color="#EF4444" />
+                        </View>
+                        <Text style={styles.confirmTitle}>Cancel Booking?</Text>
+                        <Text style={styles.confirmSubtitle}>
+                            Are you sure you want to cancel this booking? This action cannot be undone.
+                        </Text>
+                        <View style={styles.confirmActions}>
+                            <TouchableOpacity
+                                style={styles.confirmCancelBtn}
+                                onPress={() => setShowCancelConfirmModal(false)}
+                                disabled={isCancelling}
+                            >
+                                <Text style={styles.confirmCancelText}>No, Keep</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.confirmSubmitBtn}
+                                onPress={async () => {
+                                    if (isCancelling) return;
+                                    try {
+                                        setIsCancelling(true);
+                                        await bookingsService.updateServiceBookingStatus(booking._id, 'CANCELLED');
+                                        await refetch();
+                                        triggerLocalNotification('Booking Cancelled', 'Your service booking has been cancelled.');
+                                        setShowCancelConfirmModal(false);
+                                    } catch (error: any) {
+                                        showToast.error('Error', error?.response?.data?.message || 'Failed to cancel booking');
+                                    } finally {
+                                        setIsCancelling(false);
+                                    }
+                                }}
+                                disabled={isCancelling}
+                            >
+                                {isCancelling ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.confirmSubmitText}>Yes, Cancel</Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -646,4 +723,76 @@ const styles = StyleSheet.create({
     ratingSubmitText: { color: '#fff', fontSize: FontSize.base, fontWeight: '700' },
     ratingDetailLink: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
     ratingSkipLink: { fontSize: FontSize.sm, color: '#9CA3AF' },
+
+    confirmOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    confirmBox: {
+        width: '100%',
+        maxWidth: 340,
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+        ...Shadows.float,
+        elevation: 24,
+    },
+    confirmIconContainer: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#FEF2F2',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    confirmTitle: {
+        fontSize: FontSize.lg,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    confirmSubtitle: {
+        fontSize: FontSize.sm,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 24,
+    },
+    confirmActions: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    confirmCancelBtn: {
+        flex: 1,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    confirmCancelText: {
+        fontSize: FontSize.sm,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    confirmSubmitBtn: {
+        flex: 1,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: '#EF4444',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    confirmSubmitText: {
+        fontSize: FontSize.sm,
+        fontWeight: '700',
+        color: '#fff',
+    },
 });

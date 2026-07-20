@@ -6,12 +6,14 @@ import {
     TouchableOpacity,
     RefreshControl,
     StyleSheet,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     CalendarDays,
     Stethoscope,
@@ -92,7 +94,8 @@ function BookingMetaRow({ dateText, paymentText }: { dateText: string; paymentTe
     );
 }
 
-function ServiceCard({ booking, onPress }: { booking: ServiceRequest; onPress: () => void }) {
+function ServiceCard({ booking, onPress, onDelete }: { booking: ServiceRequest; onPress: () => void; onDelete?: () => void }) {
+    const router = useRouter();
     const rawNotes = (booking as any)?.notes as string | undefined;
     const selectedReason =
         rawNotes?.startsWith('Dept:') ? rawNotes.replace('Dept:', '').trim() :
@@ -127,6 +130,9 @@ function ServiceCard({ booking, onPress }: { booking: ServiceRequest; onPress: (
             mode === 'ONLINE' ? (isPaid ? 'Paid online' : 'Online pending') :
                 'Cash on service';
 
+    const isCancelled = booking.status === 'CANCELLED';
+    const showBookAgain = booking.status === 'COMPLETED' || isCancelled;
+
     return (
         <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
             <View style={styles.cardTop}>
@@ -144,11 +150,50 @@ function ServiceCard({ booking, onPress }: { booking: ServiceRequest; onPress: (
                 dateText={formatDateTime((booking as any).scheduledTime || (booking as any).scheduledSlot?.startTime || booking.createdAt)}
                 paymentText={paymentLabel}
             />
+            <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
+                {showBookAgain && (
+                    <TouchableOpacity
+                        style={[styles.cardActionBtn, { flex: 1 }]}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            const svc = booking.childServiceId;
+                            const pkg = (booking as any).healthPackageId;
+                            
+                            if (svc) {
+                                const svcId = typeof svc === 'object' ? svc?._id : svc;
+                                router.push({
+                                    pathname: `/service/[id]` as any,
+                                    params: { id: svcId || '' }
+                                });
+                            } else if (pkg) {
+                                const pkgId = typeof pkg === 'object' ? pkg?._id : pkg;
+                                router.push({
+                                    pathname: `/package/[id]` as any,
+                                    params: { id: pkgId || '' }
+                                });
+                            } else {
+                                router.push('/services');
+                            }
+                        }}
+                    >
+                        <Text style={styles.cardActionText}>Book Again</Text>
+                    </TouchableOpacity>
+                )}
+                {isCancelled && onDelete && (
+                    <TouchableOpacity
+                        style={styles.cardDeleteBtn}
+                        onPress={(e) => { e.stopPropagation(); onDelete(); }}
+                    >
+                        <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                    </TouchableOpacity>
+                )}
+            </View>
         </TouchableOpacity>
     );
 }
 
-function AppointmentCard({ appt, onPress }: { appt: DoctorAppointment; onPress?: () => void }) {
+function AppointmentCard({ appt, onPress, onDelete }: { appt: DoctorAppointment; onPress?: () => void; onDelete?: () => void }) {
+    const router = useRouter();
     const formatApptDate = (value?: string) => {
         if (!value) return '';
         const raw = value.trim();
@@ -169,6 +214,9 @@ function AppointmentCard({ appt, onPress }: { appt: DoctorAppointment; onPress?:
             mode === 'ONLINE' ? (isPaid ? 'Paid online' : 'Online pending') :
                 'Cash on consultation';
 
+    const isCancelled = appt.status === 'Cancelled';
+    const showBookAgain = appt.status === 'Completed' || isCancelled;
+
     return (
         <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
             <View style={styles.cardTop}>
@@ -188,15 +236,94 @@ function AppointmentCard({ appt, onPress }: { appt: DoctorAppointment; onPress?:
                 dateText={`${formatApptDate(appt.date)} · ${appt.startingTime && appt.endingTime ? `${appt.startingTime}-${appt.endingTime}` : (appt.timeSlot ?? 'ASAP')}`}
                 paymentText={paymentLabel}
             />
+            <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
+                {showBookAgain && (
+                    <TouchableOpacity
+                        style={[styles.cardActionBtn, { flex: 1 }]}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            const dr = appt.doctorId;
+                            const drId = typeof dr === 'object' ? dr?._id : dr;
+                            router.push({ pathname: `/doctor/book`, params: { id: drId || '', serviceName: appt.serviceName || 'Doctor Consultation' } } as any);
+                        }}
+                    >
+                        <Text style={styles.cardActionText}>Book Again</Text>
+                    </TouchableOpacity>
+                )}
+                {isCancelled && onDelete && (
+                    <TouchableOpacity
+                        style={styles.cardDeleteBtn}
+                        onPress={(e) => { e.stopPropagation(); onDelete(); }}
+                    >
+                        <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                    </TouchableOpacity>
+                )}
+            </View>
         </TouchableOpacity>
     );
 }
+
+const HIDDEN_IDS_KEY = 'cancelled_booking_hidden_ids';
 
 export default function BookingsScreen() {
     const router = useRouter();
     const isFocused = useIsFocused();
     const { user, isAuthenticated } = useAuthStore();
     const myId = user?._id ? String(user._id) : '';
+    const queryClient = useQueryClient();
+    const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        AsyncStorage.getItem(HIDDEN_IDS_KEY).then((raw) => {
+            if (raw) setHiddenIds(new Set(JSON.parse(raw)));
+        });
+    }, []);
+
+    const hideId = async (id: string) => {
+        setHiddenIds((prev) => {
+            const next = new Set(prev);
+            next.add(id);
+            AsyncStorage.setItem(HIDDEN_IDS_KEY, JSON.stringify([...next]));
+            return next;
+        });
+    };
+
+    const deleteServiceMutation = useMutation({
+        mutationFn: bookingsService.deleteCancelledServiceBooking,
+        onSuccess: (_data, id) => {
+            hideId(id);
+            queryClient.setQueryData(['service-bookings-all', myId], (prev: any) =>
+                Array.isArray(prev) ? prev.filter((b: any) => b._id !== id) : prev
+            );
+        },
+    });
+
+    const deleteApptMutation = useMutation({
+        mutationFn: bookingsService.deleteCancelledAppointment,
+        onSuccess: (_data, id) => {
+            hideId(id);
+            queryClient.setQueryData(['appointments', myId], (prev: any) =>
+                Array.isArray(prev) ? prev.filter((a: any) => a._id !== id) : prev
+            );
+        },
+    });
+
+    const confirmDelete = (id: string, kind: 'service' | 'appt') => {
+        Alert.alert(
+            'Remove Booking',
+            'Remove this cancelled booking from your list?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: () => kind === 'service'
+                        ? deleteServiceMutation.mutate(id)
+                        : deleteApptMutation.mutate(id),
+                },
+            ]
+        );
+    };
 
     const [activeTab, setActiveTab] = useState<TabId>('upcoming');
     const [refreshing, setRefreshing] = useState(false);
@@ -298,10 +425,10 @@ export default function BookingsScreen() {
     const isError = sbErr || apptErr;
 
     const filteredServiceBookings = myServiceBookings.filter(
-        (b) => getServiceTab(b.status) === activeTab
+        (b) => getServiceTab(b.status) === activeTab && !hiddenIds.has(b._id)
     );
     const filteredAppts = myAppointments.filter(
-        (a) => APPT_TAB[a.status ?? 'Pending'] === activeTab
+        (a) => APPT_TAB[a.status ?? 'Pending'] === activeTab && !hiddenIds.has(a._id)
     );
     const visibleCount = filteredServiceBookings.length + filteredAppts.length;
     const filteredItems = [
@@ -366,35 +493,37 @@ export default function BookingsScreen() {
                 </View>
             </View>
 
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.tabsRow}
-                style={styles.tabsScroll}
-            >
-                {TABS.map((t) => {
-                    const count = tabCount(t.id);
-                    return (
-                        <TouchableOpacity
-                            key={t.id}
-                            style={[styles.tab, activeTab === t.id && styles.tabActive]}
-                            onPress={() => setActiveTab(t.id)}
-                            activeOpacity={0.9}
-                        >
-                            <Text style={[styles.tabText, activeTab === t.id && styles.tabTextActive]}>
-                                {t.label}
-                            </Text>
-                            {count > 0 && (
-                                <View style={[styles.tabBadge, activeTab === t.id && styles.tabBadgeActive]}>
-                                    <Text style={[styles.tabBadgeText, activeTab === t.id && styles.tabBadgeTextActive]}>
-                                        {count}
-                                    </Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
-                    );
-                })}
-            </ScrollView>
+            <View style={{ height: 54, backgroundColor: Colors.card }}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.tabsRow}
+                    style={styles.tabsScroll}
+                >
+                    {TABS.map((t) => {
+                        const count = tabCount(t.id);
+                        return (
+                            <TouchableOpacity
+                                key={t.id}
+                                style={[styles.tab, activeTab === t.id && styles.tabActive]}
+                                onPress={() => setActiveTab(t.id)}
+                                activeOpacity={0.9}
+                            >
+                                <Text style={[styles.tabText, activeTab === t.id && styles.tabTextActive]}>
+                                    {t.label}
+                                </Text>
+                                {count > 0 && (
+                                    <View style={[styles.tabBadge, activeTab === t.id && styles.tabBadgeActive]}>
+                                        <Text style={[styles.tabBadgeText, activeTab === t.id && styles.tabBadgeTextActive]}>
+                                            {count}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
+            </View>
 
             {isError ? (
                 <ErrorState message="We could not load your bookings right now." onRetry={onRefresh} />
@@ -443,6 +572,7 @@ export default function BookingsScreen() {
                                             if (!allowCardPress) return;
                                             router.push({ pathname: '/doctor/appointment/[id]', params: { id: item.appt._id } });
                                         }}
+                                        onDelete={() => confirmDelete(item.appt._id, 'appt')}
                                     />
                                 ) : (
                                     <ServiceCard
@@ -452,6 +582,7 @@ export default function BookingsScreen() {
                                             if (!allowCardPress) return;
                                             router.push({ pathname: '/booking/[id]', params: { id: item.booking._id } });
                                         }}
+                                        onDelete={() => confirmDelete(item.booking._id, 'service')}
                                     />
                                 )
                             )}
@@ -499,13 +630,11 @@ const styles = StyleSheet.create({
 
     tabsScroll: {
         backgroundColor: Colors.card,
-        flexGrow: 0,
-        maxHeight: 56,
     },
     tabsRow: {
         paddingHorizontal: 16,
         paddingTop: 8,
-        paddingBottom: 10,
+        paddingBottom: 8,
         gap: 10,
         alignItems: 'center',
         paddingRight: 20,
@@ -513,6 +642,7 @@ const styles = StyleSheet.create({
     tab: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 6,
         paddingHorizontal: 16,
         height: 38,
@@ -521,20 +651,31 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
-    tabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-    tabText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+    tabActive: { backgroundColor: '#2D935C', borderColor: '#2D935C' },
+    tabText: { 
+        fontSize: 13, 
+        fontWeight: '700', 
+        color: Colors.textSecondary, 
+        includeFontPadding: false,
+    },
     tabTextActive: { color: '#fff' },
     tabBadge: {
         backgroundColor: Colors.border,
-        borderRadius: 10,
+        borderRadius: 9,
         minWidth: 18,
         height: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 5,
+        paddingHorizontal: 4,
     },
     tabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
-    tabBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.textSecondary },
+    tabBadgeText: { 
+        fontSize: 9, 
+        fontWeight: '700', 
+        color: Colors.textSecondary, 
+        includeFontPadding: false,
+        textAlignVertical: 'center',
+    },
     tabBadgeTextActive: { color: '#fff' },
 
     list: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 110 },
@@ -580,4 +721,29 @@ const styles = StyleSheet.create({
     },
     metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 },
     cardMeta: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '500' },
+    cardActionBtn: {
+        backgroundColor: Colors.primaryLight,
+        borderRadius: 8,
+        paddingVertical: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+    },
+    cardActionText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: Colors.primary,
+    },
+    cardDeleteBtn: {
+        width: 38,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: '#FCA5A5',
+        backgroundColor: '#FEF2F2',
+    },
 });

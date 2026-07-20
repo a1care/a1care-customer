@@ -14,12 +14,17 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { useConfigStore } from '@/stores/config.store';
 import { useRouter, useSegments } from 'expo-router';
-import { ActivityIndicator, View, Image, Text, Animated } from 'react-native';
+import { ActivityIndicator, View, Image, Text, Animated, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Alert, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { CheckCircle, XCircle, Info, AlertTriangle } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
+import api from '@/services/api';
+import { notificationsService } from '@/services/notifications.service';
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -30,10 +35,7 @@ Notifications.setNotificationHandler({
         shouldShowList: true,
     }),
 });
-import api from '@/services/api';
-import { notificationsService } from '@/services/notifications.service';
-import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 const LAST_CITY_KEY = 'last_city';
 const LAST_AREA_KEY = 'last_area';
@@ -131,15 +133,32 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                 });
             }
 
-            const geocoded = await Location.reverseGeocodeAsync({
-                latitude: pos.coords.latitude,
-                longitude: pos.coords.longitude,
-            });
-            const geo = geocoded?.[0];
+            let city = 'Your City';
+            let area = '';
 
-            const city = geo?.city || geo?.region || 'Your City';
-            const area = geo?.district || geo?.subregion || geo?.street || '';
-
+            if (Platform.OS === 'web') {
+                // reverseGeocodeAsync removed in SDK 49 on web — use Nominatim
+                try {
+                    const resp = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
+                        { headers: { 'Accept-Language': 'en' } }
+                    );
+                    const data = await resp.json();
+                    const addr = data?.address || {};
+                    city = addr.city || addr.town || addr.village || addr.county || addr.state || 'Your City';
+                    area = addr.suburb || addr.neighbourhood || addr.quarter || addr.road || '';
+                } catch (_e) { /* keep defaults */ }
+            } else {
+                try {
+                    const geocoded = await Location.reverseGeocodeAsync({
+                        latitude: pos.coords.latitude,
+                        longitude: pos.coords.longitude,
+                    });
+                    const geo = geocoded?.[0];
+                    city = geo?.city || geo?.region || 'Your City';
+                    area = geo?.district || geo?.subregion || geo?.street || '';
+                } catch (_e) { /* keep defaults */ }
+            }
             await AsyncStorage.multiSet([
                 [LAST_CITY_KEY, city],
                 [LAST_AREA_KEY, area],
@@ -169,7 +188,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         // Notification tap handler (app in background/foreground)
         const ALLOWED_SCREENS = [
             '/(tabs)/bookings', '/(tabs)/notifications', '/(tabs)/profile',
-            '/wallet/index', '/wallet_history', '/booking/', '/doctor/appointment/',
+            '/wallet', '/wallet/index', '/wallet_history', '/booking/', '/doctor/appointment/',
         ];
         const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
             const data = response.notification.request.content.data as Record<string, string> | undefined;
@@ -402,7 +421,125 @@ export default function RootLayout() {
                     </Stack>
                 </AuthGuard>
             </GestureHandlerRootView>
-            <Toast />
+            <Toast
+                position="top"
+                topOffset={Platform.OS === 'ios' ? 55 : 40}
+                visibilityTime={3500}
+                config={{
+                    success: ({ text1, text2 }) => (
+                        <View style={[styles.toastBase, styles.toastSuccess]}>
+                            <View style={[styles.toastAccent, { backgroundColor: '#10B981' }]} />
+                            <View style={styles.toastIconWrap}>
+                                <CheckCircle size={20} color="#10B981" />
+                            </View>
+                            <View style={styles.toastContent}>
+                                <Text style={[styles.toastText1, { color: '#065F46' }]} numberOfLines={1}>{text1}</Text>
+                                {text2 ? <Text style={[styles.toastText2, { color: '#047857' }]} numberOfLines={2}>{text2}</Text> : null}
+                            </View>
+                        </View>
+                    ),
+                    error: ({ text1, text2 }) => (
+                        <View style={[styles.toastBase, styles.toastError]}>
+                            <View style={[styles.toastAccent, { backgroundColor: '#EF4444' }]} />
+                            <View style={styles.toastIconWrap}>
+                                <XCircle size={20} color="#EF4444" />
+                            </View>
+                            <View style={styles.toastContent}>
+                                <Text style={[styles.toastText1, { color: '#991B1B' }]} numberOfLines={1}>{text1}</Text>
+                                {text2 ? <Text style={[styles.toastText2, { color: '#B91C1C' }]} numberOfLines={2}>{text2}</Text> : null}
+                            </View>
+                        </View>
+                    ),
+                    info: ({ text1, text2 }) => (
+                        <View style={[styles.toastBase, styles.toastInfo]}>
+                            <View style={[styles.toastAccent, { backgroundColor: '#3B82F6' }]} />
+                            <View style={styles.toastIconWrap}>
+                                <Info size={20} color="#3B82F6" />
+                            </View>
+                            <View style={styles.toastContent}>
+                                <Text style={[styles.toastText1, { color: '#1E40AF' }]} numberOfLines={1}>{text1}</Text>
+                                {text2 ? <Text style={[styles.toastText2, { color: '#1D4ED8' }]} numberOfLines={2}>{text2}</Text> : null}
+                            </View>
+                        </View>
+                    ),
+                    warning: ({ text1, text2 }) => (
+                        <View style={[styles.toastBase, styles.toastWarning]}>
+                            <View style={[styles.toastAccent, { backgroundColor: '#F59E0B' }]} />
+                            <View style={styles.toastIconWrap}>
+                                <AlertTriangle size={20} color="#F59E0B" />
+                            </View>
+                            <View style={styles.toastContent}>
+                                <Text style={[styles.toastText1, { color: '#78350F' }]} numberOfLines={1}>{text1}</Text>
+                                {text2 ? <Text style={[styles.toastText2, { color: '#92400E' }]} numberOfLines={2}>{text2}</Text> : null}
+                            </View>
+                        </View>
+                    ),
+                }}
+            />
         </>
     );
 }
+
+const styles = StyleSheet.create({
+    toastBase: {
+        width: '92%',
+        maxWidth: 420,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+        elevation: 10,
+        // subtle border for definition
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.06)',
+        minHeight: 56,
+    },
+    toastAccent: {
+        width: 5,
+        alignSelf: 'stretch',
+    },
+    toastIconWrap: {
+        paddingHorizontal: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    toastContent: {
+        flex: 1,
+        paddingVertical: 12,
+        paddingRight: 16,
+        justifyContent: 'center',
+    },
+    toastSuccess: {
+        backgroundColor: '#F0FDF4',
+        borderColor: 'rgba(16,185,129,0.15)',
+    },
+    toastError: {
+        backgroundColor: '#FFF1F2',
+        borderColor: 'rgba(239,68,68,0.15)',
+    },
+    toastInfo: {
+        backgroundColor: '#EFF6FF',
+        borderColor: 'rgba(59,130,246,0.15)',
+    },
+    toastWarning: {
+        backgroundColor: '#FFFBEB',
+        borderColor: 'rgba(245,158,11,0.15)',
+    },
+    toastText1: {
+        fontSize: 14,
+        fontWeight: '700',
+        lineHeight: 20,
+    },
+    toastText2: {
+        fontSize: 12,
+        fontWeight: '400',
+        marginTop: 2,
+        lineHeight: 17,
+        opacity: 0.85,
+    },
+});

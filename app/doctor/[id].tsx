@@ -49,13 +49,13 @@ export default function DoctorDetailScreen() {
     const { data: doctor, isLoading, isError, refetch } = useQuery({
         queryKey: ['doctor', id],
         queryFn: () => doctorsService.getById(id!),
-        enabled: !!id,
+        enabled: !!id && id !== '[id]',
     });
 
     const { data: reviews = [] } = useQuery({
         queryKey: ['reviews', id],
         queryFn: () => reviewsService.getDoctorReviews(id!),
-        enabled: !!id,
+        enabled: !!id && id !== '[id]',
     });
 
     if (isLoading) {

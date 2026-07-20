@@ -75,7 +75,7 @@ export default function LoginScreen() {
             <StatusBar style="dark" />
             <LinearGradient colors={["#C8E6F9", "#EBF5FB", "#FFFFFF"]} style={StyleSheet.absoluteFill} />
 
-            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 28 }}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 28, paddingBottom: 48 }}>
                 {/* Back */}
                 {router.canGoBack() && (
                     <TouchableOpacity onPress={() => router.back()} style={{ marginBottom: 20 }}>

@@ -51,10 +51,17 @@ api.interceptors.response.use(
         }
 
         if (error.response?.status === 401) {
-            await tokenStorage.removeItem('auth_token');
-            // Clear auth store so UI reflects logged-out state immediately
-            const { useAuthStore } = await import('@/stores/auth.store');
-            useAuthStore.getState().logout();
+            // Only auto-logout if a token was actually present but got rejected (expired/invalid).
+            // If message is 'token missing', no token was sent — don't wipe storage (pre-login
+            // race condition or unauthenticated request; logging out would clear a valid token).
+            const errMsg: string = error.response?.data?.message || '';
+            const isTokenMissing = errMsg.toLowerCase().includes('token missing');
+            if (!isTokenMissing) {
+                await tokenStorage.removeItem('auth_token');
+                // Clear auth store so UI reflects logged-out state immediately
+                const { useAuthStore } = require('@/stores/auth.store');
+                useAuthStore.getState().logout();
+            }
         }
         return Promise.reject(error);
     }

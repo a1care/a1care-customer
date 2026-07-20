@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 export default function PaymentStatusScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
-    const { status, txnId, amount, type, description, bookingId, paidAt } = useLocalSearchParams() as any;
+    const { status, txnId, amount, type, description, bookingId, bookingType, paidAt, date, timeSlot, providerName } = useLocalSearchParams() as any;
     const txnDate = paidAt ? new Date(Number(paidAt)) : new Date();
     const isSuccess = status?.toUpperCase() === "SUCCESS";
     const isWallet = type === "WALLET_TOPUP";
@@ -32,7 +32,12 @@ export default function PaymentStatusScreen() {
     const primaryAction = () => {
         if (!isSuccess) { router.back(); return; }
         if (isWallet) { router.replace("/wallet" as any); return; }
-        if (bookingId) { router.replace({ pathname: '/booking/[id]', params: { id: bookingId } } as any); return; }
+        if (bookingId) {
+            const isDoctor = bookingType === "Doctor";
+            const pathname = isDoctor ? "/doctor/appointment/[id]" : "/booking/[id]";
+            router.replace({ pathname, params: { id: bookingId } } as any);
+            return;
+        }
         router.replace("/(tabs)/bookings" as any);
     };
 
@@ -94,7 +99,7 @@ export default function PaymentStatusScreen() {
                     <View style={styles.divider} />
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Method</Text>
-                        <Text style={styles.detailValue}>Razorpay</Text>
+                        <Text style={styles.detailValue}>{String(description || '').includes('Easebuzz') ? 'Easebuzz' : 'Razorpay'}</Text>
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.detailRow}>
@@ -119,9 +124,51 @@ export default function PaymentStatusScreen() {
                     </View>
                 )}
                 {isSuccess && !isWallet && (
-                    <View style={styles.infoBox}>
-                        <CreditCard size={20} color="#10B981" />
-                        <Text style={styles.infoText}>Payment confirmed. Your booking is active.</Text>
+                    <View style={styles.bookingCard}>
+                        <Text style={styles.bookingCardTitle}>Appointment Details</Text>
+                        
+                        <View style={styles.bookingRow}>
+                            <Text style={styles.bookingLabel}>Booking Ref</Text>
+                            <Text style={styles.bookingValue}>#{bookingId || "N/A"}</Text>
+                        </View>
+                        <View style={styles.bookingDivider} />
+
+                        {providerName ? (
+                            <>
+                                <View style={styles.bookingRow}>
+                                    <Text style={styles.bookingLabel}>Doctor / Provider</Text>
+                                    <Text style={styles.bookingValue}>Dr. {providerName}</Text>
+                                </View>
+                                <View style={styles.bookingDivider} />
+                            </>
+                        ) : null}
+
+                        {date ? (
+                            <>
+                                <View style={styles.bookingRow}>
+                                    <Text style={styles.bookingLabel}>Scheduled Date</Text>
+                                    <Text style={styles.bookingValue}>
+                                        {new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </Text>
+                                </View>
+                                <View style={styles.bookingDivider} />
+                            </>
+                        ) : null}
+
+                        {timeSlot ? (
+                            <>
+                                <View style={styles.bookingRow}>
+                                    <Text style={styles.bookingLabel}>Time Slot</Text>
+                                    <Text style={styles.bookingValue}>{timeSlot}</Text>
+                                </View>
+                                <View style={styles.bookingDivider} />
+                            </>
+                        ) : null}
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                            <CheckCircle size={16} color="#10B981" />
+                            <Text style={{ fontSize: 13, color: '#059669', fontWeight: '600' }}>Confirmed & Active</Text>
+                        </View>
                     </View>
                 )}
             </ScrollView>
@@ -231,4 +278,43 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+    bookingCard: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 20,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        marginTop: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    bookingCardTitle: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#1E293B",
+        marginBottom: 16,
+    },
+    bookingRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingVertical: 10,
+    },
+    bookingLabel: {
+        fontSize: 13,
+        color: "#64748B",
+        fontWeight: "500",
+    },
+    bookingValue: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#1E293B",
+    },
+    bookingDivider: {
+        height: 1,
+        backgroundColor: "#F1F5F9",
+    },
 });

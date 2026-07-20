@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────
 export interface Patient {
     _id: string;
-    mobileNumber: number;
+    mobileNumber: string;
     name?: string;
     email?: string;
     profileImage?: string;
@@ -88,6 +88,8 @@ export interface Doctor {
     about?: string;
     workingHours?: string;
     consultationFee?: number;
+    homeConsultationFee?: number;
+    onlineConsultationFee?: number;
     profileImage?: string;
     imageUrl?: string;
     status?: 'Pending' | 'Active' | 'Inactive';

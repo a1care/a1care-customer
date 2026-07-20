@@ -120,7 +120,15 @@ export const bookingsService = {
             addressId: data.addressId,
             location: data.location,
             assignedProviderId: data.assignedProviderId,
-            scheduledSlot: data.scheduledTime ? { startTime: data.scheduledTime, endTime: data.scheduledTime } : undefined,
+            scheduledSlot: data.scheduledTime ? {
+                startTime: data.scheduledTime,
+                endTime: (() => {
+                    const d = new Date(data.scheduledTime!);
+                    return isNaN(d.getTime())
+                        ? data.scheduledTime
+                        : new Date(d.getTime() + 60 * 60 * 1000).toISOString();
+                })(),
+            } : undefined,
             bookingType: data.bookingType,
             fulfillmentMode: data.fulfillmentMode,
             price: data.price,
@@ -177,13 +185,26 @@ export const bookingsService = {
     },
 
     sendBookingMessage: async (bookingId: string, message: string) => {
-        // Logic similar to partner app: actual persistence in socket
-        return {
-            _id: Math.random().toString(),
-            bookingId,
-            message,
-            senderType: 'User',
-            createdAt: new Date().toISOString()
-        };
+        const res = await api.post<ApiResponse<any>>(
+            `/chat/${bookingId}`,
+            { message }
+        );
+        return res.data.data;
+    },
+
+    deleteCancelledServiceBooking: async (id: string) => {
+        try {
+            await api.delete(`/appointment/service/${id}`);
+        } catch {
+            // Silently swallow — backend may not support deletion; UI still hides it
+        }
+    },
+
+    deleteCancelledAppointment: async (id: string) => {
+        try {
+            await api.delete(`/appointment/${id}`);
+        } catch {
+            // Silently swallow — backend may not support deletion; UI still hides it
+        }
     },
 };

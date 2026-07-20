@@ -73,7 +73,8 @@ export default function TabsLayout() {
                 }}
                 listeners={({ navigation }) => ({
                     tabPress: (e) => {
-                        // Reset params when clicking the tab to show all services
+                        // Only intercept when already on services tab — prevents blocking other tabs
+                        if (!navigation.isFocused()) return;
                         e.preventDefault();
                         navigation.navigate('services', {
                             category: '',

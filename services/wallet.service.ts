@@ -25,6 +25,13 @@ export const walletService = {
         return res.data.data;
     },
 
+    getHistory: async () => {
+        const res = await api.get<ApiResponse<Wallet>>(
+            Endpoints.WALLET
+        );
+        return res.data.data?.transactions || [];
+    },
+
     addMoney: async (amount: number, description?: string) => {
         const res = await api.post<ApiResponse<Wallet>>(
             Endpoints.ADD_MONEY,
@@ -33,7 +40,7 @@ export const walletService = {
         return res.data.data;
     },
 
-    initiatePayment: async (amount: number) => {
+    initiateDeposit: async (amount: number) => {
         const res = await api.post<ApiResponse<{ orderId: string; amount: number; currency: string }>>(
             '/wallet/initiate',
             { amount }
@@ -41,7 +48,7 @@ export const walletService = {
         return res.data.data;
     },
 
-    verifyPayment: async (data: any) => {
+    verifyDeposit: async (data: any) => {
         const res = await api.post<ApiResponse<Wallet>>(
             '/wallet/response',
             data

@@ -17,7 +17,11 @@ export const authService = {
             Endpoints.VERIFY_OTP,
             { mobileNumber, otp }
         );
-        const { token } = res.data.data;
+        const payload = res.data?.data;
+        if (!payload || !payload.token) {
+            throw new Error(res.data?.message || 'Verification failed. Please try again.');
+        }
+        const { token } = payload;
         await tokenStorage.setItem('auth_token', token);
         return res.data;
     },
