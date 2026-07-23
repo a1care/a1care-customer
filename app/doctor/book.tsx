@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,6 +17,7 @@ import { doctorsService } from '@/services/doctors.service';
 import { bookingsService } from '@/services/bookings.service';
 import { walletService } from '@/services/wallet.service';
 import { paymentService } from '@/services/payment.service';
+import { useAuthStore } from '@/stores/auth.store';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Button } from '@/components/ui/Button';
@@ -144,6 +146,19 @@ export default function DoctorBookingScreen() {
     });
 
     const handleBook = async () => {
+        const isAuthenticated = useAuthStore.getState().isAuthenticated;
+        if (!isAuthenticated) {
+            Alert.alert(
+                'Sign In Required',
+                'Please sign in or create an account to complete your booking.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Sign In', onPress: () => router.push('/(auth)/login') }
+                ]
+            );
+            return;
+        }
+
         if (!selectedSlot) {
             showToast.warn('Select Slot', 'Please choose a time slot to continue.');
             return;

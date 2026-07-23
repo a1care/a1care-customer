@@ -350,10 +350,20 @@ export default function BookingDetailScreen() {
                             {(booking.status === 'ACCEPTED' || booking.status === 'IN_PROGRESS') && (
                                 <TouchableOpacity
                                     style={styles.actionBtn}
-                                    onPress={() => router.push({
-                                        pathname: '/booking/track' as any,
-                                        params: { id: booking._id, providerId: (booking as any).assignedProviderId?._id || (booking as any).assignedProviderId }
-                                    })}
+                                    onPress={() => {
+                                        const addr = booking.addressId;
+                                        const lat = (addr && typeof addr === 'object') ? addr.latitude : booking.location?.lat;
+                                        const lng = (addr && typeof addr === 'object') ? addr.longitude : booking.location?.lng;
+                                        router.push({
+                                            pathname: '/booking/track' as any,
+                                            params: {
+                                                id: booking._id,
+                                                providerId: (booking as any).assignedProviderId?._id || (booking as any).assignedProviderId,
+                                                destLat: lat ? String(lat) : '',
+                                                destLng: lng ? String(lng) : ''
+                                            }
+                                        });
+                                    }}
                                 >
                                     <View style={[styles.actionIcon, { backgroundColor: '#E0F2FE' }]}>
                                         <MapPin size={22} color="#0369A1" />

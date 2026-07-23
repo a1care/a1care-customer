@@ -70,11 +70,17 @@ export default function BookingChatScreen() {
     const socketRef = useRef<Socket | null>(null);
     const providerName = Array.isArray(name) ? name[0] : (name || 'Service Provider');
 
-    const { isLoading } = useQuery({
+    const { data: initialData, isLoading } = useQuery({
         queryKey: ['booking-chat', id],
         queryFn: () => bookingsService.getBookingMessages(id!),
         enabled: !!id && id !== '[id]',
     });
+
+    useEffect(() => {
+        if (initialData?.length > 0) {
+            setChatMessages(initialData);
+        }
+    }, [initialData]);
 
     useEffect(() => {
         if (!id) return;
@@ -82,7 +88,7 @@ export default function BookingChatScreen() {
         socketRef.current = socket;
         socket.on('connect', () => socket.emit('join_room', id));
         socket.on('receive_message', (data: any) => {
-            if (data.roomId === id) {
+            if (data.roomId === id || data.bookingId === id) {
                 setChatMessages(prev => {
                     if (prev.find((m: any) => m._id && m._id === data._id)) return prev;
                     return [...prev, data];
@@ -115,10 +121,18 @@ export default function BookingChatScreen() {
 
     const initials = providerName.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
 
+    const handleBack = () => {
+        if (router.canGoBack()) {
+            router.back();
+        } else {
+            router.replace('/(tabs)/bookings' as any);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
 
@@ -163,7 +177,7 @@ export default function BookingChatScreen() {
                         )}
 
                         {chatMessages.map((msg: any, idx: number) => {
-                            const isMe = msg.senderType === 'User';
+                            const isMe = msg.senderType === 'Patient' || msg.senderType === 'User';
                             const showDay = idx === 0 || !isSameDay(msg.createdAt, chatMessages[idx - 1]?.createdAt);
                             const isLast = idx === chatMessages.length - 1;
 
@@ -241,7 +255,7 @@ export default function BookingChatScreen() {
                         />
                     </View>
                     <TouchableOpacity
-                        style={styles.sendBtn}
+                        style={[styles.sendBtn, { backgroundColor: typedMessage.trim() ? PRIMARY : '#8DB48E' }]}
                         onPress={() => handleSend()}
                         disabled={sendMutation.isPending}
                         activeOpacity={0.85}

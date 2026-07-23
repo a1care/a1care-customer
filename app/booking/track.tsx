@@ -19,7 +19,7 @@ import { io, Socket } from 'socket.io-client';
 const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
 
 export default function TrackingScreen() {
-    const { id, providerId } = useLocalSearchParams<{ id: string, providerId: string }>();
+    const { id, providerId, destLat, destLng } = useLocalSearchParams<{ id: string, providerId: string, destLat?: string, destLng?: string }>();
     const router = useRouter();
     const socketRef = useRef<Socket | null>(null);
     const [liveLocation, setLiveLocation] = useState<any>(null);
@@ -57,6 +57,38 @@ export default function TrackingScreen() {
     const mapUrl = location 
         ? `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`
         : null;
+
+    const destLatNum = parseFloat(destLat || '');
+    const destLngNum = parseFloat(destLng || '');
+
+    // Haversine distance calculation
+    const getDistanceAndEta = () => {
+        if (!location?.latitude || !location?.longitude || isNaN(destLatNum) || isNaN(destLngNum)) {
+            return { distanceStr: '-- km', durationStr: '-- mins' };
+        }
+        const toRad = (value: number) => (value * Math.PI) / 180;
+        const R = 6371; // Earth radius in km
+        const dLat = toRad(destLatNum - location.latitude);
+        const dLon = toRad(destLngNum - location.longitude);
+        const lat1 = toRad(location.latitude);
+        const lat2 = toRad(destLatNum);
+
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c;
+
+        // Estimate duration: assume average speed of 20 km/h in city traffic (3 mins per km)
+        const durationMin = Math.max(1, Math.round(distance * 3));
+
+        return {
+            distanceStr: `${distance.toFixed(1)} km`,
+            durationStr: `${durationMin} mins`,
+        };
+    };
+
+    const { distanceStr, durationStr } = getDistanceAndEta();
 
     return (
         <SafeAreaView style={styles.container}>
@@ -104,12 +136,12 @@ export default function TrackingScreen() {
                         
                         <View style={styles.statGrid}>
                             <View style={styles.statBox}>
-                                <Text style={styles.statLabel}>LATITUDE</Text>
-                                <Text style={styles.statVal}>{location.latitude.toFixed(5)}</Text>
+                                <Text style={styles.statLabel}>DISTANCE TO REACH</Text>
+                                <Text style={styles.statVal}>{distanceStr}</Text>
                             </View>
                             <View style={styles.statBox}>
-                                <Text style={styles.statLabel}>LONGITUDE</Text>
-                                <Text style={styles.statVal}>{location.longitude.toFixed(5)}</Text>
+                                <Text style={styles.statLabel}>TIME TO REACH</Text>
+                                <Text style={styles.statVal}>{durationStr}</Text>
                             </View>
                         </View>
                     </View>

@@ -452,12 +452,18 @@ export default function ServiceDetailScreen() {
 
     const deleteAddressMutation = useMutation({
         mutationFn: addressService.delete,
-        onSuccess: (_: any, deletedId: string) => {
+        onSuccess: (_data: any, deletedId: string) => {
             qc.invalidateQueries({ queryKey: ['addresses'] });
             // H7: if deleted address was selected, clear selection
-            if (selectedAddressId === deletedId) setSelectedAddressId('');
+            if (selectedAddressId === deletedId) {
+                setSelectedAddressId('');
+            }
             Alert.alert('Success', 'Address deleted successfully');
         },
+        onError: (err: any) => {
+            const errMsg = err?.response?.data?.message || err?.message || 'Could not delete address. Please try again.';
+            Alert.alert('Error', errMsg);
+        }
     });
 
     const handleAutoDetectAddress = async () => {
@@ -490,13 +496,43 @@ export default function ServiceDetailScreen() {
             const lng = position.coords.longitude;
             setLocationCoords({ lat, lng });
 
-            const geocoded = await withTimeout(
-                Location.reverseGeocodeAsync({ latitude: lat, longitude: lng }),
-                10000,
-                'Address lookup timed out'
-            );
-            const geo = geocoded?.[0];
-            if (!geo) return;
+            let geo: any = null;
+
+            if (Platform.OS === 'web') {
+                // expo-location reverseGeocodeAsync doesn't work on web — use Nominatim instead
+                try {
+                    const resp = await withTimeout(
+                        fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+                            headers: { 'Accept-Language': 'en' }
+                        }),
+                        10000,
+                        'Address lookup timed out'
+                    );
+                    const data = await resp.json();
+                    const addr = data?.address || {};
+                    geo = {
+                        name: addr.suburb || addr.neighbourhood || addr.quarter || '',
+                        street: addr.road || '',
+                        district: addr.city || addr.town || addr.village || addr.county || '',
+                        subregion: addr.suburb || addr.neighbourhood || '',
+                        city: addr.city || addr.town || addr.village || '',
+                        region: addr.state || '',
+                        postalCode: addr.postcode || ''
+                    };
+                } catch (_e) { /* keep geo null */ }
+            } else {
+                const geocoded = await withTimeout(
+                    Location.reverseGeocodeAsync({ latitude: lat, longitude: lng }),
+                    10000,
+                    'Address lookup timed out'
+                );
+                geo = geocoded?.[0];
+            }
+
+            if (!geo) {
+                setIsAutoDetectDone(false);
+                return;
+            }
 
             const streetLine = [geo.name, geo.street].filter(Boolean).join(', ');
             const autoStreet = streetLine || geo.district || geo.subregion || '';
@@ -1136,40 +1172,63 @@ export default function ServiceDetailScreen() {
                             const config = getAddressIcon(a.label || 'Home');
                             const isActive = selectedAddressId === a._id;
                             return (
-                                <TouchableOpacity
+                                <View
                                     key={a._id}
-                                    onPress={() => setSelectedAddressId(a._id)}
-                                    style={[styles.addressCard, isActive && styles.addressCardActive]}
+                                    style={[styles.addressCard, isActive && styles.addressCardActive, { flexDirection: 'column', gap: 0, padding: 0 }]}
                                 >
-                                    <View style={[styles.iconBox, { backgroundColor: config.bg }]}>
-                                        <MaterialCommunityIcons name={config.icon as any} size={24} color={config.color} />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 12 }}>
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Text style={styles.addrLabel}>{a.label}</Text>
-                                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                                <TouchableOpacity onPress={() => handleEditAddress(a)}>
-                                                    <Ionicons name="pencil" size={16} color={Colors.primary} />
-                                                </TouchableOpacity>
-                                                <TouchableOpacity onPress={() => {
-                                                    if (a._id) {
-                                                        Alert.alert('Delete Address', 'Are you sure?', [
-                                                            { text: 'Cancel', style: 'cancel' },
-                                                            { text: 'Delete', style: 'destructive', onPress: () => deleteAddressMutation.mutate(a._id!) }
-                                                        ]);
-                                                    }
-                                                }}>
-                                                    <Ionicons name="trash" size={16} color="#EF4444" />
-                                                </TouchableOpacity>
-                                            </View>
+                                    <TouchableOpacity
+                                        onPress={() => setSelectedAddressId(a._id)}
+                                        style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 14, width: '100%' }}
+                                    >
+                                        <View style={[styles.iconBox, { backgroundColor: config.bg }]}>
+                                            <MaterialCommunityIcons name={config.icon as any} size={24} color={config.color} />
                                         </View>
-                                        <Text style={styles.addrStreet} numberOfLines={2}>{getStreetValue(a)}</Text>
-                                        <Text style={styles.addrCity}>{a.city}, {a.pincode}</Text>
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={styles.addrLabel}>{a.label}</Text>
+                                            <Text style={styles.addrStreet} numberOfLines={2}>{getStreetValue(a)}</Text>
+                                            <Text style={styles.addrCity}>{a.city}, {a.pincode}</Text>
+                                        </View>
+                                        <View style={[styles.radioOuter, isActive && styles.radioActive, { marginTop: 4 }]}>
+                                            {isActive && <View style={styles.radioInner} />}
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    {/* Action bar is physically outside card selector touch hit box */}
+                                    <View style={{
+                                        flexDirection: 'row',
+                                        justifyContent: 'flex-end',
+                                        alignItems: 'center',
+                                        paddingHorizontal: 16,
+                                        paddingVertical: 10,
+                                        borderTopWidth: 1,
+                                        borderTopColor: '#E2E8F0',
+                                        width: '100%',
+                                        gap: 16
+                                    }}>
+                                        <TouchableOpacity onPress={() => handleEditAddress(a)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Ionicons name="pencil" size={15} color={Colors.primary} />
+                                            <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '700' }}>Edit</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => {
+                                            if (a._id) {
+                                                if (Platform.OS === 'web') {
+                                                    // Alert.alert callbacks don't fire on web — use window.confirm
+                                                    if ((window as any).confirm('Are you sure you want to delete this address?')) {
+                                                        deleteAddressMutation.mutate(a._id!);
+                                                    }
+                                                } else {
+                                                    Alert.alert('Delete Address', 'Are you sure you want to delete this address?', [
+                                                        { text: 'Cancel', style: 'cancel' },
+                                                        { text: 'Delete', style: 'destructive', onPress: () => deleteAddressMutation.mutate(a._id!) }
+                                                    ]);
+                                                }
+                                            }
+                                        }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Ionicons name="trash" size={15} color="#EF4444" />
+                                            <Text style={{ fontSize: 12, color: '#EF4444', fontWeight: '700' }}>Delete</Text>
+                                        </TouchableOpacity>
                                     </View>
-                                    <View style={[styles.radioOuter, isActive && styles.radioActive, { marginTop: 4 }]}>
-                                        {isActive && <View style={styles.radioInner} />}
-                                    </View>
-                                </TouchableOpacity>
+                                </View>
                             );
                         })}
                         <TouchableOpacity
@@ -1372,7 +1431,7 @@ export default function ServiceDetailScreen() {
                     label={step === 'confirm' ? 'Confirm Booking' : 'Continue →'}
                     onPress={() => {
                         if (step === 'confirm') handleFinalSubmit();
-                        else if (step === 'info' && !isAuthenticated) setShowGuestModal(true);
+                        else if (step === 'info' && !isAuthenticated) router.push('/(auth)/login');
                         else goToNextStep();
                     }}
                     loading={bookMutation.isPending || submittingOnline}
@@ -1380,67 +1439,6 @@ export default function ServiceDetailScreen() {
                     size="lg"
                 />
             </View>
-
-            {/* ── Guest Checkout Modal ── */}
-            <Modal
-                visible={showGuestModal}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setShowGuestModal(false)}
-            >
-                <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={styles.modalOverlay}
-                >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Enter Your Details</Text>
-                            <TouchableOpacity onPress={() => setShowGuestModal(false)}>
-                                <Ionicons name="close" size={24} color="#64748B" />
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={{ fontSize: 14, color: Colors.textSecondary, marginBottom: 20 }}>
-                            Sign in or create an account to complete your booking.
-                        </Text>
-
-                        <Text style={styles.modalInputLabel}>Your Name <Text style={{ color: '#EF4444' }}>*</Text></Text>
-                        <TextInput
-                            style={styles.modalInput}
-                            placeholder="e.g. Rahul Sharma"
-                            value={guestName}
-                            onChangeText={setGuestName}
-                            autoCapitalize="words"
-                            returnKeyType="next"
-                        />
-
-                        <Text style={styles.modalInputLabel}>Mobile Number <Text style={{ color: '#EF4444' }}>*</Text></Text>
-                        <View style={[styles.modalInput, { flexDirection: 'row', alignItems: 'center', paddingVertical: 0 }]}>
-                            <Text style={{ fontSize: 15, color: '#4A6E8A', fontWeight: '600', marginRight: 8 }}>+91</Text>
-                            <TextInput
-                                style={{ flex: 1, fontSize: 15, color: Colors.textPrimary, height: 52 }}
-                                placeholder="98765 43210"
-                                keyboardType="phone-pad"
-                                value={guestPhone}
-                                onChangeText={(t) => setGuestPhone(t.replace(/\D/g, ''))}
-                                maxLength={10}
-                                returnKeyType="done"
-                            />
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.saveAddrBtn, { marginTop: 24 }]}
-                            onPress={handleGuestContinue}
-                            disabled={guestLoading}
-                        >
-                            {guestLoading ? (
-                                <ActivityIndicator color="#FFF" />
-                            ) : (
-                                <Text style={styles.saveAddrBtnText}>Send OTP & Continue</Text>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
 
             {/* ── Add/Edit Address Modal ── */}
             <Modal

@@ -21,6 +21,7 @@ import { FontSize } from '@/constants/spacing';
 import { Button } from '@/components/ui/Button';
 import { triggerLocalNotification } from '@/utils/notifications';
 import { showToast } from '@/utils/toast';
+import { useAuthStore } from '@/stores/auth.store';
 
 const DEPARTMENTS = [
     { id: 'ortho', name: 'Orthopaedics', icon: 'body-outline' },
@@ -183,6 +184,19 @@ export default function HospitalBookingScreen() {
     });
 
     const handleConfirm = async () => {
+        const isAuthenticated = useAuthStore.getState().isAuthenticated;
+        if (!isAuthenticated) {
+            Alert.alert(
+                'Sign In Required',
+                'Please sign in or create an account to complete your booking.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Sign In', onPress: () => router.push('/(auth)/login') }
+                ]
+            );
+            return;
+        }
+
         if (step === 'details') {
             if (!selectedDept && !selectedSymptom) {
                 showToast.warn('Select Reason', 'Please select a department or symptom to proceed.');

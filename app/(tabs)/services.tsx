@@ -505,7 +505,11 @@ export default function ServicesScreen() {
         (level === 'sub' && (subLoading || !subServices || !selectedService)) ||
         (level === 'child' && (childLoading || !childServices || !selectedSub));
     const isError = servicesErr || subErr || childErr;
-    const onRetry = level === 'services' ? refetchServices : level === 'sub' ? refetchSubs : refetchChildren;
+    const onRetry = () => {
+        if (servicesErr) refetchServices();
+        if (subErr) refetchSubs();
+        if (childErr) refetchChildren();
+    };
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
