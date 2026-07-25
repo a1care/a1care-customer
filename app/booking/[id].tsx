@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { io, Socket } from 'socket.io-client';
+import { socketService } from '@/services/socket.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { bookingsService } from '@/services/bookings.service';
 import { addressService } from '@/services/address.service';
@@ -28,7 +28,6 @@ import { MapPin, MessageSquare, XCircle, Clock3, Radio, ShieldCheck, Truck, Chec
 import { triggerLocalNotification } from '@/utils/notifications';
 import { showToast } from '@/utils/toast';
 
-const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_STEPS: Array<{ status: string; label: string; key: string; desc: string }> = [
@@ -153,8 +152,6 @@ export default function BookingDetailScreen() {
     const [showRatingModal, setShowRatingModal] = React.useState(false);
     const [ratingStars, setRatingStars] = React.useState(0);
     const prevStatusRef = React.useRef<string | null>(null);
-    const socketRef = React.useRef<Socket | null>(null);
-
     const { data: booking, isLoading, isError, refetch, isRefetching } = useQuery({
         queryKey: ['service-booking', id],
         queryFn: () => bookingsService.getServiceBookingById(id!),
@@ -171,13 +168,21 @@ export default function BookingDetailScreen() {
     // Socket — join booking room for real-time status updates
     React.useEffect(() => {
         if (!id) return;
-        const socket = io(SOCKET_URL, { auth: { token }, transports: ['polling', 'websocket'] });
-        socketRef.current = socket;
-        socket.on('connect', () => socket.emit('join_room', id));
-        socket.on('booking_status_updated', (data: { bookingId: string; status: string }) => {
+        const socket = socketService.getSocket();
+        if (!socket) return;
+        
+        socket.emit('join_room', id);
+        
+        const handleStatusUpdate = (data: { bookingId: string; status: string }) => {
             if (data.bookingId === id) refetch();
-        });
-        return () => { socket.disconnect(); socketRef.current = null; };
+        };
+        
+        socket.on('booking_status_updated', handleStatusUpdate);
+        
+        return () => { 
+            socket.off('booking_status_updated', handleStatusUpdate);
+            socket.emit('leave_room', id);
+        };
     }, [id]);
 
     // Auto-prompt rating when status first transitions to COMPLETED

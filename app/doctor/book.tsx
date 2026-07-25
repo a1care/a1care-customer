@@ -112,7 +112,7 @@ export default function DoctorBookingScreen() {
 
     const [selectedDate, setSelectedDate] = useState(() => toLocalYMD(new Date()));
     const [selectedSlot, setSelectedSlot] = useState<{ startingTime: string; endingTime: string } | null>(null);
-    const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE'>('COD');
+    const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE' | null>(null);
     const [chosenSpecialization, setChosenSpecialization] = useState<string>(nameParam || "");
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
@@ -208,6 +208,11 @@ export default function DoctorBookingScreen() {
 
         if (!selectedSlot) {
             showToast.warn('Select Slot', 'Please choose a time slot to continue.');
+            return;
+        }
+
+        if (!paymentMethod) {
+            showToast.warn('Payment Method Required', 'Please select a payment method.');
             return;
         }
 
@@ -509,10 +514,10 @@ export default function DoctorBookingScreen() {
                     <Text style={styles.priceVal}>{doctor?.consultationFee ? `₹${doctor.consultationFee}` : '...'}</Text>
                 </View>
                 <Button
-                    label={paymentMethod === 'WALLET' ? 'Book & Pay from Wallet' : paymentMethod === 'ONLINE' ? 'Confirm & Pay Online' : 'Confirm & Book (COD)'}
+                    label={!paymentMethod ? 'Select Payment Method' : paymentMethod === 'WALLET' ? 'Book & Pay from Wallet' : paymentMethod === 'ONLINE' ? 'Confirm & Pay Online' : 'Confirm & Book (COD)'}
                     onPress={handleBook}
                     loading={bookMutation.isPending || isProcessingPayment}
-                    disabled={!selectedSlot || !doctor || bookMutation.isPending || isProcessingPayment}
+                    disabled={bookMutation.isPending || isProcessingPayment}
                     variant="primary"
                     size="lg"
                     fullWidth

@@ -33,7 +33,7 @@ export default function HealthPackageDetail() {
     const qc = useQueryClient();
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
-    const [paymentMode, setPaymentMode] = useState<'OFFLINE' | 'ONLINE' | 'WALLET'>('OFFLINE');
+    const [paymentMode, setPaymentMode] = useState<'OFFLINE' | 'ONLINE' | 'WALLET' | null>(null);
     const source = Array.isArray(from) ? from[0] : from;
 
     // Fetch wallet balance
@@ -105,7 +105,11 @@ export default function HealthPackageDetail() {
         }
     });
 
-    const handleBooking = async (mode: 'ONLINE' | 'OFFLINE' | 'WALLET') => {
+    const handleBooking = async (mode: 'ONLINE' | 'OFFLINE' | 'WALLET' | null) => {
+        if (!mode) {
+            showToast.warn("Payment Method Required", "Please select a payment method.");
+            return;
+        }
         if (mode === 'WALLET') {
             const walletBalance = wallet?.balance ?? 0;
             if (walletBalance < pkg.price) {
@@ -390,7 +394,7 @@ export default function HealthPackageDetail() {
                         <ActivityIndicator color="#fff" />
                     ) : (
                         <Text style={styles.bookBtnText}>
-                            {paymentMode === 'ONLINE' ? 'Pay Online' : paymentMode === 'WALLET' ? 'Pay from Wallet' : 'Book Now'}
+                            {paymentMode === 'ONLINE' ? 'Pay Online' : paymentMode === 'WALLET' ? 'Pay from Wallet' : paymentMode === 'OFFLINE' ? 'Book Now' : 'Select Payment Method'}
                         </Text>
                     )}
                 </TouchableOpacity>

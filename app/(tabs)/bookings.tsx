@@ -29,7 +29,7 @@ import {
 
 import { bookingsService } from '@/services/bookings.service';
 import { useAuthStore } from '@/stores/auth.store';
-import { io } from 'socket.io-client';
+import { socketService } from '@/services/socket.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -402,17 +402,18 @@ export default function BookingsScreen() {
     }, [isFocused, refetchSB, refetchAppt]);
 
     // Socket: refetch bookings on any status update so customer sees live changes
-    const socketRef = useRef<any>(null);
-    const { token } = useAuthStore();
     useEffect(() => {
-        const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3000';
-        socketRef.current = io(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
-        socketRef.current.on('booking_status_updated', () => {
+        const socket = socketService.getSocket();
+        if (!socket) return;
+        
+        const handleUpdate = () => {
             refetchSB();
             refetchAppt();
-        });
-        return () => { socketRef.current?.disconnect(); };
-    }, [token]);
+        };
+        
+        socket.on('booking_status_updated', handleUpdate);
+        return () => { socket.off('booking_status_updated', handleUpdate); };
+    }, []);
 
     React.useEffect(() => {
         if (!isFocused) return;

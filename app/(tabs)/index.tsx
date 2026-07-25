@@ -197,6 +197,7 @@ export default function HomeScreen() {
     const [locArea, setLocArea] = useState('');
     const [locLoading, setLocLoading] = useState(false);
     const [showAreaPicker, setShowAreaPicker] = useState(false);
+    const [recentAreas, setRecentAreas] = useState<string[]>([]);
 
     const heroScrollRef = useRef<ScrollView>(null);
     const popularScrollRef = useRef<ScrollView>(null);
@@ -421,8 +422,12 @@ export default function HomeScreen() {
             try {
                 const cachedCity = await AsyncStorage.getItem("last_city");
                 const cachedArea = await AsyncStorage.getItem("last_area");
+                const cachedRecents = await AsyncStorage.getItem("recent_areas");
                 if (cachedCity) setLocCity(cachedCity);
                 if (cachedArea) setLocArea(cachedArea);
+                if (cachedRecents) {
+                    try { setRecentAreas(JSON.parse(cachedRecents)); } catch (e) { }
+                }
             } catch (e) { }
         };
 
@@ -800,40 +805,83 @@ export default function HomeScreen() {
                                     <View style={{ width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2 }} />
                                     <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 10, color: '#1a1a1a' }}>Select Your Area</Text>
                                 </View>
-                                {[
-                                    'Safilguda',
-                                    'Neredmet',
-                                    'Malkajgiri',
-                                    'Anand Bagh',
-                                    'Dayanand Nagar',
-                                    'Moula Ali',
-                                    'A.S. Rao Nagar',
-                                    'Sainikpuri',
-                                ].map((area) => (
-                                    <TouchableOpacity
-                                        key={area}
-                                        onPress={async () => {
-                                            setLocArea(area);
-                                            setLocCity('Hyderabad');
-                                            await AsyncStorage.setItem('last_city', 'Hyderabad');
-                                            await AsyncStorage.setItem('last_area', area);
-                                            setShowAreaPicker(false);
-                                        }}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            paddingHorizontal: 24,
-                                            paddingVertical: 14,
-                                            borderBottomWidth: 1,
-                                            borderBottomColor: '#f0f0f0',
-                                            backgroundColor: locArea === area ? '#EBF5FB' : '#fff',
-                                        }}
-                                    >
-                                        <MapPin size={16} color={Colors.primary} style={{ marginRight: 12 }} />
-                                        <Text style={{ fontSize: 15, color: '#1a1a1a', fontWeight: locArea === area ? '700' : '400' }}>{area}</Text>
-                                        {locArea === area && <Text style={{ marginLeft: 'auto', color: Colors.primary, fontSize: 18 }}>✓</Text>}
-                                    </TouchableOpacity>
-                                ))}
+                                <ScrollView style={{ maxHeight: 300 }}>
+                                    {recentAreas.length > 0 && (
+                                        <View>
+                                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#888', paddingHorizontal: 24, paddingVertical: 8, backgroundColor: '#f9f9f9' }}>RECENT</Text>
+                                            {recentAreas.map((area) => (
+                                                <TouchableOpacity
+                                                    key={`recent-${area}`}
+                                                    onPress={async () => {
+                                                        setLocArea(area);
+                                                        setLocCity('Hyderabad');
+                                                        await AsyncStorage.setItem('last_city', 'Hyderabad');
+                                                        await AsyncStorage.setItem('last_area', area);
+                                                        
+                                                        let newRecents = [area, ...recentAreas.filter(a => a !== area)].slice(0, 3);
+                                                        setRecentAreas(newRecents);
+                                                        await AsyncStorage.setItem('recent_areas', JSON.stringify(newRecents));
+                                                        
+                                                        setShowAreaPicker(false);
+                                                    }}
+                                                    style={{
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        paddingHorizontal: 24,
+                                                        paddingVertical: 14,
+                                                        borderBottomWidth: 1,
+                                                        borderBottomColor: '#f0f0f0',
+                                                        backgroundColor: locArea === area ? '#EBF5FB' : '#fff',
+                                                    }}
+                                                >
+                                                    <MapPin size={16} color={Colors.primary} style={{ marginRight: 12 }} />
+                                                    <Text style={{ fontSize: 15, color: '#1a1a1a', fontWeight: locArea === area ? '700' : '400' }}>{area}</Text>
+                                                    {locArea === area && <Text style={{ marginLeft: 'auto', color: Colors.primary, fontSize: 18 }}>✓</Text>}
+                                                </TouchableOpacity>
+                                            ))}
+                                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#888', paddingHorizontal: 24, paddingVertical: 8, backgroundColor: '#f9f9f9' }}>ALL AREAS</Text>
+                                        </View>
+                                    )}
+                                    {[
+                                        'Safilguda',
+                                        'Neredmet',
+                                        'Malkajgiri',
+                                        'Anand Bagh',
+                                        'Dayanand Nagar',
+                                        'Moula Ali',
+                                        'A.S. Rao Nagar',
+                                        'Sainikpuri',
+                                    ].map((area) => (
+                                        <TouchableOpacity
+                                            key={area}
+                                            onPress={async () => {
+                                                setLocArea(area);
+                                                setLocCity('Hyderabad');
+                                                await AsyncStorage.setItem('last_city', 'Hyderabad');
+                                                await AsyncStorage.setItem('last_area', area);
+                                                
+                                                let newRecents = [area, ...recentAreas.filter(a => a !== area)].slice(0, 3);
+                                                setRecentAreas(newRecents);
+                                                await AsyncStorage.setItem('recent_areas', JSON.stringify(newRecents));
+                                                
+                                                setShowAreaPicker(false);
+                                            }}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                paddingHorizontal: 24,
+                                                paddingVertical: 14,
+                                                borderBottomWidth: 1,
+                                                borderBottomColor: '#f0f0f0',
+                                                backgroundColor: locArea === area ? '#EBF5FB' : '#fff',
+                                            }}
+                                        >
+                                            <MapPin size={16} color={Colors.primary} style={{ marginRight: 12 }} />
+                                            <Text style={{ fontSize: 15, color: '#1a1a1a', fontWeight: locArea === area ? '700' : '400' }}>{area}</Text>
+                                            {locArea === area && <Text style={{ marginLeft: 'auto', color: Colors.primary, fontSize: 18 }}>✓</Text>}
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
                                 <TouchableOpacity
                                     onPress={() => { setShowAreaPicker(false); handleGetLocation(); }}
                                     style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}

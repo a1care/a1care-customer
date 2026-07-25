@@ -13,7 +13,7 @@ export const authService = {
     },
 
     verifyOtp: async (mobileNumber: string, otp: string) => {
-        const res = await api.post<ApiResponse<{ token: string }>>(
+        const res = await api.post<ApiResponse<{ token: string, refreshToken?: string }>>(
             Endpoints.VERIFY_OTP,
             { mobileNumber, otp }
         );
@@ -21,8 +21,11 @@ export const authService = {
         if (!payload || !payload.token) {
             throw new Error(res.data?.message || 'Verification failed. Please try again.');
         }
-        const { token } = payload;
+        const { token, refreshToken } = payload;
         await tokenStorage.setItem('auth_token', token);
+        if (refreshToken) {
+            await tokenStorage.setItem('refresh_token', refreshToken);
+        }
         return res.data;
     },
 
@@ -41,6 +44,7 @@ export const authService = {
 
     logout: async () => {
         await tokenStorage.removeItem('auth_token');
+        await tokenStorage.removeItem('refresh_token');
     },
 
     getToken: async () => {

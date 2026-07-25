@@ -102,7 +102,7 @@ export default function HospitalBookingScreen() {
     const todayYmd = useMemo(() => toLocalYMD(new Date()), []);
     const [selectedDate, setSelectedDate] = useState(todayYmd);
     const [selectedTime, setSelectedTime] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState<'OFFLINE' | 'ONLINE' | 'WALLET'>('OFFLINE');
+    const [paymentMethod, setPaymentMethod] = useState<'OFFLINE' | 'ONLINE' | 'WALLET' | null>(null);
     const [step, setStep] = useState<'details' | 'payment'>('details');
     const [submitted, setSubmitted] = useState(false);
     const [submittingOnline, setSubmittingOnline] = useState(false);
@@ -208,6 +208,10 @@ export default function HospitalBookingScreen() {
             }
             setStep('payment');
         } else {
+            if (!paymentMethod) {
+                showToast.warn('Payment Method Required', 'Please select a payment method.');
+                return;
+            }
             const payableAmount = service?.price || 0;
 
             if (paymentMethod === 'WALLET') {
@@ -538,6 +542,7 @@ export default function HospitalBookingScreen() {
                         submittingOnline ? "Processing..." :
                         bookMutation.isPending ? "Confirming..." :
                         step === 'details' ? "Proceed to Payment" :
+                        !paymentMethod ? "Select Payment Method" :
                         paymentMethod === 'ONLINE' ? "Pay Online" :
                         paymentMethod === 'WALLET' ? "Pay from Wallet" :
                         "Complete OP Booking"

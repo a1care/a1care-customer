@@ -14,14 +14,11 @@ import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
-import { io, Socket } from 'socket.io-client';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
+import { socketService } from '@/services/socket.service';
 
 export default function TrackingScreen() {
     const { id, providerId, destLat, destLng } = useLocalSearchParams<{ id: string, providerId: string, destLat?: string, destLng?: string }>();
     const router = useRouter();
-    const socketRef = useRef<Socket | null>(null);
     const [liveLocation, setLiveLocation] = useState<any>(null);
 
     const { data: initialLocation, isLoading, refetch } = useQuery({
@@ -36,19 +33,20 @@ export default function TrackingScreen() {
 
     useEffect(() => {
         if (!id) return;
-        socketRef.current = io(API_URL);
-        const socket = socketRef.current;
+        const socket = socketService.getSocket();
+        if (!socket) return;
 
-        socket.on('connect', () => {
-            socket.emit('join_room', id);
-        });
+        socket.emit('join_room', id);
 
-        socket.on('location_update', (data) => {
+        const handleLocationUpdate = (data: any) => {
             setLiveLocation(data);
-        });
+        };
+
+        socket.on('location_update', handleLocationUpdate);
 
         return () => {
-            socket.disconnect();
+            socket.off('location_update', handleLocationUpdate);
+            socket.emit('leave_room', id);
         };
     }, [id]);
 

@@ -303,17 +303,6 @@ export default function NotificationsScreen() {
 
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
-                        style={[styles.headerActionBtn, unreadCount === 0 && { opacity: 0.35 }]}
-                        onPress={() => markAllMutation.mutate()}
-                        disabled={unreadCount === 0 || markAllMutation.isPending}
-                    >
-                        {markAllMutation.isPending 
-                            ? <ActivityIndicator size="small" color={Colors.primary} />
-                            : <CheckCircle2 size={13} color={Colors.primary} />
-                        }
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
                         style={[styles.headerActionBtn, { backgroundColor: '#FFF1F2' }]}
                         onPress={handleClearAll}
                         disabled={localList.length === 0 || clearAllMutation.isPending}

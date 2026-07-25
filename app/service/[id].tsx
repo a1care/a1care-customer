@@ -166,7 +166,7 @@ export default function ServiceDetailScreen() {
     const [couponInput, setCouponInput] = useState('');
     const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; finalAmount: number } | null>(null);
     const [couponChecking, setCouponChecking] = useState(false);
-    const [isAsap, setIsAsap] = useState(true);
+    const [isAsap, setIsAsap] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [submittedBookingId, setSubmittedBookingId] = useState<string | null>(null);
     const submitting = useRef(false);
@@ -297,7 +297,13 @@ export default function ServiceDetailScreen() {
 
                 if (Object.keys(errors).length > 0) {
                     setFormErrors(errors);
-                    showToast.warn('Schedule Required', 'Please choose both a date and a time slot.');
+                    if (!scheduledDate && !scheduledTime) {
+                        showToast.warn('Select Schedule', 'Please select a preferred date and time slot.');
+                    } else if (!scheduledDate) {
+                        showToast.warn('Select Date', 'Please choose a valid date for your booking.');
+                    } else if (!scheduledTime) {
+                        showToast.warn('Select Time Slot', 'Please choose an available time slot for your booking.');
+                    }
                     return;
                 }
             }

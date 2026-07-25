@@ -25,6 +25,7 @@ import api from '@/services/api';
 import { notificationsService } from '@/services/notifications.service';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { socketService } from '@/services/socket.service';
 
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -44,7 +45,7 @@ const LOCATION_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-    const { isAuthenticated, isLoading, user, initialize, postLoginReturn, setPostLoginReturn } = useAuthStore();
+    const { isAuthenticated, isLoading, user, initialize, postLoginReturn, setPostLoginReturn, token } = useAuthStore();
     const { fetchConfig, config } = useConfigStore();
     const router = useRouter();
     const segments = useSegments();
@@ -224,6 +225,17 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             setHasRequestedPostLoginPermissions(false);
         }
     }, [isAuthenticated, user?.isRegistered]);
+
+    useEffect(() => {
+        if (isAuthenticated && user?._id && token) {
+            socketService.connect(token, user._id);
+        } else {
+            socketService.disconnect();
+        }
+        return () => {
+            // Cleaned up on unmount or logout
+        };
+    }, [isAuthenticated, user, token]);
 
     useEffect(() => {
         if (!isAuthenticated) return;

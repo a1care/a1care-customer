@@ -18,9 +18,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { bookingsService } from '@/services/bookings.service';
 import { Colors } from '@/constants/colors';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { io, Socket } from 'socket.io-client';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.0.2.2:3000';
+import { socketService } from '@/services/socket.service';
 
 // ── A1Care Brand Color Palette ──────────────────────────────
 const PRIMARY      = '#2D935C';          // A1Care primary green
@@ -67,7 +65,6 @@ export default function BookingChatScreen() {
     const scrollRef = useRef<ScrollView>(null);
     const [typedMessage, setTypedMessage] = useState('');
     const [chatMessages, setChatMessages] = useState<any[]>([]);
-    const socketRef = useRef<Socket | null>(null);
     const providerName = Array.isArray(name) ? name[0] : (name || 'Service Provider');
 
     const { data: initialData, isLoading } = useQuery({
@@ -84,24 +81,32 @@ export default function BookingChatScreen() {
 
     useEffect(() => {
         if (!id) return;
-        const socket = io(API_URL, { transports: ['websocket'] });
-        socketRef.current = socket;
-        socket.on('connect', () => socket.emit('join_room', id));
-        socket.on('receive_message', (data: any) => {
+        const socket = socketService.getSocket();
+        if (!socket) return;
+        
+        socket.emit('join_room', id);
+        
+        const handleReceiveMessage = (data: any) => {
             if (data.roomId === id || data.bookingId === id) {
                 setChatMessages(prev => {
                     if (prev.find((m: any) => m._id && m._id === data._id)) return prev;
                     return [...prev, data];
                 });
             }
-        });
-        return () => { socket.disconnect(); };
+        };
+        
+        socket.on('receive_message', handleReceiveMessage);
+        return () => { 
+            socket.off('receive_message', handleReceiveMessage);
+            socket.emit('leave_room', id);
+        };
     }, [id]);
 
     const sendMutation = useMutation({
         mutationFn: (msg: string) => bookingsService.sendBookingMessage(id!, msg),
         onSuccess: (newMsg: any) => {
-            socketRef.current?.emit('send_message', { ...newMsg, roomId: id, senderType: 'User' });
+            const socket = socketService.getSocket();
+            socket?.emit('send_message', { ...newMsg, roomId: id, senderType: 'User' });
             setChatMessages(prev => [...prev, newMsg]);
             setTypedMessage('');
         },
