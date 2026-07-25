@@ -68,8 +68,8 @@ export default function ReferralScreen() {
                 <LinearGradient colors={['#1A7FD4', '#0D5FA0']} style={styles.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                     <View style={styles.heroBubble1} /><View style={styles.heroBubble2} />
                     <Ionicons name="gift" size={48} color="rgba(255,255,255,0.3)" style={{ marginBottom: 12 }} />
-                    <Text style={styles.heroTitle}>Invite Friends, Earn ₹100</Text>
-                    <Text style={styles.heroSub}>For every friend who books their first service using your code, you get ₹100 in your A1Care wallet.</Text>
+                    <Text style={styles.heroTitle}>Invite Friends, Earn {data?.rewardAmount ? `₹${data.rewardAmount}` : ''}</Text>
+                    <Text style={styles.heroSub}>For every friend who books their first service using your code, you get {data?.rewardAmount ? `₹${data.rewardAmount}` : 'rewarded'} in your A1Care wallet.</Text>
                 </LinearGradient>
 
                 {/* Your Code */}

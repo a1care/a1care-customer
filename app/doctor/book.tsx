@@ -58,6 +58,53 @@ const formatSlotTimeLocal = (raw: string) => {
     return value;
 };
 
+const isSlotExpired = (slotStartTime: string, selectedDateStr: string) => {
+    const now = new Date();
+    
+    const [y, m, d] = selectedDateStr.split('-').map(Number);
+    if (!y || !m || !d) return false;
+    
+    const selectedDt = new Date(y, m - 1, d);
+    const isToday = now.getFullYear() === y && now.getMonth() === m - 1 && now.getDate() === d;
+    
+    if (!isToday) {
+        if (selectedDt < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+            return true;
+        }
+        return false;
+    }
+    
+    let slotHour = 0;
+    let slotMinute = 0;
+    
+    const value = String(slotStartTime || '').trim();
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(value) || /[AaPp][Mm]/.test(value)) {
+        const timeMatch = value.match(/(\d{1,2}):(\d{2})/);
+        if (timeMatch) {
+            slotHour = parseInt(timeMatch[1], 10);
+            slotMinute = parseInt(timeMatch[2], 10);
+            if (value.toLowerCase().includes('pm') && slotHour < 12) {
+                slotHour += 12;
+            } else if (value.toLowerCase().includes('am') && slotHour === 12) {
+                slotHour = 0;
+            }
+        }
+    } else {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) {
+            slotHour = parsed.getHours();
+            slotMinute = parsed.getMinutes();
+        }
+    }
+    
+    const slotDateTime = new Date(y, m - 1, d, slotHour, slotMinute, 0, 0);
+    // 30-minute buffer to prevent immediate rush bookings
+    const bufferTimeMs = 30 * 60 * 1000; 
+    const cutoffTime = new Date(now.getTime() + bufferTimeMs);
+    
+    return slotDateTime < cutoffTime;
+};
+
 export default function DoctorBookingScreen() {
     const { id, serviceName: nameParam } = useLocalSearchParams<{ id: string; serviceName?: string }>();
     const router = useRouter();
@@ -349,15 +396,27 @@ export default function DoctorBookingScreen() {
                 ) : (
                     <View style={styles.slotsGrid}>
                         {slots!.map((slot) => {
+                            const expired = isSlotExpired(slot.startingTime, selectedDate);
                             const isSelected = selectedSlot?.startingTime === slot.startingTime;
                             return (
                                 <TouchableOpacity
                                     key={slot.startingTime}
-                                    style={[styles.slotCard, isSelected ? styles.slotCardActive : {}]}
-                                    onPress={() => setSelectedSlot(slot)}
-                                    activeOpacity={0.8}
+                                    style={[
+                                        styles.slotCard, 
+                                        isSelected ? styles.slotCardActive : {},
+                                        expired ? styles.slotCardExpired : {}
+                                    ]}
+                                    onPress={() => {
+                                        if (!expired) setSelectedSlot(slot);
+                                    }}
+                                    activeOpacity={expired ? 1 : 0.8}
+                                    disabled={expired}
                                 >
-                                    <Text style={[styles.slotText, isSelected ? styles.slotTextActive : {}]}>
+                                    <Text style={[
+                                        styles.slotText, 
+                                        isSelected ? styles.slotTextActive : {},
+                                        expired ? styles.slotTextExpired : {}
+                                    ]}>
                                         {formatSlotTimeLocal(slot.startingTime)}
                                     </Text>
                                 </TouchableOpacity>
@@ -533,8 +592,10 @@ const styles = StyleSheet.create({
         borderColor: Colors.border,
     },
     slotCardActive: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary },
+    slotCardExpired: { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', opacity: 0.5 },
     slotText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textPrimary },
     slotTextActive: { color: Colors.primary },
+    slotTextExpired: { color: '#94A3B8', textDecorationLine: 'line-through' },
 
     emptySlots: { alignItems: 'center', paddingVertical: 40 },
     emptySlotsIcon: { fontSize: 40, marginBottom: 12 },

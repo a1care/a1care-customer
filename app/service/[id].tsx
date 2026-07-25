@@ -1,3 +1,4 @@
+import { showToast } from '@/utils/toast';
 import React, { useMemo, useRef, useState } from 'react';
 import {
     View,
@@ -281,11 +282,11 @@ export default function ServiceDetailScreen() {
     const goToNextStep = () => {
         // Step Validation
         if (step === 'doctor' && shouldUseDoctorAppointment && !selectedDoctorId) {
-            Alert.alert('Selection Required', 'Please select a healthcare expert to proceed.');
+            showToast.warn('Selection Required', 'Please select a healthcare expert to proceed.');
             return;
         }
         if (step === 'address' && !selectedAddressId) {
-            Alert.alert('Location Required', 'Please select a service location.');
+            showToast.warn('Location Required', 'Please select a service location.');
             return;
         }
         if (step === 'schedule') {
@@ -296,13 +297,13 @@ export default function ServiceDetailScreen() {
 
                 if (Object.keys(errors).length > 0) {
                     setFormErrors(errors);
-                    Alert.alert('Schedule Required', 'Please choose both a date and a time slot.');
+                    showToast.warn('Schedule Required', 'Please choose both a date and a time slot.');
                     return;
                 }
             }
         }
         if (step === 'payment' && !paymentMethod) {
-            Alert.alert('Payment Method Required', 'Please choose a payment method.');
+            showToast.warn('Payment Method Required', 'Please choose a payment method.');
             return;
         }
 
@@ -426,7 +427,7 @@ export default function ServiceDetailScreen() {
                     ? 'Unable to reach server. Please check internet and try again.'
                     : error?.message) ||
                 'Failed to save address';
-            Alert.alert('Error', message);
+            showToast.error('Error', message);
         }
     });
 
@@ -458,11 +459,11 @@ export default function ServiceDetailScreen() {
             if (selectedAddressId === deletedId) {
                 setSelectedAddressId('');
             }
-            Alert.alert('Success', 'Address deleted successfully');
+            showToast.success('Success', 'Address deleted successfully');
         },
         onError: (err: any) => {
             const errMsg = err?.response?.data?.message || err?.message || 'Could not delete address. Please try again.';
-            Alert.alert('Error', errMsg);
+            showToast.error('Error', errMsg);
         }
     });
 
@@ -473,7 +474,7 @@ export default function ServiceDetailScreen() {
 
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Location Permission Needed', 'Please allow location access to auto-fill your address.');
+                showToast.warn('Location Permission Needed', 'Please allow location access to auto-fill your address.');
                 return;
             }
 
@@ -549,7 +550,7 @@ export default function ServiceDetailScreen() {
             setIsAutoDetectDone(true);
         } catch (error: any) {
             setIsAutoDetectDone(false);
-            Alert.alert('Auto Detect Failed', error?.message || 'Could not detect your location right now.');
+            showToast.error('Auto Detect Failed', error?.message || 'Could not detect your location right now.');
         } finally {
             setIsDetectingLocation(false);
         }
@@ -571,7 +572,7 @@ export default function ServiceDetailScreen() {
 
         if (Object.keys(errors).length > 0) {
             setFormErrors(errors);
-            Alert.alert('Required Fields', 'Please fill all mandatory fields with valid data.');
+            showToast.warn('Required Fields', 'Please fill all mandatory fields with valid data.');
             return;
         }
 
@@ -867,7 +868,7 @@ export default function ServiceDetailScreen() {
         },
         onError: (err: any) => {
             submitting.current = false;
-            Alert.alert('Booking Failed', err?.response?.data?.message || err?.message || 'Booking failed');
+            showToast.error('Booking Failed', err?.response?.data?.message || err?.message || 'Booking failed');
         },
     });
 
@@ -880,7 +881,7 @@ export default function ServiceDetailScreen() {
             const result = await couponService.preview(code, baseAmount);
             setCouponApplied({ code: result.code, discount: result.discount, finalAmount: result.finalAmount });
         } catch (err: any) {
-            Alert.alert('Invalid Coupon', err?.response?.data?.message || 'Coupon code is not valid.');
+            showToast.warn('Invalid Coupon', err?.response?.data?.message || 'Coupon code is not valid.');
             setCouponApplied(null);
         } finally {
             setCouponChecking(false);
@@ -889,7 +890,7 @@ export default function ServiceDetailScreen() {
 
     const handleFinalSubmit = async () => {
         if (!isAsap && (!scheduledDate || !scheduledTime)) {
-            Alert.alert('Incomplete Schedule', 'Please go back and select a valid date and time.');
+            showToast.warn('Incomplete Schedule', 'Please go back and select a valid date and time.');
             return;
         }
 
@@ -898,9 +899,8 @@ export default function ServiceDetailScreen() {
         if (paymentMethod === 'WALLET') {
             const walletBalance = wallet?.balance ?? 0;
             if (walletBalance < payableAmount) {
-                Alert.alert(
-                    'Insufficient Balance',
-                    `Your wallet balance (₹${walletBalance}) is not enough for this payment (₹${payableAmount}). Please add funds or choose another payment method.`,
+                showToast.warn(
+                    'Insufficient Balance', `Your wallet balance (₹${walletBalance}) is not enough for this payment (₹${payableAmount}). Please add funds or choose another payment method.`,
                     [{ text: 'OK', onPress: () => setStep('payment') }]
                 );
                 return;
@@ -927,7 +927,7 @@ export default function ServiceDetailScreen() {
                     err?.response?.data?.message ||
                     err?.message ||
                     'Wallet payment failed. Please check your balance and try again.';
-                Alert.alert('Payment Error', msg);
+                showToast.error('Payment Error', msg);
             } finally {
                 setSubmittingOnline(false);
             }
@@ -961,7 +961,7 @@ export default function ServiceDetailScreen() {
                     err?.response?.data?.message ||
                     err?.message ||
                     'Payment failed. Please try again.';
-                Alert.alert('Payment Error', msg);
+                showToast.error('Payment Error', msg);
             } finally {
                 setSubmittingOnline(false);
             }
@@ -974,11 +974,11 @@ export default function ServiceDetailScreen() {
         const name = guestName.trim();
         const phone = guestPhone.replace(/\D/g, '');
         if (!name) {
-            Alert.alert('Name Required', 'Please enter your name to continue.');
+            showToast.warn('Name Required', 'Please enter your name to continue.');
             return;
         }
         if (phone.length < 10) {
-            Alert.alert('Invalid Number', 'Please enter a valid 10-digit mobile number.');
+            showToast.warn('Invalid Number', 'Please enter a valid 10-digit mobile number.');
             return;
         }
         setGuestLoading(true);
@@ -1003,7 +1003,7 @@ export default function ServiceDetailScreen() {
             });
             router.push({ pathname: '/(auth)/otp', params: { mobile: phone } });
         } catch (err: any) {
-            Alert.alert('Failed to Send OTP', err?.response?.data?.message || err?.message || 'Please try again.');
+            showToast.error('Failed to Send OTP', err?.response?.data?.message || err?.message || 'Please try again.');
         } finally {
             setGuestLoading(false);
         }
@@ -2361,3 +2361,4 @@ const styles = StyleSheet.create({
     },
     saveAddrBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
+

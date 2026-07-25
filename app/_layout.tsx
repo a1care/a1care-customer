@@ -420,8 +420,7 @@ export default function RootLayout() {
                         <Stack.Screen name="maintenance" />
                     </Stack>
                 </AuthGuard>
-            </GestureHandlerRootView>
-            <Toast
+            <Toast zIndex={99999}
                 position="top"
                 topOffset={Platform.OS === 'ios' ? 55 : 40}
                 visibilityTime={3500}
@@ -476,6 +475,7 @@ export default function RootLayout() {
                     ),
                 }}
             />
+            </GestureHandlerRootView>
         </>
     );
 }
@@ -543,3 +543,4 @@ const styles = StyleSheet.create({
         opacity: 0.85,
     },
 });
+
