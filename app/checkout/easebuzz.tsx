@@ -5,36 +5,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Colors } from "@/constants/colors";
 
-function buildAutoSubmitHtml(accessKey: string, actionUrl: string) {
-  return `
-    <!doctype html>
-    <html>
-      <head><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
-      <body>
-        <form id="easebuzzForm" method="post" action="${actionUrl}">
-          <input type="hidden" name="access_key" value="${String(accessKey).replace(/"/g, "&quot;")}"/>
-        </form>
-        <script>document.getElementById('easebuzzForm').submit();</script>
-      </body>
-    </html>
-  `;
-}
-
 export default function EasebuzzCheckout() {
   const router = useRouter();
   const params = useLocalSearchParams<Record<string, string>>();
 
-  const actionUrl = React.useMemo(() => {
+  const checkoutUrl = React.useMemo(() => {
     const isProd = params.env === "prod" || params.env === "production";
-    return isProd 
-      ? "https://pay.easebuzz.in/pay/secure" 
-      : "https://testpay.easebuzz.in/pay/secure";
-  }, [params.env]);
-
-  const html = React.useMemo(() => {
     const accessKey = params.accessKey || params.access_key || "";
-    return buildAutoSubmitHtml(accessKey, actionUrl);
-  }, [params.accessKey, params.access_key, actionUrl]);
+    const baseUrl = isProd 
+      ? "https://pay.easebuzz.in/pay/" 
+      : "https://testpay.easebuzz.in/pay/";
+    return baseUrl + accessKey;
+  }, [params.env, params.accessKey, params.access_key]);
 
   React.useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -93,14 +75,14 @@ export default function EasebuzzCheckout() {
     <SafeAreaView style={styles.root}>
       {Platform.OS === 'web' ? (
         <iframe
-          srcDoc={html}
+          src={checkoutUrl}
           style={{ width: '100%', height: '100%', border: 'none' }}
           title="Easebuzz Checkout"
         />
       ) : (
         <WebView
           originWhitelist={["https://testpay.easebuzz.in", "https://pay.easebuzz.in", "https://dashboard.easebuzz.in", "about:*"]}
-          source={{ html }}
+          source={{ uri: checkoutUrl }}
           startInLoadingState
           renderLoading={() => (
             <View style={styles.loader}>

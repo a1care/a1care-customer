@@ -3,7 +3,16 @@ import api from './api';
 export const referralService = {
     getMyCode: async () => {
         const res = await api.get('/referral/my-code');
-        return res.data.data as { referralCode: string; shareMessage: string };
+        return res.data.data as { referralCode: string; shareMessage: string; rewardAmount: number };
+    },
+
+    getMyEarnings: async () => {
+        const res = await api.get('/referral/my-earnings');
+        return res.data.data as { 
+            totalEarned: number; 
+            totalPending: number; 
+            items: any[]; 
+        };
     },
 
     validate: async (code: string) => {

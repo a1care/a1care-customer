@@ -22,6 +22,11 @@ export default function ReferralScreen() {
         queryFn: referralService.getMyCode,
     });
 
+    const { data: earningsData } = useQuery({
+        queryKey: ['referral-earnings'],
+        queryFn: referralService.getMyEarnings,
+    });
+
     const handleShare = async () => {
         if (!data?.shareMessage) return;
         try {
@@ -95,6 +100,22 @@ export default function ReferralScreen() {
                             </TouchableOpacity>
                         </>
                     )}
+                </View>
+
+                {/* Earnings Summary */}
+                <View style={styles.card}>
+                    <Text style={styles.cardLabel}>EARNINGS SUMMARY</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <View style={{ flex: 1, backgroundColor: '#F0FDF4', borderRadius: 12, padding: 16, marginRight: 8 }}>
+                            <Text style={{ fontSize: 12, color: '#16A34A', fontWeight: '700', marginBottom: 4 }}>TOTAL EARNED</Text>
+                            <Text style={{ fontSize: 24, fontWeight: '900', color: '#15803D' }}>₹{earningsData?.totalEarned || 0}</Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: '#FFF7ED', borderRadius: 12, padding: 16, marginLeft: 8 }}>
+                            <Text style={{ fontSize: 12, color: '#EA580C', fontWeight: '700', marginBottom: 4 }}>PENDING</Text>
+                            <Text style={{ fontSize: 24, fontWeight: '900', color: '#C2410C' }}>₹{earningsData?.totalPending || 0}</Text>
+                        </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 18 }}>Pending rewards will unlock automatically when your friend completes their first service.</Text>
                 </View>
 
                 {/* How it works */}

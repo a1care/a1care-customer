@@ -80,8 +80,11 @@ export default function ProfileScreen() {
 
     const deleteMutation = useMutation({
         mutationFn: authService.requestDeletion,
-        onSuccess: (data: any) => {
-            showToast.success('Request Submitted', data.message || 'Deletion request submitted. Admin will review your request.');
+        onSuccess: async (data: any) => {
+            showToast.success('Request Submitted', data.message || 'Deletion request submitted. You have been logged out.');
+            await logout();
+            qc.clear();
+            router.replace('/(auth)/login');
         },
         onError: (err: any) => {
             showToast.error('Error', err.response?.data?.message || 'Failed to submit deletion request.');
@@ -109,7 +112,10 @@ export default function ProfileScreen() {
     const handleLogout = () => {
         if (Platform.OS === 'web') {
             if (window.confirm('Are you sure you want to logout?')) {
-                logout().then(() => router.replace('/(auth)/login'));
+                logout().then(() => {
+                    qc.clear();
+                    router.replace('/(auth)/login');
+                });
             }
         } else {
             Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -119,6 +125,7 @@ export default function ProfileScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         await logout();
+                        qc.clear();
                         router.replace('/(auth)/login');
                     },
                 },
