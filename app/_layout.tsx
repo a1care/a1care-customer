@@ -228,14 +228,62 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         if (isAuthenticated && user?._id && token) {
-            socketService.connect(token, user._id);
+            const socket = socketService.connect(token, user._id);
+            if (socket) {
+                // Ensure we don't attach multiple listeners
+                socket.off("flash_notification");
+                socket.on("flash_notification", (data: any) => {
+                    // Don't show toast if currently on the active chat screen
+                    const currentSegment = (segments as string[]).join('/');
+                    if (currentSegment.includes(`chat`) && currentSegment.includes(data.threadId)) {
+                        return;
+                    }
+
+                    // Add to notification center
+                    notificationsService.addLocalNotification({
+                        title: data.title || "New Message",
+                        body: data.body || "You received a message",
+                        refType: "Message",
+                        data: {
+                            screen: data.type === "BOOKING_CHAT" 
+                                ? `/booking/chat?id=${data.threadId}&name=${encodeURIComponent(data.senderName)}`
+                                : `/support/chat?id=${data.threadId}&subject=${encodeURIComponent(data.title)}`
+                        }
+                    }).catch(console.error);
+
+                    Toast.show({
+                        type: 'info',
+                        text1: data.title || "New Message",
+                        text2: data.body || "Tap to view",
+                        position: 'top',
+                        onPress: () => {
+                            if (data.type === "BOOKING_CHAT") {
+                                router.push(`/booking/chat?id=${data.threadId}&name=${encodeURIComponent(data.senderName)}`);
+                            } else if (data.type === "TICKET_CHAT") {
+                                router.push(`/support/chat?id=${data.threadId}&subject=${encodeURIComponent(data.title)}`);
+                            }
+                            Toast.hide();
+                        },
+                        visibilityTime: 4000,
+                        props: {
+                            style: {
+                                borderLeftColor: Colors.primary,
+                                backgroundColor: '#F0F7F4'
+                            }
+                        }
+                    });
+                });
+            }
         } else {
             socketService.disconnect();
         }
         return () => {
-            // Cleaned up on unmount or logout
+            const socket = socketService.getSocket();
+            if (socket) {
+                socket.off("flash_notification");
+            }
         };
-    }, [isAuthenticated, user, token]);
+    }, [isAuthenticated, user, token, segments]);
 
     useEffect(() => {
         if (!isAuthenticated) return;

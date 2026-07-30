@@ -16,6 +16,7 @@ import { reviewsService } from '@/services/reviews.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Button } from '@/components/ui/Button';
+import { showToast } from '@/utils/toast';
 
 const QUICK_TAGS = ["Excellent Service", "Punctual", "Professional", "Very Helpful", "Highly Recommend"];
 
@@ -44,21 +45,17 @@ export default function FeedbackScreen() {
             childServiceId,
         }),
         onSuccess: () => {
-            Alert.alert("Thank You!", "Your feedback helps us improve our services.", [
-                {
-                    text: "Done", onPress: () => {
-                        qc.invalidateQueries({ queryKey: ['doctor', doctorId] });
-                        qc.invalidateQueries({ queryKey: ['reviews', doctorId] });
-                        qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
-                        qc.invalidateQueries({ queryKey: ['appointments'] });
-                        qc.invalidateQueries({ queryKey: ['service-booking', bookingId] });
-                        router.replace('/(tabs)/bookings' as any);
-                    }
-                }
-            ]);
+            qc.invalidateQueries({ queryKey: ['doctor', doctorId] });
+            qc.invalidateQueries({ queryKey: ['reviews', doctorId] });
+            qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+            qc.invalidateQueries({ queryKey: ['appointments'] });
+            qc.invalidateQueries({ queryKey: ['service-booking', bookingId] });
+            
+            showToast.success("Thank You!", "Your feedback helps us improve our services.");
+            router.replace('/(tabs)/bookings' as any);
         },
         onError: (err: any) => {
-            Alert.alert("Error", err?.response?.data?.message || "Failed to submit review");
+            showToast.error("Error", err?.response?.data?.message || "Failed to submit review");
         }
     });
 

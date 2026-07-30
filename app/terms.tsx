@@ -1,13 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-
-import { useConfigStore } from '@/stores/config.store';
+import RenderHtml from 'react-native-render-html';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/services/api';
 
 export default function TermsScreen() {
     const router = useRouter();
+    const { width } = useWindowDimensions();
+
+    const { data: termsData, isLoading } = useQuery({
+        queryKey: ["cms-terms", "CUSTOMER"],
+        queryFn: async () => {
+            const res = await api.get("/cms/public/CUSTOMER/TERMS");
+            return res.data.data;
+        }
+    });
 
     // Hardware back button should go to Profile Menu
     useFocusEffect(
@@ -20,7 +30,14 @@ export default function TermsScreen() {
             return () => subscription.remove();
         }, [])
     );
-    const { config } = useConfigStore();
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#2D935C" />
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -32,8 +49,8 @@ export default function TermsScreen() {
             </View>
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={styles.title}>A1Care User Agreement</Text>
-                {config?.contact.termsAndConditions ? (
-                    <Text style={styles.text}>{config.contact.termsAndConditions}</Text>
+                {termsData?.content ? (
+                    <RenderHtml contentWidth={width - 40} source={{ html: termsData.content }} tagsStyles={{ p: styles.text, span: styles.text, li: styles.text }} />
                 ) : (
                     <>
                         <Text style={styles.subtitle}>1. Medical Disclaimer</Text>

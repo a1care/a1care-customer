@@ -20,7 +20,7 @@ export const socketService = {
 
         socket.on("connect", () => {
             if (__DEV__) console.log("[Socket] Connected:", socket?.id);
-            socket?.emit("join_room", `patient:${patientId}`);
+            socket?.emit("join_room", `user_${patientId}`);
         });
 
         socket.on("disconnect", (reason) => {

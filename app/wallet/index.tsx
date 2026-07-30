@@ -85,23 +85,56 @@ export default function WalletScreen() {
     const addMoneyMutation = useMutation({
         mutationFn: async (amount: number) => {
             const order = await paymentService.createOrder({ amount, type: "WALLET_TOPUP" });
-            const params = await paymentService.initiatePayment(order._id);
-            return { order, params };
+            const razorData = await paymentService.initiateRazorpay(order._id);
+            const paymentData = await RazorpayCheckout.open({
+                key: razorData.key,
+                amount: razorData.razorOrder.amount,
+                currency: 'INR',
+                name: 'A1Care 24/7',
+                description: 'Wallet Top-up',
+                order_id: razorData.razorOrder.id,
+                prefill: {
+                    email: razorData.customer.email || '',
+                    contact: razorData.customer.contact || '',
+                    name: razorData.customer.name || '',
+                },
+                theme: { color: Colors.primary },
+            });
+            await paymentService.verifyRazorpay({
+                razorpay_order_id: (paymentData as any).razorpay_order_id,
+                razorpay_payment_id: (paymentData as any).razorpay_payment_id,
+                razorpay_signature: (paymentData as any).razorpay_signature,
+                orderId: order._id,
+            });
+            return { order };
         },
-        onSuccess: ({ order, params }) => {
+        onSuccess: ({ order }) => {
             qc.invalidateQueries({ queryKey: ['wallet'] });
-            router.push({
-                pathname: '/checkout/easebuzz' as any,
+            router.replace({
+                pathname: '/checkout/status' as any,
                 params: {
-                    ...params,
-                    type: 'WALLET_TOPUP',
+                    status: 'SUCCESS',
+                    txnId: order.txnId,
                     amount: String(order.amount),
+                    type: 'WALLET_TOPUP',
+                    description: 'Wallet Top-up',
                 },
             });
         },
         onError: (err: any) => {
-            const msg = err?.response?.data?.message || err?.message || 'Unable to add money. Please try again.';
-            Alert.alert('Payment Error', msg);
+            if (err.code === 2) {
+                Alert.alert('Payment Cancelled', 'You cancelled the top-up transaction.');
+            } else {
+                router.replace({
+                    pathname: '/checkout/status' as any,
+                    params: {
+                        status: 'FAILED',
+                        amount: String(amountInput),
+                        type: 'WALLET_TOPUP',
+                        description: 'Wallet Top-up',
+                    },
+                });
+            }
         },
     });
 

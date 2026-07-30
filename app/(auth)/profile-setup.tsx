@@ -163,7 +163,7 @@ export default function OnboardingScreen() {
             formData.append('gender', gender);
             if (dobString) formData.append('dateOfBirth', dobString);
             formData.append('email', email.trim().toLowerCase());
-            if (referralCode.trim()) formData.append('referralCode', referralCode.trim().toUpperCase());
+            if (referralCode.trim()) formData.append('referredByCode', referralCode.trim().toUpperCase());
             formData.append('isRegistered', 'true');
 
             if (selectedImage) {

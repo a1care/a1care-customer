@@ -25,10 +25,12 @@ import { addressService } from '@/services/address.service';
 import { Colors, Shadows } from '@/constants/colors';
 import type { Address } from '@/types';
 import { showToast } from '@/utils/toast';
+import { useAuthStore } from '@/stores/auth.store';
 
 export default function AddressesScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { user } = useAuthStore();
     const [refreshing, setRefreshing] = useState(false);
 
     // Hardware back button should go to Profile Menu
@@ -103,7 +105,7 @@ export default function AddressesScreen() {
     };
 
     const { data: addresses, isLoading, refetch } = useQuery({
-        queryKey: ['addresses'],
+        queryKey: ['addresses', user?.id || user?._id],
         queryFn: addressService.getAll,
     });
 

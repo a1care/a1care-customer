@@ -45,6 +45,7 @@ const TYPE_META: Record<string, { icon: any; color: string; bgColor: string }> =
     Broadcast:           { icon: Tag,         color: '#9B51E0', bgColor: '#F5EBFF' },
     Auth:                { icon: ShieldAlert, color: '#6366F1', bgColor: '#EEF2FF' },
     Partner:             { icon: Users,       color: '#0D9488', bgColor: '#CCFBF1' },
+    Message:             { icon: Activity,    color: '#3B82F6', bgColor: '#EFF6FF' }, // Reusing an icon but giving it a distinct blue styling
     default:             { icon: Bell,        color: Colors.primary, bgColor: '#EBF3FD' },
 };
 
@@ -244,6 +245,13 @@ export default function NotificationsScreen() {
                 break;
             case 'Ticket':
                 router.push('/support/index' as any);
+                break;
+            case 'Message':
+                if (n.data?.type === "BOOKING_CHAT") {
+                    router.push(`/booking/chat?id=${n.data.threadId}` as any);
+                } else if (n.data?.type === "TICKET_CHAT") {
+                    router.push(`/support/chat?id=${n.data.threadId}` as any);
+                }
                 break;
             case 'Broadcast':
             case 'Auth':

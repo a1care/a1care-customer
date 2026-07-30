@@ -1,17 +1,30 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/services/api';
 
-import { useConfigStore } from '@/stores/config.store';
+const DEFAULT_FAQS = [
+    { question: "How do I book a service?", answer: "You can book a service by browsing through the categories on the Home screen and selecting the service or doctor of your choice." },
+    { question: "What are your payment methods?", answer: "We accept payments via A1Care Wallet, UPI, Credit/Debit cards, and NetBanking." },
+    { question: "How do I cancel my request?", answer: "You can cancel any pending request from your 'My Bookings' section. Cancellation fees may apply if the provider is already en route." },
+    { question: "Is home consultation available?", answer: "Yes, many of our partner doctors and services support home visits. Look for the 'Home Visit' badge." },
+];
 
 export default function FAQScreen() {
     const router = useRouter();
-    const { config } = useConfigStore();
     const [expanded, setExpanded] = useState<number | null>(null);
 
-    // Hardware back button should go to Profile Menu
+    const { data: faqData, isLoading } = useQuery({
+        queryKey: ["cms-faq", "CUSTOMER"],
+        queryFn: async () => {
+            const res = await api.get("/cms/public/CUSTOMER/FAQ");
+            return res.data.data;
+        }
+    });
+
     useFocusEffect(
         React.useCallback(() => {
             const onBackPress = () => {
@@ -23,12 +36,15 @@ export default function FAQScreen() {
         }, [])
     );
 
-    const defaultFaqs = [
-        { q: "How do I book a service?", a: "You can book a service by browsing through the categories on the Home screen and selecting the service or doctor of your choice." },
-        { q: "What are your payment methods?", a: "We accept payments via A1Care Wallet, UPI, Credit/Debit cards, and NetBanking." },
-        { q: "How do I cancel my request?", a: "You can cancel any pending request from your 'My Bookings' section. Cancellation fees may apply if the provider is already en route." },
-        { q: "Is home consultation available?", a: "Yes, many of our partner doctors and services support home visits. Look for the 'Home Visit' badge." },
-    ];
+    const faqItems = faqData?.faqs && faqData.faqs.length > 0 ? faqData.faqs : DEFAULT_FAQS;
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#2D935C" />
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -39,18 +55,22 @@ export default function FAQScreen() {
                 <Text style={styles.headerTitle}>Frequently Asked Qs</Text>
             </View>
             <ScrollView contentContainerStyle={styles.content}>
-                {config?.contact.faq ? (
-                    <View style={styles.card}>
-                        <Text style={styles.answer}>{config.contact.faq}</Text>
-                    </View>
-                ) : (
-                    defaultFaqs.map((faq, i) => (
-                        <View key={i} style={styles.card}>
-                            <Text style={styles.question}>{faq.q}</Text>
-                            <Text style={styles.answer}>{faq.a}</Text>
+                {faqItems.map((faq: any, i: number) => (
+                    <TouchableOpacity 
+                        key={i} 
+                        style={styles.card} 
+                        activeOpacity={0.8}
+                        onPress={() => setExpanded(expanded === i ? null : i)}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={styles.question}>{faq.question || faq.q}</Text>
+                            <Ionicons name={expanded === i ? "chevron-up" : "chevron-down"} size={20} color="#64748B" />
                         </View>
-                    ))
-                )}
+                        {expanded === i && (
+                            <Text style={styles.answer}>{faq.answer || faq.a}</Text>
+                        )}
+                    </TouchableOpacity>
+                ))}
             </ScrollView>
         </SafeAreaView>
     );

@@ -1,13 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-
-import { useConfigStore } from '@/stores/config.store';
+import RenderHtml from 'react-native-render-html';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/services/api';
 
 export default function PrivacyScreen() {
     const router = useRouter();
+    const { width } = useWindowDimensions();
+
+    const { data: privacyData, isLoading } = useQuery({
+        queryKey: ["cms-privacy", "CUSTOMER"],
+        queryFn: async () => {
+            const res = await api.get("/cms/public/CUSTOMER/PRIVACY");
+            return res.data.data;
+        }
+    });
 
     // Hardware back button should go to Profile Menu
     useFocusEffect(
@@ -20,7 +30,14 @@ export default function PrivacyScreen() {
             return () => subscription.remove();
         }, [])
     );
-    const { config } = useConfigStore();
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#2D935C" />
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -31,9 +48,9 @@ export default function PrivacyScreen() {
                 <Text style={styles.headerTitle}>Privacy Policy</Text>
             </View>
             <ScrollView contentContainerStyle={styles.content}>
-                <Text style={styles.title}>Your Privacy Matters</Text>
-                {config?.contact.privacyPolicy ? (
-                    <Text style={styles.text}>{config.contact.privacyPolicy}</Text>
+                <Text style={styles.title}>Data Protection</Text>
+                {privacyData?.content ? (
+                    <RenderHtml contentWidth={width - 40} source={{ html: privacyData.content }} tagsStyles={{ p: styles.text, span: styles.text, li: styles.text }} />
                 ) : (
                     <>
                         <Text style={styles.text}>

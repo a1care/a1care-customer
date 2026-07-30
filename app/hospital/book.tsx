@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { triggerLocalNotification } from '@/utils/notifications';
 import { showToast } from '@/utils/toast';
 import { useAuthStore } from '@/stores/auth.store';
+import RazorpayCheckout from 'react-native-razorpay';
 
 const DEPARTMENTS = [
     { id: 'ortho', name: 'Orthopaedics', icon: 'body-outline' },
@@ -265,23 +266,59 @@ export default function HospitalBookingScreen() {
                         type: "BOOKING",
                         referenceId: booking._id
                     });
-                    const params = await paymentService.initiatePayment(order._id);
-                    router.push({
-                        pathname: "/checkout/easebuzz" as any,
+                    const razorData = await paymentService.initiateRazorpay(order._id);
+                    const data = await RazorpayCheckout.open({
+                        key: razorData.key,
+                        amount: razorData.razorOrder.amount,
+                        currency: 'INR',
+                        name: 'A1Care 24/7',
+                        description: `Hospital Booking for ${service?.name}`,
+                        order_id: razorData.razorOrder.id,
+                        prefill: {
+                            email: razorData.customer.email || '',
+                            contact: razorData.customer.contact || '',
+                            name: razorData.customer.name || '',
+                        },
+                        theme: { color: Colors.primary },
+                    });
+                    await paymentService.verifyRazorpay({
+                        razorpay_order_id: (data as any).razorpay_order_id,
+                        razorpay_payment_id: (data as any).razorpay_payment_id,
+                        razorpay_signature: (data as any).razorpay_signature,
+                        orderId: order._id,
+                    });
+                    triggerLocalNotification('Booking Confirmed', `Your booking for ${service?.name} is confirmed.`);
+                    qc.invalidateQueries({ queryKey: ['appointments'] });
+                    router.replace({
+                        pathname: '/checkout/status' as any,
                         params: {
-                            ...params,
+                            status: 'SUCCESS',
+                            txnId: order.txnId,
+                            amount: String(payableAmount),
                             type: 'BOOKING',
-                            amount: String(order.amount),
+                            description: `Hospital Booking for ${service?.name}`,
                             bookingId: booking._id,
-                            bookingType: 'Service',
+                            date: new Date().toISOString(),
+                            providerName: '',
                         }
                     });
                 } catch (err: any) {
                     if (createdBookingId) {
                         bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
                     }
-                    const msg = err?.response?.data?.message || err?.message || 'Payment failed. Please try again.';
-                    Alert.alert('Payment Error', msg);
+                    if (err.code === 2) {
+                        showToast.warn('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed.');
+                    } else {
+                        router.replace({
+                            pathname: '/checkout/status' as any,
+                            params: {
+                                status: 'FAILED',
+                                amount: String(payableAmount),
+                                type: 'BOOKING',
+                                description: `Hospital Booking for ${service?.name}`,
+                            },
+                        });
+                    }
                 } finally {
                     setSubmittingOnline(false);
                 }

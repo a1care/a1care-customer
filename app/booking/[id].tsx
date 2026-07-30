@@ -203,13 +203,16 @@ export default function BookingDetailScreen() {
             rating: ratingStars,
             comment: '',
             childServiceId: (booking as any)?.childServiceId?._id || (booking as any)?.childServiceId,
+            doctorId: (booking as any)?.assignedProviderId?._id || (booking as any)?.assignedProviderId,
         }),
         onSuccess: () => {
             setShowRatingModal(false);
             qc.invalidateQueries({ queryKey: ['service-booking', id] });
             showToast.success('Thank You!', 'Your rating helps us improve.');
         },
-        onError: () => { showToast.error('Rating Failed', 'Unable to submit your rating. Please try again.'); },
+        onError: (err: any) => { 
+            showToast.error('Rating Failed', err?.response?.data?.message || 'Unable to submit your rating. Please try again.'); 
+        },
     });
 
     const getAddressText = (b: any) => {
@@ -427,6 +430,7 @@ export default function BookingDetailScreen() {
                                         bookingId: booking._id,
                                         bookingType: 'Service',
                                         childServiceId: (booking as any).childServiceId?._id || (booking as any).childServiceId,
+                                        doctorId: (booking as any).assignedProviderId?._id || (booking as any).assignedProviderId,
                                         name: (booking as any).childServiceId?.name || 'Service'
                                     }
                                 })}
@@ -524,6 +528,7 @@ export default function BookingDetailScreen() {
                                             bookingId: id,
                                             bookingType: 'Service',
                                             childServiceId: (booking as any)?.childServiceId?._id || (booking as any)?.childServiceId,
+                                            doctorId: (booking as any)?.assignedProviderId?._id || (booking as any)?.assignedProviderId,
                                             name: (booking as any)?.childServiceId?.name || 'Service',
                                         },
                                     });

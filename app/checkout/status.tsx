@@ -1,10 +1,12 @@
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { CheckCircle, XCircle, ChevronLeft, CreditCard, RefreshCw } from "lucide-react-native";
+import { CheckCircle, XCircle, ChevronLeft, CreditCard, AlertCircle, RotateCcw } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQueryClient } from "@tanstack/react-query";
+
+const { width } = Dimensions.get("window");
 
 export default function PaymentStatusScreen() {
     const router = useRouter();
@@ -27,6 +29,7 @@ export default function PaymentStatusScreen() {
     const typeLabel =
         type === "WALLET_TOPUP" ? "Wallet Top-up" :
         type === "BOOKING" ? "Booking Payment" :
+        type === "SUBSCRIPTION" ? "Partner Plan" :
         "Payment";
 
     const primaryAction = () => {
@@ -43,19 +46,19 @@ export default function PaymentStatusScreen() {
 
     const primaryLabel = isSuccess
         ? (isWallet ? "Back to Wallet" : "View Booking")
-        : "Go Back";
+        : "Try Again";
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, !isSuccess && styles.containerError]}>
             <LinearGradient
-                colors={isSuccess ? ["#E8F5E9", "#FFFFFF"] : ["#FFEBEE", "#FFFFFF"]}
+                colors={isSuccess ? ["#E8F5E9", "#FFFFFF"] : ["#0F172A", "#1E293B"]}
                 style={styles.headerGradient}
             >
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.replace("/(tabs)" as any)} style={styles.backButton}>
-                        <ChevronLeft size={24} color="#1E293B" />
+                    <TouchableOpacity onPress={() => router.replace("/(tabs)" as any)} style={[styles.backButton, !isSuccess && styles.backButtonDark]}>
+                        <ChevronLeft size={24} color={isSuccess ? "#1E293B" : "#FFFFFF"} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Receipt</Text>
+                    <Text style={[styles.headerTitle, !isSuccess && { color: "#FFFFFF" }]}>Receipt</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
@@ -65,53 +68,61 @@ export default function PaymentStatusScreen() {
                             <CheckCircle size={60} color="#10B981" />
                         </View>
                     ) : (
-                        <View style={styles.iconCircleError}>
-                            <XCircle size={60} color="#EF4444" />
+                        <View style={styles.iconCircleErrorPremium}>
+                            <View style={styles.iconGlow}>
+                                <XCircle size={64} color="#FF3B30" strokeWidth={1.5} />
+                            </View>
                         </View>
                     )}
-                    <Text style={[styles.statusText, { color: isSuccess ? "#059669" : "#DC2626" }]}>
+                    <Text style={[styles.statusText, { color: isSuccess ? "#059669" : "#FFFFFF" }]}>
                         {isSuccess ? "Payment Successful!" : "Payment Failed"}
                     </Text>
-                    <Text style={styles.amountText}>₹{parseFloat(amount || "0").toFixed(2)}</Text>
+                    <Text style={[styles.amountText, !isSuccess && { color: "#F8FAFC" }]}>₹{parseFloat(amount || "0").toFixed(2)}</Text>
+                    
+                    {!isSuccess && (
+                        <Text style={styles.errorSubtext}>
+                            We couldn't process your payment. Don't worry, your money is safe. If deducted, it will be refunded automatically.
+                        </Text>
+                    )}
                 </View>
             </LinearGradient>
 
-            <ScrollView style={styles.detailsContainer}>
-                <View style={styles.card}>
+            <ScrollView style={styles.detailsContainer} showsVerticalScrollIndicator={false}>
+                <View style={[styles.card, !isSuccess && styles.cardDark]}>
                     {description ? (
                         <>
                             <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Description</Text>
-                                <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>{description}</Text>
+                                <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Description</Text>
+                                <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }, !isSuccess && { color: "#F1F5F9" }]} numberOfLines={2}>{description}</Text>
                             </View>
-                            <View style={styles.divider} />
+                            <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
                         </>
                     ) : null}
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Transaction ID</Text>
-                        <Text style={styles.detailValue} numberOfLines={1}>{txnId || "N/A"}</Text>
+                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Transaction ID</Text>
+                        <Text style={[styles.detailValue, !isSuccess && { color: "#F1F5F9" }]} numberOfLines={1}>{txnId || "N/A"}</Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Payment Type</Text>
-                        <Text style={styles.detailValue}>{typeLabel}</Text>
+                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Payment Type</Text>
+                        <Text style={[styles.detailValue, !isSuccess && { color: "#F1F5F9" }]}>{typeLabel}</Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Method</Text>
-                        <Text style={styles.detailValue}>{String(description || '').includes('Easebuzz') ? 'Easebuzz' : 'Razorpay'}</Text>
+                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Method</Text>
+                        <Text style={[styles.detailValue, !isSuccess && { color: "#F1F5F9" }]}>{String(description || '').includes('Easebuzz') ? 'Easebuzz' : 'Razorpay'}</Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Date & Time</Text>
-                        <Text style={styles.detailValue}>
+                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Date & Time</Text>
+                        <Text style={[styles.detailValue, !isSuccess && { color: "#F1F5F9" }]}>
                             {txnDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Amount Paid</Text>
-                        <Text style={[styles.detailValue, { color: isSuccess ? '#059669' : '#DC2626', fontWeight: '800' }]}>
+                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Amount {isSuccess ? 'Paid' : 'Attempted'}</Text>
+                        <Text style={[styles.detailValue, { color: isSuccess ? '#059669' : '#FF3B30', fontWeight: '800' }]}>
                             ₹{parseFloat(amount || "0").toFixed(2)}
                         </Text>
                     </View>
@@ -123,6 +134,17 @@ export default function PaymentStatusScreen() {
                         <Text style={styles.infoText}>Your wallet balance has been credited automatically.</Text>
                     </View>
                 )}
+
+                {!isSuccess && (
+                    <View style={styles.errorHelpBox}>
+                        <AlertCircle size={24} color="#FBBF24" style={{ marginTop: 2 }} />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={styles.errorHelpTitle}>What happens next?</Text>
+                            <Text style={styles.errorHelpText}>Your booking has been placed on hold. Please try another payment method or try again to secure your booking.</Text>
+                        </View>
+                    </View>
+                )}
+
                 {isSuccess && !isWallet && (
                     <View style={styles.bookingCard}>
                         <Text style={styles.bookingCardTitle}>Appointment Details</Text>
@@ -171,20 +193,23 @@ export default function PaymentStatusScreen() {
                         </View>
                     </View>
                 )}
+                <View style={{ height: 40 }} />
             </ScrollView>
 
-            <View style={styles.footer}>
+            <View style={[styles.footer, !isSuccess && styles.footerDark]}>
                 <TouchableOpacity
-                    style={[styles.button, { backgroundColor: isSuccess ? "#10B981" : "#1E293B" }]}
+                    style={[styles.button, { backgroundColor: isSuccess ? "#10B981" : "#FF3B30" }]}
                     onPress={primaryAction}
+                    activeOpacity={0.8}
                 >
+                    {!isSuccess && <RotateCcw size={20} color="#FFFFFF" style={{ marginRight: 8 }} />}
                     <Text style={styles.buttonText}>{primaryLabel}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.button, { backgroundColor: "transparent", marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }]}
+                    style={[styles.button, { backgroundColor: "transparent", marginTop: 12, borderWidth: 1, borderColor: isSuccess ? "#E2E8F0" : "#334155" }]}
                     onPress={() => router.replace("/(tabs)" as any)}
                 >
-                    <Text style={[styles.buttonText, { color: "#64748B" }]}>Return to Home</Text>
+                    <Text style={[styles.buttonText, { color: isSuccess ? "#64748B" : "#94A3B8" }]}>Return to Home</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -193,10 +218,12 @@ export default function PaymentStatusScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#FFFFFF" },
+    containerError: { backgroundColor: "#0F172A" },
     headerGradient: {
         paddingBottom: 40,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
+        paddingTop: 10,
     },
     header: {
         flexDirection: "row",
@@ -213,10 +240,14 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
     },
+    backButtonDark: {
+        backgroundColor: "rgba(255,255,255,0.1)",
+    },
     headerTitle: { fontSize: 18, fontWeight: "600", color: "#1E293B" },
     statusContainer: {
         alignItems: "center",
         marginTop: 30,
+        paddingHorizontal: 30,
     },
     iconCircleSuccess: {
         width: 100,
@@ -227,48 +258,80 @@ const styles = StyleSheet.create({
         alignItems: "center",
         marginBottom: 20,
     },
-    iconCircleError: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: "rgba(239, 68, 68, 0.1)",
+    iconCircleErrorPremium: {
+        width: 110,
+        height: 110,
+        borderRadius: 55,
+        backgroundColor: "rgba(255, 59, 48, 0.08)",
         justifyContent: "center",
         alignItems: "center",
-        marginBottom: 20,
+        marginBottom: 24,
     },
-    statusText: { fontSize: 24, fontWeight: "700", marginBottom: 10 },
-    amountText: { fontSize: 36, fontWeight: "800", color: "#1E293B" },
+    iconGlow: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: "rgba(255, 59, 48, 0.15)",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    statusText: { fontSize: 26, fontWeight: "800", marginBottom: 12, letterSpacing: -0.5 },
+    amountText: { fontSize: 38, fontWeight: "900", color: "#1E293B", letterSpacing: -1 },
+    errorSubtext: {
+        fontSize: 14,
+        color: "#94A3B8",
+        textAlign: "center",
+        marginTop: 16,
+        lineHeight: 20,
+    },
     detailsContainer: { flex: 1, padding: 20 },
     card: {
         backgroundColor: "#F8FAFC",
-        borderRadius: 20,
-        padding: 20,
+        borderRadius: 24,
+        padding: 24,
         borderWidth: 1,
         borderColor: "#E2E8F0",
+    },
+    cardDark: {
+        backgroundColor: "rgba(30, 41, 59, 0.7)",
+        borderColor: "rgba(255,255,255,0.05)",
     },
     detailRow: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingVertical: 12,
+        paddingVertical: 14,
     },
-    detailLabel: { fontSize: 14, color: "#64748B" },
-    detailValue: { fontSize: 14, fontWeight: "600", color: "#1E293B" },
+    detailLabel: { fontSize: 14, color: "#64748B", fontWeight: "500" },
+    detailValue: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
     divider: { height: 1, backgroundColor: "#E2E8F0" },
     infoBox: {
         flexDirection: "row",
         alignItems: "center",
         backgroundColor: "#EFF6FF",
-        padding: 15,
-        borderRadius: 15,
-        marginTop: 20,
-        gap: 10,
-    },
-    infoText: { fontSize: 13, color: "#1E40AF", flex: 1 },
-    footer: { padding: 20, paddingBottom: 30 },
-    button: {
-        height: 56,
+        padding: 16,
         borderRadius: 16,
+        marginTop: 20,
+        gap: 12,
+    },
+    infoText: { fontSize: 14, color: "#1E40AF", flex: 1, fontWeight: "500", lineHeight: 20 },
+    errorHelpBox: {
+        flexDirection: "row",
+        backgroundColor: "rgba(245, 158, 11, 0.1)",
+        padding: 20,
+        borderRadius: 20,
+        marginTop: 20,
+        borderWidth: 1,
+        borderColor: "rgba(245, 158, 11, 0.2)",
+    },
+    errorHelpTitle: { fontSize: 15, color: "#FBBF24", fontWeight: "700", marginBottom: 6 },
+    errorHelpText: { fontSize: 13, color: "#CBD5E1", lineHeight: 20 },
+    footer: { padding: 20, paddingBottom: 30, backgroundColor: "#FFFFFF" },
+    footerDark: { backgroundColor: "#0F172A" },
+    button: {
+        height: 58,
+        borderRadius: 16,
+        flexDirection: "row",
         justifyContent: "center",
         alignItems: "center",
         shadowColor: "#000",
@@ -277,11 +340,11 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 3,
     },
-    buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+    buttonText: { color: "#FFFFFF", fontSize: 17, fontWeight: "700", letterSpacing: 0.5 },
     bookingCard: {
         backgroundColor: "#FFFFFF",
-        borderRadius: 20,
-        padding: 20,
+        borderRadius: 24,
+        padding: 24,
         borderWidth: 1,
         borderColor: "#E2E8F0",
         marginTop: 20,
@@ -292,8 +355,8 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     bookingCardTitle: {
-        fontSize: 16,
-        fontWeight: "700",
+        fontSize: 17,
+        fontWeight: "800",
         color: "#1E293B",
         marginBottom: 16,
     },
@@ -301,16 +364,16 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingVertical: 10,
+        paddingVertical: 12,
     },
     bookingLabel: {
-        fontSize: 13,
+        fontSize: 14,
         color: "#64748B",
         fontWeight: "500",
     },
     bookingValue: {
-        fontSize: 14,
-        fontWeight: "600",
+        fontSize: 15,
+        fontWeight: "700",
         color: "#1E293B",
     },
     bookingDivider: {

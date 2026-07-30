@@ -21,9 +21,12 @@ import { paymentService } from '@/services/payment.service';
 import { walletService } from '@/services/wallet.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
+import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '@/utils/formatters';
+import RazorpayCheckout from 'react-native-razorpay';
 import { addressService } from '@/services/address.service';
 import { showToast } from '@/utils/toast';
+import { useAuthStore } from '@/stores/auth.store';
 
 const { width } = Dimensions.get('window');
 
@@ -31,6 +34,7 @@ export default function HealthPackageDetail() {
     const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
     const router = useRouter();
     const qc = useQueryClient();
+    const { user } = useAuthStore();
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [paymentMode, setPaymentMode] = useState<'OFFLINE' | 'ONLINE' | 'WALLET' | null>(null);
@@ -75,7 +79,7 @@ export default function HealthPackageDetail() {
     });
 
     const { data: addresses } = useQuery({
-        queryKey: ['addresses'],
+        queryKey: ['addresses', user?.id || user?._id],
         queryFn: addressService.getAll,
     });
 
@@ -140,22 +144,70 @@ export default function HealthPackageDetail() {
                 setSubmitting(false);
             }
         } else if (mode === 'ONLINE') {
+            let createdBookingId: string | null = null;
             try {
                 setSubmitting(true);
                 const booking = await bookMutation.mutateAsync('ONLINE');
+                createdBookingId = booking._id;
                 const order = await paymentService.createOrder({
                     amount: pkg.price,
                     type: "BOOKING",
                     referenceId: booking._id
                 });
-                const params = await paymentService.initiatePayment(order._id);
-                router.push({
-                    pathname: "/checkout/easebuzz" as any,
-                    params: { ...params }
+                const razorData = await paymentService.initiateRazorpay(order._id);
+                const data = await RazorpayCheckout.open({
+                    key: razorData.key,
+                    amount: razorData.razorOrder.amount,
+                    currency: 'INR',
+                    name: 'A1Care 24/7',
+                    description: `Health Package: ${pkg.name}`,
+                    order_id: razorData.razorOrder.id,
+                    prefill: {
+                        email: razorData.customer.email || '',
+                        contact: razorData.customer.contact || '',
+                        name: razorData.customer.name || '',
+                    },
+                    theme: { color: Colors.primary },
+                });
+                await paymentService.verifyRazorpay({
+                    razorpay_order_id: (data as any).razorpay_order_id,
+                    razorpay_payment_id: (data as any).razorpay_payment_id,
+                    razorpay_signature: (data as any).razorpay_signature,
+                    orderId: order._id,
+                });
+                
+                qc.invalidateQueries({ queryKey: ['service-bookings'] });
+                qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+                
+                router.replace({
+                    pathname: '/checkout/status' as any,
+                    params: {
+                        status: 'SUCCESS',
+                        txnId: order.txnId,
+                        amount: String(pkg.price),
+                        type: 'BOOKING',
+                        description: `Health Package: ${pkg.name}`,
+                        bookingId: booking._id,
+                        date: new Date().toISOString(),
+                    },
                 });
             } catch (err: any) {
-                const msg = err?.response?.data?.message || err?.message || "Unable to start online payment. Please try again.";
-                showToast.error("Payment Error", msg);
+                if (createdBookingId) {
+                    bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
+                }
+                if (err.code === 2) {
+                    showToast.warn('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed.');
+                } else {
+                    router.replace({
+                        pathname: '/checkout/status' as any,
+                        params: {
+                            status: 'FAILED',
+                            amount: String(pkg.price),
+                            type: 'BOOKING',
+                            description: `Health Package: ${pkg.name}`,
+                        },
+                    });
+                }
             } finally {
                 setSubmitting(false);
             }

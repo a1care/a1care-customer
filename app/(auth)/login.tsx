@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
     ScrollView,
     StyleSheet,
+    Modal
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -26,6 +27,8 @@ export default function LoginScreen() {
     const { setToken, setUser } = useAuthStore();
     const [mobile, setMobile] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showRestoreModal, setShowRestoreModal] = useState(false);
+    const [restoring, setRestoring] = useState(false);
 
     // Google Sign-in initialization removed
 
@@ -59,6 +62,11 @@ export default function LoginScreen() {
         } catch (err: any) {
             console.error('[Login] Send OTP Error:', err);
             let msg = err?.response?.data?.message || err?.message || "Failed to send OTP.";
+            
+            if (msg === "ACCOUNT_DELETED") {
+                setShowRestoreModal(true);
+                return;
+            }
             Toast.show({
                 type: 'error',
                 text1: 'Send OTP Failed',
@@ -67,6 +75,22 @@ export default function LoginScreen() {
             });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleRestoreAccount = async () => {
+        const cleaned = mobile.replace(/\D/g, '');
+        setRestoring(true);
+        try {
+            await authService.api.post(`/patient/auth/restore`, { mobileNumber: cleaned });
+            setShowRestoreModal(false);
+            Toast.show({ type: 'success', text1: 'Account Restored', text2: 'Your account is active again!', position: 'top' });
+            // Automatically send OTP now
+            handleSendOtp();
+        } catch (err: any) {
+            Toast.show({ type: 'error', text1: 'Restore Failed', text2: err?.response?.data?.message || 'Could not restore account', position: 'top' });
+        } finally {
+            setRestoring(false);
         }
     };
 
@@ -149,6 +173,30 @@ export default function LoginScreen() {
                     ))}
                 </View>
             </ScrollView>
+
+            <Modal visible={showRestoreModal} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.iconContainer}>
+                            <Ionicons name="warning" size={32} color="#EF4444" />
+                        </View>
+                        <Text style={styles.modalTitle}>Account Unavailable</Text>
+                        <Text style={styles.modalDesc}>
+                            Your account is currently disabled and scheduled for deletion. If this was a mistake or you changed your mind, you can reactivate it right now.
+                        </Text>
+                        
+                        <TouchableOpacity style={styles.restoreBtn} onPress={handleRestoreAccount} disabled={restoring}>
+                            <LinearGradient colors={["#27AE60", "#1E8449"]} style={styles.restoreBtnGradient}>
+                                {restoring ? <ActivityIndicator color="#FFF" /> : <Text style={styles.restoreBtnText}>Restore My Account</Text>}
+                            </LinearGradient>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowRestoreModal(false)} disabled={restoring}>
+                            <Text style={styles.cancelBtnText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
@@ -196,4 +244,16 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
     },
     badgeText: { color: '#1A7FD4', fontSize: 12, fontWeight: '600' },
+    
+    // Modal Styles
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(13, 46, 77, 0.4)', justifyContent: 'flex-end' },
+    modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 32, paddingBottom: Platform.OS === 'ios' ? 48 : 32, alignItems: 'center' },
+    iconContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 24, fontWeight: '800', color: '#0D2E4D', marginBottom: 12, textAlign: 'center' },
+    modalDesc: { fontSize: 15, color: '#4A6E8A', textAlign: 'center', lineHeight: 22, marginBottom: 32, paddingHorizontal: 12 },
+    restoreBtn: { width: '100%', height: 56, borderRadius: 28, overflow: 'hidden', marginBottom: 16 },
+    restoreBtnGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    restoreBtnText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
+    cancelBtn: { width: '100%', height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#D8EAF5' },
+    cancelBtnText: { fontSize: 16, fontWeight: '700', color: '#64748B' },
 });

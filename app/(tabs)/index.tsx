@@ -779,7 +779,7 @@ export default function HomeScreen() {
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
                 }
-                contentContainerStyle={{ paddingTop: 0 }}
+                contentContainerStyle={{ paddingTop: 0, paddingBottom: 100 }}
             >
                 {/* ── 1. Top Bar (Now part of scroll) ── */}
                 <View style={[styles.stickyHeader, { paddingTop: insets.top + 12 }]}>

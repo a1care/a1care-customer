@@ -320,7 +320,15 @@ export default function DoctorBookingScreen() {
                 if (err.code === 2) {
                     showToast.warn('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed.');
                 } else {
-                    showToast.error('Payment Error', err?.description || 'Payment failed. Please try again.');
+                    router.replace({
+                        pathname: '/checkout/status' as any,
+                        params: {
+                            status: 'FAILED',
+                            amount: String(fee),
+                            type: 'BOOKING',
+                            description: `Consultation with Dr. ${doctor?.name}`,
+                        },
+                    });
                 }
             } finally {
                 setIsProcessingPayment(false);
