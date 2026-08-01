@@ -39,13 +39,21 @@ function TabIcon({ focused, icon, label, isCenter }: TabIconProps) {
 }
 
 
+import { InteractionManager } from 'react-native';
+
 export default function TabsLayout() {
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
 
     useEffect(() => {
-        fetchUnreadCount();
+        // Defer non-critical startup tasks until navigation finishes to prevent UI stutter
+        const task = InteractionManager.runAfterInteractions(() => {
+            fetchUnreadCount();
+        });
         const interval = setInterval(fetchUnreadCount, 90000);
-        return () => clearInterval(interval);
+        return () => {
+            task.cancel();
+            clearInterval(interval);
+        };
     }, []);
 
     return (
@@ -54,6 +62,7 @@ export default function TabsLayout() {
                 headerShown: false,
                 tabBarStyle: styles.tabBar,
                 tabBarShowLabel: false,
+                freezeOnBlur: true, // Optimizes memory by freezing inactive tabs
             }}
         >
             <Tabs.Screen

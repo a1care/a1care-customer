@@ -158,7 +158,12 @@ export default function BookingChatScreen() {
                 </TouchableOpacity>
             </View>
 
-            <View style={{ flex: 1, backgroundColor: BG_CHAT }}>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            >
+                <View style={{ flex: 1, backgroundColor: BG_CHAT }}>
                 {isLoading && chatMessages.length === 0 ? (
                     <View style={styles.center}>
                         <ActivityIndicator color={PRIMARY} size="large" />
@@ -244,10 +249,6 @@ export default function BookingChatScreen() {
                 </View>
             )}
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-            >
                 <View style={styles.inputBar}>
                     <View style={styles.inputWrap}>
                         <TextInput

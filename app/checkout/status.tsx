@@ -49,16 +49,16 @@ export default function PaymentStatusScreen() {
         : "Try Again";
 
     return (
-        <SafeAreaView style={[styles.container, !isSuccess && styles.containerError]}>
+        <SafeAreaView style={styles.container}>
             <LinearGradient
-                colors={isSuccess ? ["#E8F5E9", "#FFFFFF"] : ["#0F172A", "#1E293B"]}
+                colors={isSuccess ? ["#E8F5E9", "#FFFFFF"] : ["#FEF2F2", "#FFFFFF"]}
                 style={styles.headerGradient}
             >
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.replace("/(tabs)" as any)} style={[styles.backButton, !isSuccess && styles.backButtonDark]}>
-                        <ChevronLeft size={24} color={isSuccess ? "#1E293B" : "#FFFFFF"} />
+                    <TouchableOpacity onPress={() => router.replace("/(tabs)" as any)} style={styles.backButton}>
+                        <ChevronLeft size={24} color={"#1E293B"} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, !isSuccess && { color: "#FFFFFF" }]}>Receipt</Text>
+                    <Text style={styles.headerTitle}>Receipt</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
@@ -74,10 +74,10 @@ export default function PaymentStatusScreen() {
                             </View>
                         </View>
                     )}
-                    <Text style={[styles.statusText, { color: isSuccess ? "#059669" : "#FFFFFF" }]}>
+                    <Text style={[styles.statusText, { color: isSuccess ? "#059669" : "#DC2626" }]}>
                         {isSuccess ? "Payment Successful!" : "Payment Failed"}
                     </Text>
-                    <Text style={[styles.amountText, !isSuccess && { color: "#F8FAFC" }]}>₹{parseFloat(amount || "0").toFixed(2)}</Text>
+                    <Text style={styles.amountText}>₹{parseFloat(amount || "0").toFixed(2)}</Text>
                     
                     {!isSuccess && (
                         <Text style={styles.errorSubtext}>
@@ -88,40 +88,40 @@ export default function PaymentStatusScreen() {
             </LinearGradient>
 
             <ScrollView style={styles.detailsContainer} showsVerticalScrollIndicator={false}>
-                <View style={[styles.card, !isSuccess && styles.cardDark]}>
+                <View style={styles.card}>
                     {description ? (
                         <>
                             <View style={styles.detailRow}>
-                                <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Description</Text>
-                                <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }, !isSuccess && { color: "#F1F5F9" }]} numberOfLines={2}>{description}</Text>
+                                <Text style={styles.detailLabel}>Description</Text>
+                                <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>{description}</Text>
                             </View>
-                            <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
+                            <View style={styles.divider} />
                         </>
                     ) : null}
                     <View style={styles.detailRow}>
-                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Transaction ID</Text>
-                        <Text style={[styles.detailValue, !isSuccess && { color: "#F1F5F9" }]} numberOfLines={1}>{txnId || "N/A"}</Text>
+                        <Text style={styles.detailLabel}>Transaction ID</Text>
+                        <Text style={styles.detailValue} numberOfLines={1}>{txnId || "N/A"}</Text>
                     </View>
-                    <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
+                    <View style={styles.divider} />
                     <View style={styles.detailRow}>
-                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Payment Type</Text>
-                        <Text style={[styles.detailValue, !isSuccess && { color: "#F1F5F9" }]}>{typeLabel}</Text>
+                        <Text style={styles.detailLabel}>Payment Type</Text>
+                        <Text style={styles.detailValue}>{typeLabel}</Text>
                     </View>
-                    <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
+                    <View style={styles.divider} />
                     <View style={styles.detailRow}>
-                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Method</Text>
-                        <Text style={[styles.detailValue, !isSuccess && { color: "#F1F5F9" }]}>{String(description || '').includes('Easebuzz') ? 'Easebuzz' : 'Razorpay'}</Text>
+                        <Text style={styles.detailLabel}>Method</Text>
+                        <Text style={styles.detailValue}>{String(description || '').includes('Easebuzz') ? 'Easebuzz' : 'Razorpay'}</Text>
                     </View>
-                    <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
+                    <View style={styles.divider} />
                     <View style={styles.detailRow}>
-                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Date & Time</Text>
-                        <Text style={[styles.detailValue, !isSuccess && { color: "#F1F5F9" }]}>
+                        <Text style={styles.detailLabel}>Date & Time</Text>
+                        <Text style={styles.detailValue}>
                             {txnDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </Text>
                     </View>
-                    <View style={[styles.divider, !isSuccess && { backgroundColor: "#334155" }]} />
+                    <View style={styles.divider} />
                     <View style={styles.detailRow}>
-                        <Text style={[styles.detailLabel, !isSuccess && { color: "#94A3B8" }]}>Amount {isSuccess ? 'Paid' : 'Attempted'}</Text>
+                        <Text style={styles.detailLabel}>Amount {isSuccess ? 'Paid' : 'Attempted'}</Text>
                         <Text style={[styles.detailValue, { color: isSuccess ? '#059669' : '#FF3B30', fontWeight: '800' }]}>
                             ₹{parseFloat(amount || "0").toFixed(2)}
                         </Text>
@@ -137,7 +137,7 @@ export default function PaymentStatusScreen() {
 
                 {!isSuccess && (
                     <View style={styles.errorHelpBox}>
-                        <AlertCircle size={24} color="#FBBF24" style={{ marginTop: 2 }} />
+                        <AlertCircle size={24} color="#D97706" style={{ marginTop: 2 }} />
                         <View style={{ flex: 1, marginLeft: 12 }}>
                             <Text style={styles.errorHelpTitle}>What happens next?</Text>
                             <Text style={styles.errorHelpText}>Your booking has been placed on hold. Please try another payment method or try again to secure your booking.</Text>
@@ -196,7 +196,7 @@ export default function PaymentStatusScreen() {
                 <View style={{ height: 40 }} />
             </ScrollView>
 
-            <View style={[styles.footer, !isSuccess && styles.footerDark]}>
+            <View style={styles.footer}>
                 <TouchableOpacity
                     style={[styles.button, { backgroundColor: isSuccess ? "#10B981" : "#FF3B30" }]}
                     onPress={primaryAction}
@@ -206,10 +206,10 @@ export default function PaymentStatusScreen() {
                     <Text style={styles.buttonText}>{primaryLabel}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.button, { backgroundColor: "transparent", marginTop: 12, borderWidth: 1, borderColor: isSuccess ? "#E2E8F0" : "#334155" }]}
+                    style={[styles.button, { backgroundColor: "transparent", marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }]}
                     onPress={() => router.replace("/(tabs)" as any)}
                 >
-                    <Text style={[styles.buttonText, { color: isSuccess ? "#64748B" : "#94A3B8" }]}>Return to Home</Text>
+                    <Text style={[styles.buttonText, { color: "#64748B" }]}>Return to Home</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -218,7 +218,6 @@ export default function PaymentStatusScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#FFFFFF" },
-    containerError: { backgroundColor: "#0F172A" },
     headerGradient: {
         paddingBottom: 40,
         borderBottomLeftRadius: 30,
@@ -239,9 +238,6 @@ const styles = StyleSheet.create({
         backgroundColor: "rgba(0,0,0,0.05)",
         justifyContent: "center",
         alignItems: "center",
-    },
-    backButtonDark: {
-        backgroundColor: "rgba(255,255,255,0.1)",
     },
     headerTitle: { fontSize: 18, fontWeight: "600", color: "#1E293B" },
     statusContainer: {
@@ -279,7 +275,7 @@ const styles = StyleSheet.create({
     amountText: { fontSize: 38, fontWeight: "900", color: "#1E293B", letterSpacing: -1 },
     errorSubtext: {
         fontSize: 14,
-        color: "#94A3B8",
+        color: "#475569",
         textAlign: "center",
         marginTop: 16,
         lineHeight: 20,
@@ -291,10 +287,6 @@ const styles = StyleSheet.create({
         padding: 24,
         borderWidth: 1,
         borderColor: "#E2E8F0",
-    },
-    cardDark: {
-        backgroundColor: "rgba(30, 41, 59, 0.7)",
-        borderColor: "rgba(255,255,255,0.05)",
     },
     detailRow: {
         flexDirection: "row",
@@ -324,10 +316,9 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: "rgba(245, 158, 11, 0.2)",
     },
-    errorHelpTitle: { fontSize: 15, color: "#FBBF24", fontWeight: "700", marginBottom: 6 },
-    errorHelpText: { fontSize: 13, color: "#CBD5E1", lineHeight: 20 },
+    errorHelpTitle: { fontSize: 15, color: "#92400E", fontWeight: "700", marginBottom: 6 },
+    errorHelpText: { fontSize: 13, color: "#92400E", lineHeight: 20 },
     footer: { padding: 20, paddingBottom: 30, backgroundColor: "#FFFFFF" },
-    footerDark: { backgroundColor: "#0F172A" },
     button: {
         height: 58,
         borderRadius: 16,

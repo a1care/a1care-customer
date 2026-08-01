@@ -68,6 +68,11 @@ export default function SupportChatScreen() {
                 </View>
                 <View style={{ width: 44 }} />
             </View>
+            <KeyboardAvoidingView 
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            >
 
             {isLoading && !messages ? (
                 <View style={styles.center}>
@@ -112,10 +117,6 @@ export default function SupportChatScreen() {
                 </ScrollView>
             )}
 
-            <KeyboardAvoidingView 
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            >
                 <View style={styles.inputArea}>
                     <TouchableOpacity style={styles.plusBtn}>
                         <ImageIcon size={22} color={Colors.muted} />

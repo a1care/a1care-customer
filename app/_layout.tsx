@@ -1,6 +1,7 @@
 import React from 'react';
 import { Stack } from 'expo-router';
 import { QueryProvider } from '@/providers/QueryProvider';
+import GlobalAlert from '../components/GlobalAlert';
 import {
     Inter_400Regular,
     Inter_500Medium,
@@ -448,6 +449,7 @@ export default function RootLayout() {
         <>
             <GestureHandlerRootView style={{ flex: 1 }}>
                 <AuthGuard>
+                    <GlobalAlert />
                     <Stack
                         screenOptions={{
                             headerShown: false,

@@ -102,7 +102,8 @@ export default function ReferralScreen() {
                     )}
                 </View>
 
-                {/* Earnings Summary */}
+                {/* Earnings Summary - Hidden per user request */}
+                {/* 
                 <View style={styles.card}>
                     <Text style={styles.cardLabel}>EARNINGS SUMMARY</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -116,49 +117,38 @@ export default function ReferralScreen() {
                         </View>
                     </View>
                     <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 18 }}>Pending rewards will unlock automatically when your friend completes their first service.</Text>
-                </View>
+                </View> 
+                */}
 
-                {/* How it works */}
+                {/* Referral History */}
                 <View style={styles.card}>
-                    <Text style={styles.cardLabel}>HOW IT WORKS</Text>
-                    {[
-                        { icon: 'share-social-outline', text: 'Share your unique referral code with friends' },
-                        { icon: 'person-add-outline', text: 'Friend signs up and enters your code' },
-                        { icon: 'checkmark-circle-outline', text: 'They complete their first service booking' },
-                        { icon: 'wallet-outline', text: 'You get ₹100 credited to your A1Care wallet' },
-                    ].map((step, i) => (
-                        <View key={i} style={styles.stepRow}>
-                            <View style={styles.stepIconBox}>
-                                <Ionicons name={step.icon as any} size={18} color={Colors.primary} />
+                    <Text style={styles.cardLabel}>REFERRAL HISTORY</Text>
+                    {(!earningsData?.items || earningsData.items.length === 0) ? (
+                        <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                            <Ionicons name="people-outline" size={32} color="#CBD5E1" />
+                            <Text style={{ marginTop: 8, color: '#94A3B8', fontSize: 13, textAlign: 'center' }}>
+                                No referrals yet. Share your code to start earning!
+                            </Text>
+                        </View>
+                    ) : (
+                        earningsData.items.map((item: any, index: number) => (
+                            <View key={index} style={[styles.stepRow, { borderBottomWidth: index === earningsData.items.length - 1 ? 0 : 1, borderBottomColor: '#F1F5F9', paddingBottom: 12, marginBottom: 12 }]}>
+                                <View style={[styles.stepIconBox, { backgroundColor: item.status === 'REWARDED' ? '#F0FDF4' : '#FFF7ED' }]}>
+                                    <Ionicons 
+                                        name={item.status === 'REWARDED' ? "checkmark-circle" : "time"} 
+                                        size={20} 
+                                        color={item.status === 'REWARDED' ? Colors.primary : "#EA580C"} 
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1E293B' }}>{item.refereeId?.name || 'Pending'}</Text>
+                                    <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{item.status === 'REWARDED' ? 'Earned Reward' : 'Pending First Service'}</Text>
+                                </View>
+                                <Text style={{ fontSize: 15, fontWeight: 'bold', color: item.status === 'REWARDED' ? Colors.primary : "#EA580C" }}>
+                                    +₹{item.rewardAmount}
+                                </Text>
                             </View>
-                            <Text style={styles.stepText}>{step.text}</Text>
-                        </View>
-                    ))}
-                </View>
-
-                {/* Validate a friend's code */}
-                <View style={styles.card}>
-                    <Text style={styles.cardLabel}>HAVE A FRIEND'S CODE?</Text>
-                    <Text style={styles.validateNote}>Enter a referral code to check if it's valid. Use it when booking a service to apply the reward.</Text>
-                    <View style={styles.validateRow}>
-                        <TextInput
-                            style={styles.validateInput}
-                            placeholder="Enter code (e.g. A1B2C3)"
-                            placeholderTextColor="#94A3B8"
-                            value={friendCode}
-                            onChangeText={t => { setFriendCode(t.toUpperCase()); setValidResult(null); }}
-                            autoCapitalize="characters"
-                            maxLength={10}
-                        />
-                        <TouchableOpacity onPress={handleValidateFriend} style={styles.validateBtn} disabled={validating}>
-                            {validating ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.validateBtnText}>Check</Text>}
-                        </TouchableOpacity>
-                    </View>
-                    {validResult && (
-                        <View style={styles.validBadge}>
-                            <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
-                            <Text style={styles.validBadgeText}>Valid! Referred by {validResult.referrerName} — you'll earn ₹{validResult.rewardAmount} off</Text>
-                        </View>
+                        ))
                     )}
                 </View>
 
