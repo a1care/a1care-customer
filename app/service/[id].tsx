@@ -166,7 +166,8 @@ export default function ServiceDetailScreen() {
     const [couponInput, setCouponInput] = useState('');
     const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; finalAmount: number } | null>(null);
     const [couponChecking, setCouponChecking] = useState(false);
-    const [isAsap, setIsAsap] = useState(false);
+    const [showCouponModal, setShowCouponModal] = useState(false);
+
     const [submitted, setSubmitted] = useState(false);
     const [submittedBookingId, setSubmittedBookingId] = useState<string | null>(null);
     const submitting = useRef(false);
@@ -181,6 +182,12 @@ export default function ServiceDetailScreen() {
         queryKey: ['addresses', user?.id || user?._id],
         queryFn: addressService.getAll,
         enabled: isAuthenticated, // H8: don't fire 401s for guests
+    });
+
+    const { data: availableCoupons, isLoading: couponsLoading } = useQuery({
+        queryKey: ['available-coupons'],
+        queryFn: () => couponService.getAvailable(),
+        enabled: isAuthenticated,
     });
 
     const { data: wallet } = useQuery({
@@ -290,22 +297,20 @@ export default function ServiceDetailScreen() {
             return;
         }
         if (step === 'schedule') {
-            if (!isAsap) {
-                const errors: Record<string, boolean> = {};
-                if (!scheduledDate) errors.date = true;
-                if (!scheduledTime) errors.time = true;
+            const errors: Record<string, boolean> = {};
+            if (!scheduledDate) errors.date = true;
+            if (!scheduledTime) errors.time = true;
 
-                if (Object.keys(errors).length > 0) {
-                    setFormErrors(errors);
-                    if (!scheduledDate && !scheduledTime) {
-                        showToast.warn('Select Schedule', 'Please select a preferred date and time slot.');
-                    } else if (!scheduledDate) {
-                        showToast.warn('Select Date', 'Please choose a valid date for your booking.');
-                    } else if (!scheduledTime) {
-                        showToast.warn('Select Time Slot', 'Please choose an available time slot for your booking.');
-                    }
-                    return;
+            if (Object.keys(errors).length > 0) {
+                setFormErrors(errors);
+                if (!scheduledDate && !scheduledTime) {
+                    showToast.warn('Select Schedule', 'Please select a preferred date and time slot.');
+                } else if (!scheduledDate) {
+                    showToast.warn('Select Date', 'Please choose a valid date for your booking.');
+                } else if (!scheduledTime) {
+                    showToast.warn('Select Time Slot', 'Please choose an available time slot for your booking.');
                 }
+                return;
             }
         }
         if (step === 'payment' && !paymentMethod) {
@@ -760,14 +765,12 @@ export default function ServiceDetailScreen() {
             setStep(activeSteps[0]);
             const isHosp = service.fulfillmentMode === 'HOSPITAL_VISIT' || (subName && /hospital/i.test(subName));
             if (isHosp) {
-                setIsAsap(false);
                 setScheduledDate(todayYmd); // H9: use local date not UTC
             }
         }
     }, [service, step, activeSteps, subName]);
 
     const buildScheduledTime = () => {
-        if (isAsap) return new Date().toISOString();
         if (scheduledDate && scheduledTime) {
             try {
                 const [time, modifier] = scheduledTime.split(' ');
@@ -789,7 +792,6 @@ export default function ServiceDetailScreen() {
     };
 
     const getDisplaySchedule = () => {
-        if (isAsap) return '⚡ ASAP (Fastest)';
         if (scheduledDate && scheduledTime) return `${scheduledDate} at ${scheduledTime}`;
         return 'Not scheduled';
     };
@@ -827,8 +829,8 @@ export default function ServiceDetailScreen() {
                 const fallbackStart = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
                 const end = new Date(now.getTime() + 30 * 60 * 1000);
                 const fallbackEnd = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
-                const startTime = isAsap ? fallbackStart : (displaySlotTo24Hour(scheduledTime) || fallbackStart);
-                const endTime = isAsap ? fallbackEnd : (displaySlotTo24Hour(scheduledTime) || fallbackEnd);
+                const startTime = displaySlotTo24Hour(scheduledTime) || fallbackStart;
+                const endTime = displaySlotTo24Hour(scheduledTime) || fallbackEnd;
 
                 return bookingsService.bookDoctor(selectedDoctorId, {
                     date: scheduledDate || todayYmd,
@@ -851,7 +853,7 @@ export default function ServiceDetailScreen() {
                 addressId: isHosp ? undefined : addr?._id,
                 assignedProviderId: undefined,
                 scheduledTime: buildScheduledTime(),
-                bookingType: isAsap ? 'ON_DEMAND' : 'SCHEDULED',
+                bookingType: 'SCHEDULED',
                 fulfillmentMode: (service?.fulfillmentMode) ?? (isHosp ? 'HOSPITAL_VISIT' : 'HOME_VISIT'),
                 price: finalPrice,
                 paymentMode: paymentMethod === 'COD' ? 'OFFLINE' : paymentMethod === 'WALLET' ? 'WALLET' : 'ONLINE',
@@ -878,9 +880,10 @@ export default function ServiceDetailScreen() {
         },
     });
 
-    const handleApplyCoupon = async () => {
-        const code = couponInput.trim().toUpperCase();
+    const handleApplyCoupon = async (codeToApply?: string) => {
+        const code = (codeToApply || couponInput).trim().toUpperCase();
         if (!code) return;
+        setCouponInput(code);
         const baseAmount = priceParam ? parseFloat(priceParam) : 0;
         setCouponChecking(true);
         try {
@@ -895,7 +898,7 @@ export default function ServiceDetailScreen() {
     };
 
     const handleFinalSubmit = async () => {
-        if (!isAsap && (!scheduledDate || !scheduledTime)) {
+        if (!scheduledDate || !scheduledTime) {
             showToast.warn('Incomplete Schedule', 'Please go back and select a valid date and time.');
             return;
         }
@@ -1287,31 +1290,15 @@ export default function ServiceDetailScreen() {
                 {step === 'schedule' && (
                     <View style={styles.stepContent}>
                         <Text style={styles.stepTitle}>⏰ Select Schedule</Text>
-                        <TouchableOpacity
-                            style={[styles.asapToggle, isAsap && styles.asapToggleActive]}
-                            onPress={() => {
-                                setIsAsap(true);
-                                setFormErrors({});
-                                // Avoid relying on async state update in goToNextStep validation.
-                                const idx = activeSteps.indexOf('schedule');
-                                if (idx >= 0 && idx < activeSteps.length - 1) {
-                                    setStep(activeSteps[idx + 1]);
-                                }
-                            }}
-                        >
-                            <Text style={[styles.asapToggleTitle, isAsap && { color: '#fff' }]}>⚡ ASAP (Fastest)</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.fieldLabel}>Or Choose Date <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                        <Text style={styles.fieldLabel}>Choose Date <Text style={{ color: '#EF4444' }}>*</Text></Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
                             {dates.map(d => (
-                                <TouchableOpacity key={d.full} onPress={() => { setIsAsap(false); setScheduledDate(d.full); }} style={[styles.dateChip, !isAsap && scheduledDate === d.full && styles.dateChipActive]}>
-                                    <Text style={[styles.dateChipDay, !isAsap && scheduledDate === d.full && { color: '#fff' }]}>{d.dayName}</Text>
-                                    <Text style={[styles.dateChipNum, !isAsap && scheduledDate === d.full && { color: '#fff' }]}>{d.dayNum}</Text>
+                                <TouchableOpacity key={d.full} onPress={() => { setScheduledDate(d.full); }} style={[styles.dateChip, scheduledDate === d.full && styles.dateChipActive]}>
+                                    <Text style={[styles.dateChipDay, scheduledDate === d.full && { color: '#fff' }]}>{d.dayName}</Text>
+                                    <Text style={[styles.dateChipNum, scheduledDate === d.full && { color: '#fff' }]}>{d.dayNum}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
-                        {!isAsap && (
-                            <>
                                 <Text style={styles.fieldLabel}>Select Time Slot <Text style={{ color: '#EF4444' }}>*</Text></Text>
                                 <View style={styles.timeGrid}>
                                     {timeSlots.map(t => (
@@ -1325,12 +1312,10 @@ export default function ServiceDetailScreen() {
                                         <Text style={styles.noSlotsIcon}>⚠️</Text>
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.noSlotsTitle}>No Slots Available</Text>
-                                            <Text style={styles.noSlotsSub}>No time slots available for this date. Please choose another date or use ASAP.</Text>
+                                            <Text style={styles.noSlotsSub}>No time slots available for this date. Please choose another date.</Text>
                                         </View>
                                     </View>
                                 )}
-                            </>
-                        )}
                     </View>
                 )}
 
@@ -1345,7 +1330,6 @@ export default function ServiceDetailScreen() {
                                 return [
                                     { id: 'WALLET', label: 'A1 Wallet', sub: walletInsufficient ? `Insufficient Balance (₹${walletBalance}) — Add Money →` : `Balance: ${formatCurrency(walletBalance)}`, icon: 'wallet-outline', color: Colors.health, disabled: walletInsufficient },
                                     { id: 'ONLINE', label: 'Online Payment', sub: 'UPI, Cards, Netbanking', icon: 'card-outline', color: Colors.primary, disabled: false },
-                                    { id: 'COD', label: 'Cash on Pay', sub: 'Pay after service', icon: 'cash-outline', color: '#166534', disabled: false },
                                 ].map(opt => (
                                     <TouchableOpacity
                                         key={opt.id}
@@ -1386,7 +1370,12 @@ export default function ServiceDetailScreen() {
                             <View style={styles.reviewSection}>
                                 <View style={styles.reviewRow}>
                                     <Text style={styles.reviewLabel}>Service</Text>
-                                    <Text style={[styles.reviewValue, { color: Colors.primary, fontWeight: '700' }]}>{serviceName}</Text>
+                                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                        <Text style={[styles.reviewValue, { color: Colors.primary, fontWeight: '700', textAlign: 'right' }]}>{service?.name || serviceName}</Text>
+                                        <Text style={{ fontSize: 13, color: Colors.muted, marginTop: 2, textAlign: 'right' }}>
+                                            {isDoctorService ? 'Doctor booking' : 'Service booking'} • {service?.fulfillmentMode === 'HOSPITAL_VISIT' ? 'Hospital' : service?.fulfillmentMode === 'VIRTUAL' ? 'Online' : 'Home'}
+                                        </Text>
+                                    </View>
                                 </View>
                                 {addrText && (
                                     <View style={styles.reviewRow}>
@@ -1406,7 +1395,12 @@ export default function ServiceDetailScreen() {
 
                             {/* Coupon Code */}
                             <View style={styles.reviewSection}>
-                                <Text style={[styles.reviewLabel, { marginBottom: 10, fontWeight: '700' }]}>Promo / Coupon Code</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <Text style={[styles.reviewLabel, { fontWeight: '700', width: 'auto', marginBottom: 0 }]}>Coupon Code</Text>
+                                    <TouchableOpacity onPress={() => setShowCouponModal(true)}>
+                                        <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>View Available Coupons</Text>
+                                    </TouchableOpacity>
+                                </View>
                                 <View style={{ flexDirection: 'row', gap: 8 }}>
                                     <TextInput
                                         style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: couponApplied ? '#16A34A' : '#E2E8F0', paddingHorizontal: 12, fontSize: 14, fontWeight: '700', color: '#0F172A', letterSpacing: 1 }}
@@ -1422,7 +1416,7 @@ export default function ServiceDetailScreen() {
                                             <Text style={{ fontSize: 13, fontWeight: '800', color: '#EF4444' }}>Remove</Text>
                                         </TouchableOpacity>
                                     ) : (
-                                        <TouchableOpacity onPress={handleApplyCoupon} disabled={couponChecking} style={{ height: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: Colors.primary, justifyContent: 'center' }}>
+                                        <TouchableOpacity onPress={() => handleApplyCoupon()} disabled={couponChecking} style={{ height: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: Colors.primary, justifyContent: 'center' }}>
                                             {couponChecking ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFF' }}>Apply</Text>}
                                         </TouchableOpacity>
                                     )}
@@ -1654,6 +1648,56 @@ export default function ServiceDetailScreen() {
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+            {/* Coupon Modal */}
+            <Modal visible={showCouponModal} transparent animationType="slide" onRequestClose={() => setShowCouponModal(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.textPrimary }}>Available Coupons</Text>
+                            <TouchableOpacity onPress={() => setShowCouponModal(false)}>
+                                <Ionicons name="close-circle" size={28} color="#94A3B8" />
+                            </TouchableOpacity>
+                        </View>
+                        {couponsLoading ? (
+                            <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: 40 }} />
+                        ) : availableCoupons?.length ? (
+                            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, gap: 12 }}>
+                                {availableCoupons.map((coupon) => (
+                                    <View key={coupon.code} style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 16, backgroundColor: '#F8FAFC' }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                                            <View>
+                                                <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.primary }}>{coupon.code}</Text>
+                                                <Text style={{ fontSize: 13, color: '#0F172A', fontWeight: '600', marginTop: 2 }}>{coupon.discountValue}{coupon.discountType === 'PERCENTAGE' ? '%' : '₹'} OFF</Text>
+                                            </View>
+                                            <TouchableOpacity 
+                                                onPress={() => {
+                                                    setShowCouponModal(false);
+                                                    handleApplyCoupon(coupon.code);
+                                                }}
+                                                style={{ backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                                            >
+                                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Apply</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <Text style={{ fontSize: 12, color: Colors.textSecondary, lineHeight: 18 }}>{coupon.description}</Text>
+                                        {(coupon.minOrderAmount > 0 || coupon.maxDiscountAmount > 0) && (
+                                            <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0', flexDirection: 'row', gap: 16 }}>
+                                                {coupon.minOrderAmount > 0 && <Text style={{ fontSize: 11, color: '#64748B' }}>Min Order: ₹{coupon.minOrderAmount}</Text>}
+                                                {coupon.maxDiscountAmount > 0 && <Text style={{ fontSize: 11, color: '#64748B' }}>Max Discount: ₹{coupon.maxDiscountAmount}</Text>}
+                                            </View>
+                                        )}
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        ) : (
+                            <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                                <Ionicons name="ticket-outline" size={48} color="#CBD5E1" />
+                                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginTop: 12 }}>No coupons available right now</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
             </Modal>
         </SafeAreaView>
     );

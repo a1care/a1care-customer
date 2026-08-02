@@ -450,22 +450,6 @@ export default function DoctorBookingScreen() {
                 <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Payment Method</Text>
                 <View style={styles.paymentMethods}>
 
-                    {/* Cash at Clinic */}
-                    <TouchableOpacity
-                        style={[styles.payCard, paymentMethod === 'COD' && styles.payCardActive]}
-                        onPress={() => setPaymentMethod('COD')}
-                    >
-                        <View style={[styles.payIconBox, { backgroundColor: paymentMethod === 'COD' ? Colors.primary : '#E8F4FD' }]}>
-                            <Ionicons name="cash-outline" size={22} color={paymentMethod === 'COD' ? '#fff' : Colors.primary} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.payLabel}>Pay at Clinic</Text>
-                            <Text style={styles.paySub}>Pay cash after consultation</Text>
-                        </View>
-                        <View style={[styles.radio, paymentMethod === 'COD' && styles.radioActive]}>
-                            {paymentMethod === 'COD' && <View style={styles.radioInner} />}
-                        </View>
-                    </TouchableOpacity>
 
                     {/* A1 Wallet */}
                     <TouchableOpacity

@@ -500,22 +500,6 @@ export default function HospitalBookingScreen() {
                 ) : (
                     <View style={{ gap: 20 }}>
 
-                        {/* Payment Method: Cash at Hospital */}
-                        <TouchableOpacity
-                            style={[styles.payCard, paymentMethod === 'OFFLINE' && styles.activePayCard]}
-                            onPress={() => setPaymentMethod('OFFLINE')}
-                        >
-                            <View style={[styles.payIcon, { backgroundColor: paymentMethod === 'OFFLINE' ? Colors.primary : '#E8F4FD' }]}>
-                                <Ionicons name="cash-outline" size={24} color={paymentMethod === 'OFFLINE' ? '#fff' : Colors.primary} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.payTitle}>Pay at Hospital</Text>
-                                <Text style={styles.paySub}>Pay cash directly at the OP desk</Text>
-                            </View>
-                            <View style={[styles.radio, paymentMethod === 'OFFLINE' && styles.radioActive]}>
-                                {paymentMethod === 'OFFLINE' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
 
                         {/* Payment Method: A1 Wallet */}
                         <TouchableOpacity

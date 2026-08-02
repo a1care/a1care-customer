@@ -32,4 +32,16 @@ export const couponService = {
             finalAmount: number;
         };
     },
+    getAvailable: async () => {
+        const res = await api.get('/coupons/available');
+        return res.data.data as {
+            code: string;
+            description: string;
+            discountType: string;
+            discountValue: number;
+            maxDiscountAmount: number;
+            minOrderAmount: number;
+            applicableTo: string;
+        }[];
+    },
 };

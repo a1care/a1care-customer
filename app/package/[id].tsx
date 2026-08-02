@@ -359,22 +359,6 @@ export default function HealthPackageDetail() {
                     <Text style={styles.sectionTitle}>Payment Method</Text>
                     <View style={{ gap: 12 }}>
 
-                        {/* Cash */}
-                        <TouchableOpacity
-                            style={[styles.payCard, paymentMode === 'OFFLINE' && styles.payCardActive]}
-                            onPress={() => setPaymentMode('OFFLINE')}
-                        >
-                            <View style={[styles.payIconBox, { backgroundColor: paymentMode === 'OFFLINE' ? Colors.primary : '#E8F4FD' }]}>
-                                <Ionicons name="cash-outline" size={22} color={paymentMode === 'OFFLINE' ? '#fff' : Colors.primary} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.payCardLabel}>Pay at Home</Text>
-                                <Text style={styles.payCardSub}>Pay cash when sample is collected</Text>
-                            </View>
-                            <View style={[styles.radio, paymentMode === 'OFFLINE' && styles.radioActive]}>
-                                {paymentMode === 'OFFLINE' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
 
                         {/* A1 Wallet */}
                         <TouchableOpacity
