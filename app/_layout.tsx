@@ -179,11 +179,37 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             const title = notification.request.content.title || "A1Care";
             const body = notification.request.content.body || "You have a new notification";
             const data = notification.request.content.data as Record<string, string> | undefined;
+            
             await notificationsService.addLocalNotification({
                 title,
                 body,
                 refType: (data?.refType as string) || 'Broadcast',
                 data,
+            });
+
+            // Show flash banner notification in foreground
+            Toast.show({
+                type: 'info',
+                text1: title,
+                text2: body,
+                position: 'top',
+                visibilityTime: 4000,
+                onPress: () => {
+                    const ALLOWED_SCREENS = [
+                        '/(tabs)/bookings', '/(tabs)/notifications', '/(tabs)/profile',
+                        '/wallet', '/wallet/index', '/wallet_history', '/booking/', '/doctor/appointment/',
+                    ];
+                    if (data?.screen && ALLOWED_SCREENS.some(s => (data.screen as string).startsWith(s))) {
+                        router.push(data.screen as any);
+                    }
+                    Toast.hide();
+                },
+                props: {
+                    style: {
+                        borderLeftColor: Colors.primary,
+                        backgroundColor: '#F0F7F4'
+                    }
+                }
             });
         });
 
