@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Clock3, Star } from 'lucide-react-native';
+import { Image } from 'expo-image';
 
 import { doctorsService } from '@/services/doctors.service';
 import { reviewsService } from '@/services/reviews.service';
@@ -46,6 +47,11 @@ export default function DoctorDetailScreen() {
         return `${diff > 0 ? diff : 0}`;
     };
 
+    const getImageUrl = (url?: string) => {
+        if (!url) return null;
+        return url.replace(/localhost|127\.0\.0\.1/g, '10.120.29.202');
+    };
+
     const { data: doctor, isLoading, isError, refetch } = useQuery({
         queryKey: ['doctor', id],
         queryFn: () => doctorsService.getById(id!),
@@ -74,93 +80,125 @@ export default function DoctorDetailScreen() {
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
+            {/* Soft background header */}
+            <View style={styles.headerBackground} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
+                    <Ionicons name="arrow-back" size={24} color="#0F172A" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Doctor Profile</Text>
                 <View style={{ width: 44 }} />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-                <View style={styles.profileCard}>
-                    <View style={styles.avatarLarge}>
-                        <Text style={styles.avatarText}>{doctor.name?.charAt(0).toUpperCase() ?? 'D'}</Text>
+                <View style={styles.premiumProfileCard}>
+                    <View style={styles.premiumAvatarContainer}>
+                        <View style={styles.premiumAvatar}>
+                            {(doctor.profileImage || doctor.imageUrl) ? (
+                                <Image
+                                    source={{ uri: getImageUrl(doctor.profileImage || doctor.imageUrl) }}
+                                    style={{ width: '100%', height: '100%', borderRadius: 55 }}
+                                    contentFit="cover"
+                                />
+                            ) : (
+                                <Text style={styles.premiumAvatarText}>{doctor.name?.charAt(0).toUpperCase() ?? 'D'}</Text>
+                            )}
+                        </View>
+                        <View style={styles.verifiedBadge}>
+                            <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
+                        </View>
                     </View>
-                    <Text style={styles.doctorName}>
+                    
+                    <Text style={styles.premiumDoctorName}>
                         {doctor.name?.toLowerCase().startsWith('dr') ? doctor.name : `Dr. ${doctor.name}`}
                     </Text>
 
-                    <View style={styles.specializationRow}>
+                    <View style={styles.premiumSpecRow}>
                         {(doctor.specialization ?? []).map((s) => (
-                            <View key={s} style={styles.specBadge}>
-                                <Text style={styles.specText}>{s}</Text>
+                            <View key={s} style={styles.premiumSpecBadge}>
+                                <Text style={styles.premiumSpecText}>{s}</Text>
                             </View>
                         ))}
                     </View>
 
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statNum}>{formatExperience(doctor.startExperience)}+</Text>
-                            <Text style={styles.statLabel}>Exp. Years</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <View style={styles.ratingRow}>
-                                <Star size={18} color="#F2C94C" fill="#F2C94C" />
-                                <Text style={styles.statNum}>{doctor.rating ? Number(doctor.rating).toFixed(1) : 'New'}</Text>
+                    <View style={styles.premiumStatsContainer}>
+                        <View style={styles.premiumStatItem}>
+                            <View style={styles.premiumStatIconBg}>
+                                <Ionicons name="briefcase" size={18} color="#2563EB" />
                             </View>
-                            <Text style={styles.statLabel}>Rating</Text>
+                            <Text style={styles.premiumStatNum}>{formatExperience(doctor.startExperience)}+ Yrs</Text>
+                            <Text style={styles.premiumStatLabel}>Experience</Text>
                         </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statNum}>₹{doctor.consultationFee ?? '500'}</Text>
-                            <Text style={styles.statLabel}>Fees</Text>
+                        <View style={styles.premiumStatItem}>
+                            <View style={[styles.premiumStatIconBg, { backgroundColor: '#FEF9C3' }]}>
+                                <Star size={18} color="#CA8A04" fill="#CA8A04" />
+                            </View>
+                            <Text style={styles.premiumStatNum}>{doctor.rating ? Number(doctor.rating).toFixed(1) : 'New'}</Text>
+                            <Text style={styles.premiumStatLabel}>Rating</Text>
+                        </View>
+                        <View style={styles.premiumStatItem}>
+                            <View style={[styles.premiumStatIconBg, { backgroundColor: '#DCFCE7' }]}>
+                                <Ionicons name="wallet" size={18} color="#16A34A" />
+                            </View>
+                            <Text style={styles.premiumStatNum}>₹{doctor.consultationFee ?? '500'}</Text>
+                            <Text style={styles.premiumStatLabel}>Fees</Text>
                         </View>
                     </View>
                 </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>About Doctor</Text>
-                    <Text style={styles.aboutText}>
-                        {doctor.about || `${doctor.name} is an experienced specialist. Detailed profile information will be updated soon.`}
+                {/* About Section */}
+                <View style={styles.premiumSection}>
+                    <Text style={styles.premiumSectionTitle}>About Doctor</Text>
+                    <Text style={styles.premiumAboutText}>
+                        {doctor.about || `${doctor.name} is an experienced specialist. Dedicated to providing excellent patient care with comprehensive treatment plans.`}
                     </Text>
                 </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Working Hours</Text>
-                    <View style={styles.workingCard}>
-                        <Clock3 size={22} color={Colors.primary} />
-                        <Text style={styles.workingText}>{doctor.workingHours || 'Working hours not available'}</Text>
+                {/* Working Hours */}
+                <View style={styles.premiumSection}>
+                    <Text style={styles.premiumSectionTitle}>Working Hours</Text>
+                    <View style={styles.premiumWorkingCard}>
+                        <View style={styles.premiumWorkingIcon}>
+                            <Clock3 size={20} color="#2563EB" />
+                        </View>
+                        <View>
+                            <Text style={styles.premiumWorkingTitle}>Available Today</Text>
+                            <Text style={styles.premiumWorkingTime}>{doctor.workingHours || '09:00 AM - 05:00 PM'}</Text>
+                        </View>
                     </View>
                 </View>
 
-                <View style={styles.videoBanner}>
+                {/* Video Consultation Banner */}
+                <View style={styles.premiumVideoBanner}>
+                    <View style={styles.premiumVideoIcon}>
+                        <Ionicons name="videocam" size={24} color="#0284C7" />
+                    </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.videoTitle}>Video Consultation</Text>
-                        <Text style={styles.videoSub}>Video consultation will be available soon.</Text>
+                        <Text style={styles.premiumVideoTitle}>Video Consultation</Text>
+                        <Text style={styles.premiumVideoSub}>Connect from anywhere.</Text>
                     </View>
-                    <View style={styles.soonBadge}>
-                        <Text style={styles.soonText}>Coming Soon</Text>
+                    <View style={styles.premiumSoonBadge}>
+                        <Text style={styles.premiumSoonText}>Coming Soon</Text>
                     </View>
                 </View>
 
-                <View style={[styles.section, { marginTop: 24 }]}>
-                    <View style={styles.rowBetween}>
-                        <Text style={styles.sectionTitle}>Patient Reviews</Text>
-                        <Text style={styles.reviewCount}>{reviews.length} total</Text>
+                {/* Reviews */}
+                <View style={[styles.premiumSection, { marginTop: 24 }]}>
+                    <View style={styles.premiumRowBetween}>
+                        <Text style={styles.premiumSectionTitle}>Patient Reviews</Text>
+                        <Text style={styles.premiumReviewCount}>{reviews.length} total</Text>
                     </View>
 
                     {reviews.length === 0 ? (
-                        <View style={styles.emptyReviews}>
-                            <Ionicons name="chatbubble-ellipses-outline" size={22} color={Colors.textSecondary} />
+                        <View style={styles.premiumEmptyReviews}>
+                            <Ionicons name="chatbubble-ellipses-outline" size={28} color="#94A3B8" />
                             <Text style={styles.emptyText}>
                                 No reviews yet. Reviews will appear here after completed appointments.
                             </Text>
                         </View>
                     ) : (
                         reviews.map((rev) => (
-                            <View key={rev._id} style={styles.reviewCard}>
+                            <View key={rev._id} style={styles.premiumReviewCard}>
                                 <View style={styles.reviewHeader}>
                                     <View style={styles.row}>
                                         <View style={styles.reviewAvatar}>
@@ -206,18 +244,22 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 14,
-        backgroundColor: Colors.card,
-        ...Shadows.card,
+        backgroundColor: 'transparent',
     },
     backBtn: {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: Colors.background,
+        backgroundColor: '#fff',
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
-    headerTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.textPrimary },
+    headerTitle: { fontSize: FontSize.lg, fontWeight: '800', color: '#0F172A' },
     scroll: { padding: 16 },
 
     profileCard: {
@@ -338,7 +380,164 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 8,
     },
-    starText: { fontSize: 12, fontWeight: '700', color: '#F39C12' },
     reviewComment: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
+
+    // PREMIUM STYLES
+    headerBackground: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 300,
+        backgroundColor: '#EFF6FF',
+    },
+    premiumProfileCard: {
+        backgroundColor: '#fff',
+        borderRadius: 32,
+        padding: 24,
+        alignItems: 'center',
+        marginTop: 10,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.05,
+        shadowRadius: 20,
+        elevation: 4,
+    },
+    premiumAvatarContainer: {
+        position: 'relative',
+        marginBottom: 16,
+    },
+    premiumAvatar: {
+        width: 110,
+        height: 110,
+        borderRadius: 55,
+        backgroundColor: '#2563EB',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 6,
+        borderColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    premiumAvatarText: { fontSize: 44, fontWeight: '800', color: '#fff' },
+    verifiedBadge: {
+        position: 'absolute',
+        bottom: 6,
+        right: 6,
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 2,
+    },
+    premiumDoctorName: { fontSize: 24, fontWeight: '800', color: '#0F172A', marginBottom: 12 },
+    premiumSpecRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24, justifyContent: 'center' },
+    premiumSpecBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100, borderWidth: 1, borderColor: '#E2E8F0' },
+    premiumSpecText: { color: '#475569', fontSize: 13, fontWeight: '700' },
+
+    premiumStatsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 24,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+    },
+    premiumStatItem: { alignItems: 'center', flex: 1 },
+    premiumStatIconBg: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#DBEAFE',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    premiumStatNum: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 2 },
+    premiumStatLabel: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+
+    premiumSection: { marginBottom: 28 },
+    premiumSectionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 16 },
+    premiumAboutText: { fontSize: 14, color: '#475569', lineHeight: 24, fontWeight: '500' },
+
+    premiumWorkingCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        gap: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    premiumWorkingIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 16,
+        backgroundColor: '#EFF6FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    premiumWorkingTitle: { fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 2 },
+    premiumWorkingTime: { fontSize: 16, color: '#0F172A', fontWeight: '800' },
+
+    premiumVideoBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F0F9FF',
+        padding: 20,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#BAE6FD',
+        gap: 16,
+    },
+    premiumVideoIcon: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#E0F2FE',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    premiumVideoTitle: { fontSize: 16, fontWeight: '800', color: '#0369A1', marginBottom: 4 },
+    premiumVideoSub: { fontSize: 13, color: '#0284C7', fontWeight: '500' },
+    premiumSoonBadge: { backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100 },
+    premiumSoonText: { fontSize: 11, fontWeight: '800', color: '#0369A1' },
+
+    premiumRowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    premiumReviewCount: { fontSize: 14, fontWeight: '700', color: '#64748B' },
+    premiumEmptyReviews: {
+        paddingVertical: 32,
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderStyle: 'dashed',
+    },
+    premiumReviewCard: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
+        elevation: 1,
+    },
 });
 

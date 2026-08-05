@@ -4,13 +4,13 @@ import {
     Text,
     ScrollView,
     TouchableOpacity,
-    Alert,
     TextInput,
     ActivityIndicator,
     StyleSheet,
     RefreshControl,
     Image,
     Platform,
+    Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +22,7 @@ import { walletService } from '@/services/wallet.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { showToast } from '@/utils/toast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 // ─── Menu item row ────────────────────────────────────────────────────────────
 function MenuLink({
@@ -59,6 +60,8 @@ export default function ProfileScreen() {
     const { user, logout, isAuthenticated } = useAuthStore();
     const qc = useQueryClient();
     const [refreshing, setRefreshing] = useState(false);
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
 
     // Profile
     const { data: profile, refetch: refetchProfile } = useQuery({
@@ -91,46 +94,21 @@ export default function ProfileScreen() {
         }
     });
 
-    const handleDeleteAccount = () => {
-        const msg = 'Your account data will be preserved as per legal requirements, but you will no longer have access. Admin needs to approve your request. Are you sure?';
-        if (Platform.OS === 'web') {
-            if (window.confirm(msg)) {
-                deleteMutation.mutate();
-            }
-        } else {
-            Alert.alert(
-                'Delete Account',
-                msg,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Request Deletion', style: 'destructive', onPress: () => deleteMutation.mutate() },
-                ]
-            );
-        }
+
+    const handleLogout = () => setShowLogoutModal(true);
+
+    const performLogout = async () => {
+        setShowLogoutModal(false);
+        await logout();
+        qc.clear();
+        router.replace('/(auth)/login');
     };
 
-    const handleLogout = () => {
-        if (Platform.OS === 'web') {
-            if (window.confirm('Are you sure you want to logout?')) {
-                logout().then(() => {
-                    qc.clear();
-                    router.replace('/(auth)/login');
-                });
-            }
-        } else {
-            Alert.alert('Logout', 'Are you sure you want to logout?', [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await logout();
-                        qc.clear();
-                        router.replace('/(auth)/login');
-                    },
-                },
-            ]);
-        }
+    const handleDeleteAccount = () => setShowDeleteModal(true);
+
+    const performDeleteAccount = async () => {
+        setShowDeleteModal(false);
+        deleteMutation.mutate();
     };
 
     const displayUser = profile ?? user;
@@ -138,19 +116,86 @@ export default function ProfileScreen() {
     if (!isAuthenticated) {
         return (
             <SafeAreaView style={styles.container}>
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-                    <Text style={{ fontSize: 48, marginBottom: 16 }}>👤</Text>
-                    <Text style={{ fontSize: 20, fontWeight: '800', color: '#0D2E4D', textAlign: 'center', marginBottom: 8 }}>Your Profile</Text>
-                    <Text style={{ fontSize: 14, color: '#4A6E8A', textAlign: 'center', lineHeight: 22, marginBottom: 28 }}>
-                        Sign in to access your profile, wallet, health vault and account settings.
-                    </Text>
-                    <TouchableOpacity
-                        onPress={() => router.push('/(auth)/login')}
-                        style={{ backgroundColor: '#1A7FD4', borderRadius: 28, paddingHorizontal: 36, paddingVertical: 16, width: '100%', alignItems: 'center' }}
+                <ScrollView
+                    contentContainerStyle={{ flexGrow: 1 }}
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                >
+                    {/* Top Hero Gradient */}
+                    <LinearGradient
+                        colors={['#0B3370', '#1A5FAD', '#2878D0']}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        style={styles.guestHero}
                     >
-                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Sign In / Register</Text>
-                    </TouchableOpacity>
-                </View>
+                        {/* Decorative blobs */}
+                        <View style={styles.guestBlob1} />
+                        <View style={styles.guestBlob2} />
+                        <View style={styles.guestBlob3} />
+
+                        {/* Logo / icon circle */}
+                        <View style={styles.guestIconRing}>
+                            <LinearGradient
+                                colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.10)']}
+                                style={styles.guestIconGrad}
+                            >
+                                <Ionicons name="person" size={44} color="#fff" />
+                            </LinearGradient>
+                        </View>
+
+                        <Text style={styles.guestHeroTitle}>Your Health Profile</Text>
+                        <Text style={styles.guestHeroSub}>
+                            A secure, personalised healthcare hub — built just for you.
+                        </Text>
+                    </LinearGradient>
+
+                    {/* Feature pills */}
+                    <View style={styles.guestBody}>
+                        <Text style={styles.guestSectionLabel}>UNLOCK FULL ACCESS</Text>
+
+                        {[
+                            { icon: 'wallet-outline' as const, color: '#2563EB', bg: '#EEF4FF', title: 'A1Care Wallet', desc: 'Pay instantly, track all transactions' },
+                            { icon: 'shield-checkmark-outline' as const, color: '#16A34A', bg: '#ECFDF5', title: 'Health Vault', desc: 'Store & share medical records safely' },
+                            { icon: 'calendar-outline' as const, color: '#7C3AED', bg: '#F3EEFF', title: 'My Bookings', desc: 'View & manage all your appointments' },
+                            { icon: 'gift-outline' as const, color: '#D97706', bg: '#FEF3C7', title: 'Refer & Earn', desc: 'Get ₹100 for every friend you invite' },
+                        ].map((f, i) => (
+                            <View key={i} style={styles.guestFeatureRow}>
+                                <View style={[styles.guestFeatureIcon, { backgroundColor: f.bg }]}>
+                                    <Ionicons name={f.icon} size={22} color={f.color} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.guestFeatureTitle}>{f.title}</Text>
+                                    <Text style={styles.guestFeatureDesc}>{f.desc}</Text>
+                                </View>
+                                <View style={styles.guestFeatureLock}>
+                                    <Ionicons name="lock-closed" size={13} color="#CBD5E1" />
+                                </View>
+                            </View>
+                        ))}
+
+                        {/* Primary CTA */}
+                        <TouchableOpacity
+                            onPress={() => router.push('/(auth)/login')}
+                            activeOpacity={0.88}
+                            style={styles.guestCTA}
+                        >
+                            <LinearGradient
+                                colors={['#0B3370', '#2563EB']}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                style={styles.guestCTAGrad}
+                            >
+                                <Ionicons name="log-in-outline" size={20} color="#fff" />
+                                <Text style={styles.guestCTAText}>Sign In / Register</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+
+                        <Text style={styles.guestDisclaimer}>
+                            By continuing, you agree to our{' '}
+                            <Text style={styles.guestDisclaimerLink} onPress={() => router.push('/terms' as any)}>Terms</Text>
+                            {' & '}
+                            <Text style={styles.guestDisclaimerLink} onPress={() => router.push('/privacy' as any)}>Privacy Policy</Text>
+                        </Text>
+                    </View>
+                </ScrollView>
             </SafeAreaView>
         );
     }
@@ -341,6 +386,29 @@ export default function ProfileScreen() {
 
                 <View style={{ height: 60 }} />
             </ScrollView>
+
+            <ConfirmModal
+                visible={showLogoutModal}
+                title="Sign Out?"
+                body="You will be signed out of your A1Care account. You can always sign back in anytime."
+                confirmLabel="Yes, Sign Out"
+                icon="log-out-outline"
+                confirmColor="#EF4444"
+                onConfirm={performLogout}
+                onCancel={() => setShowLogoutModal(false)}
+            />
+
+            <ConfirmModal
+                visible={showDeleteModal}
+                title="Delete Account?"
+                body="Your account data will be preserved as per legal requirements, but you will lose access. Admin approval is required."
+                confirmLabel="Request Deletion"
+                icon="trash-outline"
+                confirmColor="#B91C1C"
+                loading={deleteMutation.isPending}
+                onConfirm={performDeleteAccount}
+                onCancel={() => setShowDeleteModal(false)}
+            />
         </SafeAreaView>
     );
 }
@@ -583,5 +651,136 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#E11D48',
     },
-});
 
+    // ── Guest / Unauthenticated screen ──
+    guestHero: {
+        width: '100%',
+        paddingTop: 70,
+        paddingBottom: 50,
+        paddingHorizontal: 28,
+        alignItems: 'center',
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    guestBlob1: {
+        position: 'absolute', top: -60, right: -60,
+        width: 200, height: 200, borderRadius: 100,
+        backgroundColor: 'rgba(255,255,255,0.06)',
+    },
+    guestBlob2: {
+        position: 'absolute', bottom: -40, left: -40,
+        width: 160, height: 160, borderRadius: 80,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+    },
+    guestBlob3: {
+        position: 'absolute', top: 30, left: 20,
+        width: 80, height: 80, borderRadius: 40,
+        backgroundColor: 'rgba(255,255,255,0.04)',
+    },
+    guestIconRing: {
+        width: 96, height: 96, borderRadius: 48,
+        borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+        justifyContent: 'center', alignItems: 'center',
+        marginBottom: 22,
+    },
+    guestIconGrad: {
+        width: 88, height: 88, borderRadius: 44,
+        justifyContent: 'center', alignItems: 'center',
+    },
+    guestHeroTitle: {
+        fontSize: 26,
+        fontWeight: '900',
+        color: '#fff',
+        letterSpacing: -0.5,
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    guestHeroSub: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.78)',
+        textAlign: 'center',
+        lineHeight: 21,
+        fontWeight: '500',
+    },
+
+    guestBody: {
+        flex: 1,
+        backgroundColor: '#F4F7FC',
+        paddingHorizontal: 20,
+        paddingTop: 28,
+        paddingBottom: 40,
+    },
+    guestSectionLabel: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#94A3B8',
+        letterSpacing: 1.4,
+        marginBottom: 16,
+    },
+
+    guestFeatureRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 22,
+        padding: 16,
+        marginBottom: 12,
+        shadowColor: '#0A1A3A',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.04,
+        shadowRadius: 14,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#E8EEF5',
+    },
+    guestFeatureIcon: {
+        width: 48, height: 48, borderRadius: 16,
+        justifyContent: 'center', alignItems: 'center',
+    },
+    guestFeatureTitle: {
+        fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 3,
+    },
+    guestFeatureDesc: {
+        fontSize: 12, color: '#64748B', fontWeight: '500',
+    },
+    guestFeatureLock: {
+        width: 28, height: 28, borderRadius: 14,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center', alignItems: 'center',
+    },
+
+    guestCTA: {
+        marginTop: 28,
+        borderRadius: 30,
+        overflow: 'hidden',
+        shadowColor: '#0B3370',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 8,
+    },
+    guestCTAGrad: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        paddingVertical: 18,
+    },
+    guestCTAText: {
+        color: '#fff', fontSize: 17, fontWeight: '900', letterSpacing: 0.3,
+    },
+
+    guestDisclaimer: {
+        textAlign: 'center',
+        fontSize: 12,
+        color: '#94A3B8',
+        marginTop: 20,
+        lineHeight: 18,
+        fontWeight: '500',
+    },
+    guestDisclaimerLink: {
+        color: '#2563EB',
+        fontWeight: '800',
+    },
+});

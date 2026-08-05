@@ -11,7 +11,7 @@ const { width } = Dimensions.get("window");
 export default function PaymentStatusScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
-    const { status, txnId, amount, type, description, bookingId, bookingType, paidAt, date, timeSlot, providerName } = useLocalSearchParams() as any;
+    const { status, txnId, amount, type, description, bookingId, bookingType, paidAt, date, timeSlot, providerName, paymentMode } = useLocalSearchParams() as any;
     const txnDate = paidAt ? new Date(Number(paidAt)) : new Date();
     const isSuccess = status?.toUpperCase() === "SUCCESS";
     const isWallet = type === "WALLET_TOPUP";
@@ -33,12 +33,22 @@ export default function PaymentStatusScreen() {
         "Payment";
 
     const primaryAction = () => {
-        if (!isSuccess) { router.back(); return; }
-        if (isWallet) { router.replace("/wallet" as any); return; }
+        if (isWallet) { 
+            router.replace("/wallet" as any); 
+            return; 
+        }
         if (bookingId) {
             const isDoctor = bookingType === "Doctor";
             const pathname = isDoctor ? "/doctor/appointment/[id]" : "/booking/[id]";
             router.replace({ pathname, params: { id: bookingId } } as any);
+            return;
+        }
+        if (!isSuccess) {
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.replace("/(tabs)" as any);
+            }
             return;
         }
         router.replace("/(tabs)/bookings" as any);
@@ -69,63 +79,73 @@ export default function PaymentStatusScreen() {
                         </View>
                     ) : (
                         <View style={styles.iconCircleErrorPremium}>
-                            <View style={styles.iconGlow}>
-                                <XCircle size={64} color="#FF3B30" strokeWidth={1.5} />
+                            <View style={styles.iconGlowError}>
+                                <XCircle size={56} color="#FFFFFF" strokeWidth={2} />
                             </View>
                         </View>
                     )}
-                    <Text style={[styles.statusText, { color: isSuccess ? "#059669" : "#DC2626" }]}>
+                    <Text style={[styles.statusText, { color: isSuccess ? "#047857" : "#B91C1C" }]}>
                         {isSuccess ? "Payment Successful!" : "Payment Failed"}
                     </Text>
                     <Text style={styles.amountText}>₹{parseFloat(amount || "0").toFixed(2)}</Text>
                     
                     {!isSuccess && (
                         <Text style={styles.errorSubtext}>
-                            We couldn't process your payment. Don't worry, your money is safe. If deducted, it will be refunded automatically.
+                            We couldn't process your payment. If any amount was deducted, it will be refunded automatically within 3-5 business days.
                         </Text>
                     )}
                 </View>
             </LinearGradient>
 
-            <ScrollView style={styles.detailsContainer} showsVerticalScrollIndicator={false}>
-                <View style={styles.card}>
-                    {description ? (
-                        <>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Description</Text>
-                                <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>{description}</Text>
-                            </View>
-                            <View style={styles.divider} />
-                        </>
+            <ScrollView contentContainerStyle={styles.detailsContainer} showsVerticalScrollIndicator={false} bounces={false}>
+                {/* Receipt Card */}
+                <View style={styles.receiptWrapper}>
+                    <View style={styles.receiptTopHole} />
+                    <View style={styles.receiptBottomHole} />
+                    
+                    <View style={styles.card}>
+                        <Text style={styles.receiptTitle}>Transaction Details</Text>
+                        
+                        {description ? (
+                            <>
+                                <View style={styles.detailRow}>
+                                    <Text style={styles.detailLabel}>Description</Text>
+                                    <Text style={[styles.detailValue, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>{description}</Text>
+                                </View>
+                                <View style={styles.dashedDivider} />
+                            </>
                     ) : null}
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Transaction ID</Text>
-                        <Text style={styles.detailValue} numberOfLines={1}>{txnId || "N/A"}</Text>
+                        <Text style={styles.detailValue} selectable>{txnId || "N/A"}</Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={styles.dashedDivider} />
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Payment Type</Text>
                         <Text style={styles.detailValue}>{typeLabel}</Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={styles.dashedDivider} />
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Method</Text>
-                        <Text style={styles.detailValue}>{String(description || '').includes('Easebuzz') ? 'Easebuzz' : 'Razorpay'}</Text>
+                        <Text style={styles.detailValue}>
+                            {String(paymentMode) === 'WALLET' ? 'A1 Wallet' : String(description || '').includes('Easebuzz') ? 'Easebuzz Payment Gateway' : 'UPI / Online Payments'}
+                        </Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={styles.dashedDivider} />
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Date & Time</Text>
                         <Text style={styles.detailValue}>
-                            {txnDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {txnDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} at {txnDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                     </View>
-                    <View style={styles.divider} />
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Amount {isSuccess ? 'Paid' : 'Attempted'}</Text>
-                        <Text style={[styles.detailValue, { color: isSuccess ? '#059669' : '#FF3B30', fontWeight: '800' }]}>
+                    
+                    <View style={styles.totalBox}>
+                        <Text style={styles.totalLabel}>Amount {isSuccess ? 'Paid' : 'Attempted'}</Text>
+                        <Text style={[styles.totalValue, { color: isSuccess ? '#059669' : '#DC2626' }]}>
                             ₹{parseFloat(amount || "0").toFixed(2)}
                         </Text>
                     </View>
+                </View>
                 </View>
 
                 {isSuccess && isWallet && (
@@ -198,18 +218,25 @@ export default function PaymentStatusScreen() {
 
             <View style={styles.footer}>
                 <TouchableOpacity
-                    style={[styles.button, { backgroundColor: isSuccess ? "#10B981" : "#FF3B30" }]}
+                    style={styles.primaryBtnWrap}
                     onPress={primaryAction}
-                    activeOpacity={0.8}
+                    activeOpacity={0.88}
                 >
-                    {!isSuccess && <RotateCcw size={20} color="#FFFFFF" style={{ marginRight: 8 }} />}
-                    <Text style={styles.buttonText}>{primaryLabel}</Text>
+                    <LinearGradient 
+                        colors={isSuccess ? ["#059669", "#047857"] : ["#DC2626", "#B91C1C"]} 
+                        start={{x: 0, y: 0}} end={{x: 1, y: 1}}
+                        style={styles.primaryBtnGradient}
+                    >
+                        {!isSuccess && <RotateCcw size={20} color="#FFFFFF" style={{ marginRight: 8 }} />}
+                        <Text style={styles.primaryBtnText}>{primaryLabel}</Text>
+                    </LinearGradient>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.button, { backgroundColor: "transparent", marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }]}
+                    style={styles.secondaryBtn}
                     onPress={() => router.replace("/(tabs)" as any)}
+                    activeOpacity={0.7}
                 >
-                    <Text style={[styles.buttonText, { color: "#64748B" }]}>Return to Home</Text>
+                    <Text style={styles.secondaryBtnText}>Return to Home</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -217,11 +244,11 @@ export default function PaymentStatusScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#FFFFFF" },
+    container: { flex: 1, backgroundColor: "#F4F7FC" },
     headerGradient: {
-        paddingBottom: 40,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
+        paddingBottom: 60,
+        borderBottomLeftRadius: 40,
+        borderBottomRightRadius: 40,
         paddingTop: 10,
     },
     header: {
@@ -232,71 +259,121 @@ const styles = StyleSheet.create({
         paddingTop: 10,
     },
     backButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: "rgba(0,0,0,0.05)",
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: "rgba(0,0,0,0.06)",
         justifyContent: "center",
         alignItems: "center",
     },
-    headerTitle: { fontSize: 18, fontWeight: "600", color: "#1E293B" },
+    headerTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A", letterSpacing: -0.3 },
     statusContainer: {
         alignItems: "center",
-        marginTop: 30,
+        marginTop: 20,
         paddingHorizontal: 30,
     },
     iconCircleSuccess: {
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: "rgba(16, 185, 129, 0.1)",
+        backgroundColor: "rgba(16, 185, 129, 0.12)",
         justifyContent: "center",
         alignItems: "center",
-        marginBottom: 20,
+        marginBottom: 16,
     },
     iconCircleErrorPremium: {
         width: 110,
         height: 110,
         borderRadius: 55,
-        backgroundColor: "rgba(255, 59, 48, 0.08)",
+        backgroundColor: "rgba(239, 68, 68, 0.1)",
         justifyContent: "center",
         alignItems: "center",
-        marginBottom: 24,
+        marginBottom: 16,
     },
-    iconGlow: {
+    iconGlowError: {
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: "rgba(255, 59, 48, 0.15)",
+        backgroundColor: "#DC2626",
         justifyContent: "center",
         alignItems: "center",
+        shadowColor: "#DC2626",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        elevation: 8,
     },
-    statusText: { fontSize: 26, fontWeight: "800", marginBottom: 12, letterSpacing: -0.5 },
-    amountText: { fontSize: 38, fontWeight: "900", color: "#1E293B", letterSpacing: -1 },
+    statusText: { fontSize: 28, fontWeight: "900", marginBottom: 8, letterSpacing: -0.5 },
+    amountText: { fontSize: 44, fontWeight: "900", color: "#0F172A", letterSpacing: -1.5 },
     errorSubtext: {
         fontSize: 14,
-        color: "#475569",
+        color: "#64748B",
         textAlign: "center",
-        marginTop: 16,
-        lineHeight: 20,
+        marginTop: 12,
+        lineHeight: 22,
+        fontWeight: "500",
     },
-    detailsContainer: { flex: 1, padding: 20 },
-    card: {
-        backgroundColor: "#F8FAFC",
+    detailsContainer: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 40, marginTop: -30 },
+    
+    // Receipt Styles
+    receiptWrapper: {
+        position: 'relative',
+        backgroundColor: "#FFFFFF",
         borderRadius: 24,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.05,
+        shadowRadius: 20,
+        elevation: 6,
+        overflow: 'hidden',
+    },
+    receiptTopHole: { position: 'absolute', top: -12, left: -12, width: 24, height: 24, borderRadius: 12, backgroundColor: '#F4F7FC', zIndex: 2 },
+    receiptBottomHole: { position: 'absolute', top: -12, right: -12, width: 24, height: 24, borderRadius: 12, backgroundColor: '#F4F7FC', zIndex: 2 },
+    
+    card: {
         padding: 24,
         borderWidth: 1,
-        borderColor: "#E2E8F0",
+        borderColor: "rgba(226, 232, 240, 0.5)",
+        borderRadius: 24,
+    },
+    receiptTitle: {
+        fontSize: 14,
+        fontWeight: "800",
+        color: "#0F172A",
+        textTransform: "uppercase",
+        letterSpacing: 1,
+        marginBottom: 20,
+        textAlign: "center",
     },
     detailRow: {
         flexDirection: "row",
         justifyContent: "space-between",
-        alignItems: "center",
+        alignItems: "flex-start",
         paddingVertical: 14,
     },
-    detailLabel: { fontSize: 14, color: "#64748B", fontWeight: "500" },
-    detailValue: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
-    divider: { height: 1, backgroundColor: "#E2E8F0" },
+    detailLabel: { fontSize: 14, color: "#64748B", fontWeight: "600" },
+    detailValue: { fontSize: 14, fontWeight: "800", color: "#0F172A", textAlign: "right" },
+    dashedDivider: {
+        height: 1,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderStyle: "dashed",
+        marginVertical: 4,
+    },
+    totalBox: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        padding: 16,
+        borderRadius: 16,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    totalLabel: { fontSize: 16, fontWeight: '700', color: '#334155' },
+    totalValue: { fontSize: 20, fontWeight: '900' },
+    
     infoBox: {
         flexDirection: "row",
         alignItems: "center",
@@ -305,33 +382,50 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         marginTop: 20,
         gap: 12,
+        borderWidth: 1,
+        borderColor: "#BFDBFE",
     },
-    infoText: { fontSize: 14, color: "#1E40AF", flex: 1, fontWeight: "500", lineHeight: 20 },
+    infoText: { fontSize: 14, color: "#1E40AF", flex: 1, fontWeight: "600", lineHeight: 20 },
     errorHelpBox: {
         flexDirection: "row",
-        backgroundColor: "rgba(245, 158, 11, 0.1)",
+        backgroundColor: "#FFFBEB",
         padding: 20,
         borderRadius: 20,
-        marginTop: 20,
+        marginTop: 24,
         borderWidth: 1,
-        borderColor: "rgba(245, 158, 11, 0.2)",
+        borderColor: "#FDE68A",
     },
-    errorHelpTitle: { fontSize: 15, color: "#92400E", fontWeight: "700", marginBottom: 6 },
-    errorHelpText: { fontSize: 13, color: "#92400E", lineHeight: 20 },
-    footer: { padding: 20, paddingBottom: 30, backgroundColor: "#FFFFFF" },
-    button: {
-        height: 58,
-        borderRadius: 16,
+    errorHelpTitle: { fontSize: 15, color: "#92400E", fontWeight: "800", marginBottom: 6 },
+    errorHelpText: { fontSize: 13, color: "#92400E", lineHeight: 20, fontWeight: "500" },
+    
+    footer: { padding: 24, paddingBottom: 36, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderColor: '#F1F5F9' },
+    primaryBtnWrap: {
+        borderRadius: 18,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 6,
+        marginBottom: 16,
+    },
+    primaryBtnGradient: {
+        height: 60,
+        borderRadius: 18,
         flexDirection: "row",
         justifyContent: "center",
         alignItems: "center",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
     },
-    buttonText: { color: "#FFFFFF", fontSize: 17, fontWeight: "700", letterSpacing: 0.5 },
+    primaryBtnText: { color: "#FFFFFF", fontSize: 17, fontWeight: "900", letterSpacing: 0.5 },
+    secondaryBtn: {
+        height: 56,
+        borderRadius: 18,
+        backgroundColor: "#F8FAFC",
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 1.5,
+        borderColor: "#E2E8F0",
+    },
+    secondaryBtnText: { color: "#475569", fontSize: 16, fontWeight: "800" },
     bookingCard: {
         backgroundColor: "#FFFFFF",
         borderRadius: 24,

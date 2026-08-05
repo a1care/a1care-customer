@@ -24,10 +24,10 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/EmptyState';
 import { formatDateTime } from '@/utils/formatters';
-import { MapPin, MessageSquare, XCircle, Clock3, Radio, ShieldCheck, Truck, CheckCircle2, Search } from 'lucide-react-native';
+import { MapPin, MessageSquare, XCircle, Clock3, Radio, ShieldCheck, Truck, CheckCircle2, Search, RotateCcw, CreditCard } from 'lucide-react-native';
 import { triggerLocalNotification } from '@/utils/notifications';
 import { showToast } from '@/utils/toast';
-
+import { LinearGradient } from 'expo-linear-gradient';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_STEPS: Array<{ status: string; label: string; key: string; desc: string }> = [
@@ -59,6 +59,7 @@ function StatusHero({ status }: { status: string }) {
     const HeroIcon =
         status === 'RETURNED_TO_ADMIN' ? Clock3 :
         status === 'CANCELLED' ? XCircle :
+        status === 'PAYMENT_PENDING' ? CreditCard :
         step?.key === 'pending' ? Clock3 :
         step?.key === 'partner_assigned' ? ShieldCheck :
         step?.key === 'broadcasted' ? Radio :
@@ -67,14 +68,36 @@ function StatusHero({ status }: { status: string }) {
         step?.key === 'completed' ? CheckCircle2 :
         Search;
     const heroLabel = status === 'RETURNED_TO_ADMIN' ? 'Re-scheduling' : step?.label ?? status.replace(/_/g, ' ');
+    
+    // Premium MNC Gradient Banner mapping
+    const getGradient = () => {
+        if (status === 'CANCELLED') return ['#FEF2F2', '#FEE2E2'];
+        if (status === 'COMPLETED') return ['#F0FDF4', '#DCFCE7'];
+        if (status === 'IN_PROGRESS' || status === 'ACCEPTED') return ['#EFF6FF', '#DBEAFE'];
+        if (status === 'PAYMENT_PENDING') return ['#FFFBEB', '#FEF3C7'];
+        if (status === 'BROADCASTED') return ['#F5EBFF', '#E9D5FF']; // Searching Provider
+        return ['#F8FAFC', '#F1F5F9'];
+    };
+
+    const getTextColor = () => {
+        if (status === 'CANCELLED') return '#991B1B';
+        if (status === 'COMPLETED') return '#166534';
+        if (status === 'IN_PROGRESS' || status === 'ACCEPTED') return '#1E40AF';
+        if (status === 'PAYMENT_PENDING') return '#B45309';
+        if (status === 'BROADCASTED') return '#6B21A8'; // Purple
+        return '#0F172A';
+    };
+
     return (
-        <View style={[styles.statusHero, { backgroundColor: bg }]}>
-            <View style={styles.statusHeroIconWrap}>
-                <HeroIcon size={34} color="#4B5563" />
+        <LinearGradient colors={getGradient()} style={styles.statusHero}>
+            <View style={[styles.statusHeroIconWrap, { backgroundColor: 'rgba(255,255,255,0.6)' }]}>
+                <HeroIcon size={28} color={getTextColor()} />
             </View>
-            <Text style={styles.statusHeroLabel}>{step?.label ?? status.replace('_', ' ')}</Text>
-            <Text style={styles.statusHeroDesc}>{step?.desc ?? ''}</Text>
-        </View>
+            <View style={styles.statusHeroTextWrap}>
+                <Text style={[styles.statusHeroLabel, { color: getTextColor() }]}>{heroLabel}</Text>
+                {step?.desc ? <Text style={[styles.statusHeroDesc, { color: getTextColor() }]}>{step.desc}</Text> : null}
+            </View>
+        </LinearGradient>
     );
 }
 
@@ -86,7 +109,8 @@ function Timeline({ status }: { status: string }) {
     if (isCancelled) {
         return (
             <View style={[styles.card, styles.cancelledBox]}>
-                <Text style={styles.cancelledText}>This booking has been cancelled.</Text>
+                <XCircle size={24} color="#EF4444" style={{ marginBottom: 8 }} />
+                <Text style={styles.cancelledText}>This booking was cancelled</Text>
             </View>
         );
     }
@@ -94,46 +118,55 @@ function Timeline({ status }: { status: string }) {
     return (
         <View style={styles.card}>
             <Text style={styles.cardTitle}>Booking Progress</Text>
-            {STATUS_STEPS.map((s, idx) => {
-                const done = currentIdx > idx;
-                const active = currentIdx === idx;
-                return (
-                    <View key={s.status} style={styles.timelineRow}>
-                        <View style={styles.timelineLeft}>
-                            <View
-                                style={[
-                                    styles.timelineDot,
-                                    done ? styles.timelineDotDone : {},
-                                    active ? styles.timelineDotActive : {},
-                                ]}
-                            >
-                                {done ? (
-                                    <Text style={styles.timelineCheck}>✓</Text>
-                                ) : active ? (
-                                    <View style={styles.timelineDotInner} />
-                                ) : null}
+            <View style={styles.timelineContainer}>
+                {STATUS_STEPS.map((s, idx) => {
+                    const done = currentIdx > idx;
+                    const active = currentIdx === idx;
+                    const isLast = idx === STATUS_STEPS.length - 1;
+                    
+                    return (
+                        <View key={s.status} style={styles.timelineRow}>
+                            <View style={styles.timelineLeft}>
+                                <View
+                                    style={[
+                                        styles.timelineDot,
+                                        done && styles.timelineDotDone,
+                                        active && styles.timelineDotActive,
+                                    ]}
+                                >
+                                    {done ? (
+                                        <Ionicons name="checkmark-sharp" size={14} color="#FFF" />
+                                    ) : active ? (
+                                        <View style={styles.timelineDotInnerActive} />
+                                    ) : (
+                                        <View style={styles.timelineDotInner} />
+                                    )}
+                                </View>
+                                {!isLast && (
+                                    <View style={[
+                                        styles.timelineLine, 
+                                        done && styles.timelineLineDone
+                                    ]} />
+                                )}
                             </View>
-                            {idx < STATUS_STEPS.length - 1 && (
-                                <View style={[styles.timelineLine, done ? styles.timelineLineDone : {}]} />
-                            )}
+                            <View style={styles.timelineContent}>
+                                <Text
+                                    style={[
+                                        styles.timelineLabel,
+                                        active && styles.timelineLabelActive,
+                                        done && styles.timelineLabelDone,
+                                    ]}
+                                >
+                                    {s.label}
+                                </Text>
+                                {active && s.desc && (
+                                    <Text style={styles.timelineDesc}>{s.desc}</Text>
+                                )}
+                            </View>
                         </View>
-                        <View style={styles.timelineContent}>
-                            <Text
-                                style={[
-                                    styles.timelineLabel,
-                                    active ? styles.timelineLabelActive : {},
-                                    done ? styles.timelineLabelDone : {},
-                                ]}
-                            >
-                                {s.label}
-                            </Text>
-                            {active && (
-                                <Text style={styles.timelineDesc}>{s.desc}</Text>
-                            )}
-                        </View>
-                    </View>
-                );
-            })}
+                    );
+                })}
+            </View>
         </View>
     );
 }
@@ -277,6 +310,9 @@ export default function BookingDetailScreen() {
         ? !['COMPLETED', 'CANCELLED'].includes(String(booking.status))
         : false;
 
+    // Contact provider rules: ONLY show Chat/Track for ACCEPTED / IN_PROGRESS
+    const showContactActions = booking && (booking.status === 'ACCEPTED' || booking.status === 'IN_PROGRESS');
+
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
             {/* Header */}
@@ -287,21 +323,21 @@ export default function BookingDetailScreen() {
                 <Text style={styles.headerTitle}>Booking Details</Text>
                 <TouchableOpacity
                     onPress={handleManualRefresh}
-                    style={[styles.refreshBtn, (isRefetching || isManualRefreshing) && styles.refreshBtnDisabled]}
+                    style={styles.refreshBtn}
                     disabled={isRefetching || isManualRefreshing}
                 >
                     {isRefetching || isManualRefreshing ? (
-                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <ActivityIndicator size="small" color="#0B3370" />
                     ) : (
-                        <Ionicons name="refresh" size={18} color={Colors.primary} />
+                        <RotateCcw size={18} color="#0B3370" />
                     )}
                 </TouchableOpacity>
             </View>
 
             {isLoading ? (
                 <View style={styles.centerLoader}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={styles.loaderText}>Loading booking…</Text>
+                    <ActivityIndicator size="large" color="#0B3370" />
+                    <Text style={styles.loaderText}>Loading details…</Text>
                 </View>
             ) : isError || !booking ? (
                 <ErrorState
@@ -315,22 +351,22 @@ export default function BookingDetailScreen() {
 
                     {/* Info Card */}
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Booking Information</Text>
                         {(() => {
                             const isOnline = booking.paymentMode === 'ONLINE';
+                            const isWallet = booking.paymentMode === 'WALLET';
                             const isPaid = booking.paymentStatus === 'COMPLETED';
-                            const paymentLabel = isOnline ? (isPaid ? 'Paid online' : 'Online (pending)') : 'Cash on pay';
+                            const paymentLabel = isWallet ? 'Paid via Wallet' : isOnline ? (isPaid ? 'Paid online' : 'Online (pending)') : 'Cash on pay';
 
                             return [
                                 { label: 'Booking ID', value: `#${booking._id.slice(-10).toUpperCase()}` },
-                                { label: 'Status', value: <StatusBadge status={booking.status} size="md" /> },
+                                { label: 'Status', value: <StatusBadge status={booking.status} size="sm" /> },
                                 { label: 'Booked On', value: formatDateTime(booking.createdAt) },
                                 { label: 'Address', value: getAddressText(booking) },
                                 { label: 'Schedule', value: getScheduleText(booking) },
                                 { label: 'Payment', value: paymentLabel },
                             ];
-                        })().map((r) => (
-                            <View key={r.label} style={styles.infoRow}>
+                        })().map((r, i, arr) => (
+                            <View key={r.label} style={[styles.infoRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
                                 <Text style={styles.infoLabel}>{r.label}</Text>
                                 {typeof r.value === 'string' ? (
                                     <Text style={styles.infoValue} numberOfLines={3}>{r.value}</Text>
@@ -344,18 +380,11 @@ export default function BookingDetailScreen() {
                     {/* Timeline */}
                     <Timeline status={booking.status} />
 
-                    {/* Polling indicator */}
-                    {shouldShowPollingNote ? (
-                        <View style={styles.pollingNote}>
-                            <Text style={styles.pollingText}>Status auto-updates every 12 seconds</Text>
-                        </View>
-                    ) : null}
-
-                    {/* Chat with Provider — available for every booking status */}
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Contact Provider</Text>
-                        <View style={styles.actionGrid}>
-                            {(booking.status === 'ACCEPTED' || booking.status === 'IN_PROGRESS') && (
+                    {/* Chat with Provider / Track Live — ONLY when accepted/in progress */}
+                    {showContactActions && (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Contact Provider</Text>
+                            <View style={styles.actionGrid}>
                                 <TouchableOpacity
                                     style={styles.actionBtn}
                                     onPress={() => {
@@ -373,47 +402,52 @@ export default function BookingDetailScreen() {
                                         });
                                     }}
                                 >
-                                    <View style={[styles.actionIcon, { backgroundColor: '#E0F2FE' }]}>
-                                        <MapPin size={22} color="#0369A1" />
+                                    <View style={[styles.actionIcon, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD', borderWidth: 1 }]}>
+                                        <MapPin size={22} color="#0284C7" />
                                     </View>
                                     <Text style={styles.actionLabel}>Track Live</Text>
                                 </TouchableOpacity>
-                            )}
 
-                            <TouchableOpacity
-                                style={styles.actionBtn}
-                                onPress={() => router.push({
-                                    pathname: '/booking/chat' as any,
-                                    params: {
-                                        id: booking._id,
-                                        name: (booking as any).assignedProviderId?.name || (booking as any).partnerId?.name || 'Service Provider'
-                                    }
-                                })}
-                            >
-                                <View style={[styles.actionIcon, { backgroundColor: '#F0FDF4' }]}>
-                                    <MessageSquare size={22} color="#15803D" />
-                                </View>
-                                <Text style={styles.actionLabel}>Chat</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.actionBtn}
+                                    onPress={() => router.push({
+                                        pathname: '/booking/chat' as any,
+                                        params: {
+                                            id: booking._id,
+                                            name: (booking as any).assignedProviderId?.name || (booking as any).partnerId?.name || 'Service Provider',
+                                            mobile: (booking as any).assignedProviderId?.mobile || (booking as any).partnerId?.mobile || ''
+                                        }
+                                    })}
+                                >
+                                    <View style={[styles.actionIcon, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1 }]}>
+                                        <MessageSquare size={22} color="#16A34A" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Chat</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
+                    )}
+
+                    {/* Polling indicator */}
+                    {shouldShowPollingNote ? (
+                        <View style={styles.pollingNote}>
+                            <Text style={styles.pollingText}>Status auto-updates every 12 seconds</Text>
+                        </View>
+                    ) : null}
 
                     {/* Actions */}
                     {booking.status === 'PENDING' || booking.status === 'BROADCASTED' || booking.status === 'ACCEPTED' ? (
-                        <View style={styles.card}>
-                            <Text style={styles.cardTitle}>Actions</Text>
-                            <Button
-                                label={isCancelling ? 'Cancelling...' : 'Cancel Booking'}
-                                icon={<XCircle size={18} color="#fff" />}
-                                onPress={() => {
-                                    setShowCancelConfirmModal(true);
-                                }}
-                                variant="danger"
-                                size="md"
-                                fullWidth
-                                disabled={isCancelling}
-                            />
-                        </View>
+                        <Button
+                            label={isCancelling ? 'Cancelling...' : 'Cancel Booking'}
+                            onPress={() => {
+                                setShowCancelConfirmModal(true);
+                            }}
+                            variant="danger"
+                            size="md"
+                            fullWidth
+                            disabled={isCancelling}
+                            style={{ marginVertical: 8 }}
+                        />
                     ) : null}
 
                     {booking.status === 'COMPLETED' && (
@@ -481,18 +515,20 @@ export default function BookingDetailScreen() {
                                 }}
                                 variant="primary"
                                 size="md"
-                                style={{ marginTop: 12 }}
+                                style={{ marginTop: 16 }}
                             />
                         </View>
                     )}
 
-                    <View style={{ height: 40 }} />
+                    <View style={{ height: 60 }} />
                 </ScrollView>
             )}
+            
             {/* Rating Prompt Modal */}
             <Modal visible={showRatingModal} transparent animationType="slide" onRequestClose={() => setShowRatingModal(false)}>
                 <View style={styles.ratingOverlay}>
                     <View style={styles.ratingSheet}>
+                        <View style={styles.dragHandle} />
                         <Text style={styles.ratingTitle}>How was your experience?</Text>
                         <Text style={styles.ratingSubtitle}>
                             {(booking as any)?.childServiceId?.name || 'Your booking'} is complete
@@ -534,7 +570,7 @@ export default function BookingDetailScreen() {
                                     });
                                 }}
                             >
-                                <Text style={styles.ratingDetailLink}>Write detailed review →</Text>
+                                <Text style={styles.ratingDetailLink}>Write detailed review</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => setShowRatingModal(false)}>
                                 <Text style={styles.ratingSkipLink}>Maybe later</Text>
@@ -602,7 +638,7 @@ export default function BookingDetailScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: '#F4F7FB' },
+    root: { flex: 1, backgroundColor: '#F8FAFC' },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -610,143 +646,154 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 14,
         backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E6EDF5',
     },
     backBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
-        backgroundColor: '#F4F7FB',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F1F5F9',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    headerTitle: { fontSize: FontSize.lg, fontWeight: '800', color: '#1F2A37', flex: 1, textAlign: 'center' },
+    headerTitle: { fontSize: 17, fontWeight: '800', color: '#0F172A', flex: 1, textAlign: 'center' },
     refreshBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
-        backgroundColor: '#EAF2FB',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#EEF4FF',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    refreshBtnDisabled: { opacity: 0.65 },
 
     centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-    loaderText: { color: Colors.textSecondary, fontSize: FontSize.base },
+    loaderText: { color: '#64748B', fontSize: 15, fontWeight: '600' },
 
-    scroll: { padding: 14, gap: 12, paddingBottom: 40 },
+    scroll: { padding: 16, gap: 16 },
 
     // Status hero
     statusHero: {
-        borderRadius: 20,
-        paddingVertical: 24,
-        paddingHorizontal: 16,
+        borderRadius: 24,
+        padding: 20,
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
     },
-    statusHeroIconWrap: { marginBottom: 10, width: 54, height: 54, borderRadius: 27, backgroundColor: '#FFFFFF55', alignItems: 'center', justifyContent: 'center' },
-    statusHeroLabel: { fontSize: FontSize['2xl'], fontWeight: '800', color: '#1F2A37', marginBottom: 4 },
-    statusHeroDesc: { fontSize: FontSize.sm, color: Colors.textSecondary },
+    statusHeroIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+    statusHeroTextWrap: { flex: 1 },
+    statusHeroLabel: { fontSize: 18, fontWeight: '800', marginBottom: 2 },
+    statusHeroDesc: { fontSize: 13, fontWeight: '500', opacity: 0.9 },
 
     // Cards
     card: {
-        backgroundColor: Colors.card,
-        borderRadius: 18,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: '#E6EDF5',
-        ...Shadows.card,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 20,
+        shadowColor: '#0A1A3A',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
+        elevation: 6,
     },
-    cardTitle: { fontSize: FontSize.base, fontWeight: '800', color: '#1F2A37', marginBottom: 12 },
+    cardTitle: { fontSize: 15, fontWeight: '900', color: '#0F172A', marginBottom: 16 },
 
     // Info rows
     infoRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        paddingVertical: 10,
+        paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#EDF2F7',
-        gap: 10,
+        borderBottomColor: '#F1F5F9',
+        gap: 12,
     },
-    infoLabel: { fontSize: FontSize.sm, color: '#6B7280', flexShrink: 0, width: 92, fontWeight: '600' },
-    infoValue: { fontSize: FontSize.sm, fontWeight: '700', color: '#1F2A37', flex: 1, textAlign: 'right' },
+    infoLabel: { fontSize: 13, color: '#64748B', flexShrink: 0, width: 90, fontWeight: '600' },
+    infoValue: { fontSize: 14, fontWeight: '800', color: '#0F172A', flex: 1, textAlign: 'right' },
 
     // Timeline
-    timelineRow: { flexDirection: 'row', marginBottom: 4, minHeight: 40 },
+    timelineContainer: {
+        marginTop: 4,
+    },
+    timelineRow: { flexDirection: 'row', minHeight: 52 },
     timelineLeft: { alignItems: 'center', width: 32 },
     timelineDot: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: Colors.border,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: '#F1F5F9', // upcoming
+        zIndex: 2,
     },
-    timelineDotActive: { backgroundColor: Colors.primary },
-    timelineDotInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' },
-    timelineDotDone: { backgroundColor: Colors.health },
-    timelineCheck: { fontSize: 12, fontWeight: '700', color: '#fff' },
-    timelineLine: { width: 2, flex: 1, backgroundColor: Colors.border, marginVertical: 2 },
-    timelineLineDone: { backgroundColor: Colors.health },
-    timelineContent: { flex: 1, paddingLeft: 12, paddingBottom: 8 },
-    timelineLabel: { fontSize: FontSize.base, color: Colors.textSecondary, fontWeight: '500' },
-    timelineLabelActive: { color: Colors.primary, fontWeight: '700' },
-    timelineLabelDone: { color: Colors.health, fontWeight: '600' },
-    timelineDesc: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+    timelineDotInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#CBD5E1' },
+    timelineDotInnerActive: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#0B3370' },
+    timelineDotActive: { backgroundColor: '#EEF4FF', borderWidth: 3, borderColor: '#BAE6FD' }, // active glow
+    timelineDotDone: { backgroundColor: '#06B6D4' }, // solid cyan
+    timelineLine: { width: 2, flex: 1, backgroundColor: '#E2E8F0', marginVertical: -2 },
+    timelineLineDone: { backgroundColor: '#06B6D4' },
+    timelineContent: { flex: 1, paddingLeft: 12, paddingBottom: 20 },
+    timelineLabel: { fontSize: 14, color: '#94A3B8', fontWeight: '700' }, // slightly bolder but grey for upcoming
+    timelineLabelActive: { color: '#0B3370', fontWeight: '900', fontSize: 15 },
+    timelineLabelDone: { color: '#0F172A', fontWeight: '800' }, // dark grey instead of cyan to not look like a link
+    timelineDesc: { fontSize: 13, color: '#64748B', marginTop: 4, fontWeight: '500', lineHeight: 18 },
 
-    cancelledBox: { borderWidth: 1.5, borderColor: '#FDD8D8' },
-    cancelledText: { fontSize: FontSize.base, color: Colors.emergency, fontWeight: '500', textAlign: 'center' },
+    cancelledBox: { alignItems: 'center', padding: 24, backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1 },
+    cancelledText: { fontSize: 15, color: '#991B1B', fontWeight: '700', textAlign: 'center' },
 
     pollingNote: {
-        backgroundColor: '#EEF4FB',
-        borderRadius: 10,
-        padding: 10,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 12,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#DBE7F5',
     },
-    pollingText: { fontSize: FontSize.xs, color: '#4B5563', fontWeight: '600' },
+    pollingText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
 
-    codReminderText: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
-    actionGrid: { flexDirection: 'row', gap: 12 },
-    actionBtn: { flex: 1, alignItems: 'center', gap: 8 },
-    actionIcon: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-    actionLabel: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textPrimary },
+    codReminderText: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 16, fontWeight: '500' },
+    
+    actionGrid: { flexDirection: 'row', gap: 16 },
+    actionBtn: { flex: 1, alignItems: 'center', gap: 10 },
+    actionIcon: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
+    actionLabel: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
 
     // Rating modal
-    ratingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    ratingOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' },
     ratingSheet: {
         backgroundColor: '#fff',
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        padding: 28,
-        paddingBottom: 44,
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        padding: 24,
+        paddingBottom: Platform.OS === 'ios' ? 44 : 24,
         alignItems: 'center',
+        shadowColor: '#000', shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 24,
     },
-    ratingTitle: { fontSize: FontSize.xl, fontWeight: '800', color: '#1F2A37', marginBottom: 6 },
-    ratingSubtitle: { fontSize: FontSize.sm, color: '#6B7280', marginBottom: 28, textAlign: 'center' },
-    starsRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-    star: { fontSize: 46 },
+    dragHandle: { width: 44, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginBottom: 24 },
+    ratingTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginBottom: 8 },
+    ratingSubtitle: { fontSize: 14, color: '#64748B', marginBottom: 28, textAlign: 'center', fontWeight: '500' },
+    starsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+    star: { fontSize: 44, letterSpacing: 4 },
     starFilled: { color: '#F59E0B' },
-    starEmpty: { color: '#D1D5DB' },
-    ratingLabel: { fontSize: FontSize.base, fontWeight: '600', color: Colors.primary, marginBottom: 28 },
-    ratingActions: { width: '100%', gap: 12, alignItems: 'center' },
+    starEmpty: { color: '#E2E8F0' },
+    ratingLabel: { fontSize: 16, fontWeight: '800', color: '#0B3370', marginBottom: 32 },
+    ratingActions: { width: '100%', gap: 16, alignItems: 'center' },
     ratingSubmitBtn: {
         width: '100%',
-        backgroundColor: Colors.primary,
-        borderRadius: 16,
-        height: 52,
+        backgroundColor: '#0B3370',
+        borderRadius: 20,
+        height: 56,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    ratingSubmitText: { color: '#fff', fontSize: FontSize.base, fontWeight: '700' },
-    ratingDetailLink: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
-    ratingSkipLink: { fontSize: FontSize.sm, color: '#9CA3AF' },
+    ratingSubmitText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+    ratingDetailLink: { fontSize: 14, color: '#2563EB', fontWeight: '700' },
+    ratingSkipLink: { fontSize: 14, color: '#94A3B8', fontWeight: '600' },
 
     confirmOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
@@ -755,11 +802,9 @@ const styles = StyleSheet.create({
         width: '100%',
         maxWidth: 340,
         backgroundColor: '#fff',
-        borderRadius: 24,
-        padding: 24,
+        borderRadius: 28,
+        padding: 28,
         alignItems: 'center',
-        ...Shadows.float,
-        elevation: 24,
     },
     confirmIconContainer: {
         width: 72,
@@ -768,21 +813,22 @@ const styles = StyleSheet.create({
         backgroundColor: '#FEF2F2',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 20,
     },
     confirmTitle: {
-        fontSize: FontSize.lg,
+        fontSize: 20,
         fontWeight: '900',
         color: '#0F172A',
-        marginBottom: 8,
+        marginBottom: 10,
         textAlign: 'center',
     },
     confirmSubtitle: {
-        fontSize: FontSize.sm,
+        fontSize: 14,
         color: '#64748B',
         textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 24,
+        lineHeight: 22,
+        marginBottom: 28,
+        fontWeight: '500'
     },
     confirmActions: {
         flexDirection: 'row',
@@ -791,29 +837,28 @@ const styles = StyleSheet.create({
     },
     confirmCancelBtn: {
         flex: 1,
-        height: 48,
-        borderRadius: 14,
+        height: 52,
+        borderRadius: 16,
         backgroundColor: '#F1F5F9',
         justifyContent: 'center',
         alignItems: 'center',
     },
     confirmCancelText: {
-        fontSize: FontSize.sm,
-        fontWeight: '700',
+        fontSize: 15,
+        fontWeight: '800',
         color: '#475569',
     },
     confirmSubmitBtn: {
         flex: 1,
-        height: 48,
-        borderRadius: 14,
+        height: 52,
+        borderRadius: 16,
         backgroundColor: '#EF4444',
         justifyContent: 'center',
         alignItems: 'center',
     },
     confirmSubmitText: {
-        fontSize: FontSize.sm,
-        fontWeight: '700',
+        fontSize: 15,
+        fontWeight: '800',
         color: '#fff',
     },
 });
-

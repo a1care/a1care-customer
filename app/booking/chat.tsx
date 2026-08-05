@@ -11,6 +11,8 @@ import {
     Platform,
     Alert,
     ImageBackground,
+    Modal,
+    TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,17 +20,18 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { bookingsService } from '@/services/bookings.service';
 import { Colors } from '@/constants/colors';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { socketService } from '@/services/socket.service';
 
-// ── A1Care Brand Color Palette ──────────────────────────────
-const PRIMARY      = '#2D935C';          // A1Care primary green
-const HEADER_COLOR = '#2D935C';          // same green for header
-const AVATAR_BG    = '#1E6B43';          // darker shade for avatar
-const MY_BUBBLE    = '#2D935C';          // sent messages: brand green
+// ── A1Care Brand Color Palette (Premium) ──────────────────────────────
+const PRIMARY      = '#059669';          // A1Care primary green
+const HEADER_COLOR = '#FFFFFF';          // crisp white header
+const AVATAR_BG    = '#0F172A';          // dark navy
+const MY_BUBBLE    = '#059669';          // sent messages: brand green
 const MY_BUBBLE_TEXT = '#FFFFFF';        // white text on green
 const THEIR_BUBBLE = '#FFFFFF';          // received: white
-const THEIR_TEXT   = '#1E293B';          // dark text
-const BG_CHAT      = '#F0F7F4';          // very light mint background
+const THEIR_TEXT   = '#0F172A';          // dark text
+const BG_CHAT      = '#F4F7FC';          // very light gray background
 const TICK_COLOR   = '#A7F3D0';          // light mint tick on green bubble
 
 const QUICK_REPLIES = [
@@ -60,12 +63,15 @@ function dayLabel(dateStr: string) {
 }
 
 export default function BookingChatScreen() {
-    const { id, name } = useLocalSearchParams<{ id: string, name: string }>();
+    const { id, name, mobile } = useLocalSearchParams<{ id: string; name: string; mobile?: string }>();
     const router = useRouter();
     const scrollRef = useRef<ScrollView>(null);
     const [typedMessage, setTypedMessage] = useState('');
     const [chatMessages, setChatMessages] = useState<any[]>([]);
+    const [showOptions, setShowOptions] = useState(false);
+    const [isBlocked, setIsBlocked] = useState(false);
     const providerName = Array.isArray(name) ? name[0] : (name || 'Service Provider');
+    const providerMobile = Array.isArray(mobile) ? mobile[0] : mobile;
 
     const { data: initialData, isLoading } = useQuery({
         queryKey: ['booking-chat', id],
@@ -134,11 +140,40 @@ export default function BookingChatScreen() {
         }
     };
 
+    const handleCall = () => {
+        if (providerMobile) {
+            import('react-native').then(({ Linking }) => {
+                Linking.openURL(`tel:${providerMobile}`);
+            });
+        } else {
+            Alert.alert('Not Available', 'Phone number is not available for this provider.');
+        }
+    };
+
+    useEffect(() => {
+        if (id) {
+            AsyncStorage.getItem(`blocked_customer_${id}`).then(val => {
+                if (val === 'true') setIsBlocked(true);
+            });
+        }
+    }, [id]);
+
+    const toggleBlock = async () => {
+        const newVal = !isBlocked;
+        setIsBlocked(newVal);
+        await AsyncStorage.setItem(`blocked_customer_${id}`, newVal ? 'true' : 'false');
+        setShowOptions(false);
+    };
+
+    const handleOptions = () => {
+        setShowOptions(true);
+    };
+
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="arrow-back" size={22} color="#fff" />
+                    <Ionicons name="arrow-back" size={24} color="#0F172A" />
                 </TouchableOpacity>
 
                 <View style={styles.avatarCircle}>
@@ -153,8 +188,11 @@ export default function BookingChatScreen() {
                     </View>
                 </View>
 
-                <TouchableOpacity style={styles.headerAction}>
-                    <Ionicons name="call-outline" size={20} color="#fff" />
+                <TouchableOpacity style={styles.headerAction} onPress={handleCall}>
+                    <Ionicons name="call" size={22} color="#0F172A" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerAction} onPress={handleOptions}>
+                    <Ionicons name="ellipsis-vertical" size={22} color="#0F172A" />
                 </TouchableOpacity>
             </View>
 
@@ -189,8 +227,7 @@ export default function BookingChatScreen() {
                         {chatMessages.map((msg: any, idx: number) => {
                             const isMe = msg.senderType === 'Patient' || msg.senderType === 'User';
                             const showDay = idx === 0 || !isSameDay(msg.createdAt, chatMessages[idx - 1]?.createdAt);
-                            const isLast = idx === chatMessages.length - 1;
-
+                            
                             return (
                                 <React.Fragment key={msg._id || idx}>
                                     {showDay && (
@@ -200,15 +237,11 @@ export default function BookingChatScreen() {
                                     )}
                                     <View style={[styles.msgRow, isMe ? styles.rowMe : styles.rowThem]}>
                                         <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-                                            {isMe
-                                                ? <View style={styles.tailRight} />
-                                                : <View style={styles.tailLeft} />
-                                            }
                                             <Text style={[styles.msgText, { color: isMe ? MY_BUBBLE_TEXT : THEIR_TEXT }]}>
                                                 {msg.message}
                                             </Text>
                                             <View style={styles.metaRow}>
-                                                <Text style={[styles.msgTime, { color: isMe ? TICK_COLOR : '#8696A0' }]}>{formatMsgTime(msg.createdAt)}</Text>
+                                                <Text style={[styles.msgTime, { color: isMe ? 'rgba(255,255,255,0.8)' : '#94A3B8' }]}>{formatMsgTime(msg.createdAt)}</Text>
                                                 {isMe && (
                                                     <Ionicons
                                                         name="checkmark-done"
@@ -249,11 +282,20 @@ export default function BookingChatScreen() {
                 </View>
             )}
 
+            {isBlocked ? (
+                <TouchableOpacity style={styles.blockedBar} onPress={toggleBlock}>
+                    <Ionicons name="lock-closed" size={18} color="#64748B" />
+                    <Text style={styles.blockedText}>You blocked this provider. Tap to unblock.</Text>
+                </TouchableOpacity>
+            ) : (
                 <View style={styles.inputBar}>
                     <View style={styles.inputWrap}>
+                        <TouchableOpacity style={{ paddingHorizontal: 8 }}>
+                            <Ionicons name="happy-outline" size={22} color="#94A3B8" />
+                        </TouchableOpacity>
                         <TextInput
                             style={styles.input}
-                            placeholder="Type a message"
+                            placeholder="Reply..."
                             placeholderTextColor="#94A3B8"
                             value={typedMessage}
                             onChangeText={setTypedMessage}
@@ -261,7 +303,7 @@ export default function BookingChatScreen() {
                         />
                     </View>
                     <TouchableOpacity
-                        style={[styles.sendBtn, { backgroundColor: typedMessage.trim() ? PRIMARY : '#8DB48E' }]}
+                        style={styles.sendBtn}
                         onPress={() => handleSend()}
                         disabled={sendMutation.isPending}
                         activeOpacity={0.85}
@@ -272,130 +314,189 @@ export default function BookingChatScreen() {
                         }
                     </TouchableOpacity>
                 </View>
+            )}
             </KeyboardAvoidingView>
+
+            {/* Options Bottom Sheet */}
+            <Modal visible={showOptions} transparent animationType="fade">
+                <TouchableWithoutFeedback onPress={() => setShowOptions(false)}>
+                    <View style={styles.modalOverlay}>
+                        <TouchableWithoutFeedback>
+                            <View style={styles.optionsSheet}>
+                                <View style={styles.sheetHandle} />
+                                <Text style={styles.sheetTitle}>Chat Options</Text>
+                                
+                                <TouchableOpacity style={styles.optionRow} onPress={() => { setShowOptions(false); handleCall(); }}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#F0FDF4' }]}>
+                                        <Ionicons name="call" size={20} color="#16A34A" />
+                                    </View>
+                                    <Text style={styles.optionText}>Call Provider</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.optionRow} onPress={toggleBlock}>
+                                    <View style={[styles.optionIcon, { backgroundColor: isBlocked ? '#F1F5F9' : '#FEF2F2' }]}>
+                                        <Ionicons name={isBlocked ? "lock-open" : "warning"} size={20} color={isBlocked ? "#64748B" : "#DC2626"} />
+                                    </View>
+                                    <Text style={[styles.optionText, { color: isBlocked ? '#64748B' : '#DC2626' }]}>
+                                        {isBlocked ? "Unblock Provider" : "Report / Block"}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={[styles.optionRow, { borderBottomWidth: 0 }]} onPress={() => setShowOptions(false)}>
+                                    <View style={[styles.optionIcon, { backgroundColor: '#F1F5F9' }]}>
+                                        <Ionicons name="close" size={20} color="#64748B" />
+                                    </View>
+                                    <Text style={styles.optionText}>Cancel</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </View>
+                </TouchableWithoutFeedback>
+            </Modal>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: HEADER_COLOR },
+    root: { flex: 1, backgroundColor: BG_CHAT },
 
-    // ── Header ──────────────────────────────────
     header: {
         flexDirection: 'row', alignItems: 'center',
         backgroundColor: HEADER_COLOR,
-        paddingHorizontal: 10, paddingVertical: 12,
-        gap: 10,
-        shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-        elevation: 4,
+        paddingHorizontal: 16, paddingVertical: 14, gap: 12,
+        shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 4 },
+        elevation: 8, zIndex: 10
     },
-    backBtn: { padding: 6, borderRadius: 20 },
+    backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
     avatarCircle: {
-        width: 42, height: 42, borderRadius: 21,
+        width: 44, height: 44, borderRadius: 22,
         backgroundColor: AVATAR_BG,
         alignItems: 'center', justifyContent: 'center',
-        borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
     },
-    avatarText: { color: '#fff', fontWeight: '900', fontSize: 15, letterSpacing: 0.5 },
+    avatarText: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 0.5 },
     headerMeta: { flex: 1 },
-    headerName: { color: '#fff', fontWeight: '800', fontSize: 16 },
+    headerName: { color: '#0F172A', fontWeight: '900', fontSize: 18, letterSpacing: -0.5 },
     headerSubRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-    greenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#A7F3D0' },
-    headerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '600' },
-    headerAction: { padding: 8 },
+    greenDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY },
+    headerSub: { color: '#64748B', fontSize: 12, fontWeight: '700' },
+    headerAction: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
 
-    // ── Messages ────────────────────────────────
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    msgList: { paddingHorizontal: 12, paddingTop: 16, paddingBottom: 10 },
+    msgList: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 16 },
 
-    emptyWrap: { alignItems: 'center', paddingTop: 28 },
+    emptyWrap: { alignItems: 'center', paddingTop: 32 },
     lockBadge: {
         flexDirection: 'row', alignItems: 'center', gap: 6,
-        backgroundColor: 'rgba(255,255,255,0.92)',
-        paddingHorizontal: 16, paddingVertical: 8,
-        borderRadius: 12, maxWidth: 290,
-        shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
-        elevation: 1,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 16, paddingVertical: 10,
+        borderRadius: 20, maxWidth: '85%',
+        shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
     },
-    lockText: { fontSize: 11.5, color: '#64748B', textAlign: 'center', lineHeight: 17, fontWeight: '500' },
+    lockText: { fontSize: 12, color: '#64748B', textAlign: 'center', lineHeight: 18, fontWeight: '600' },
 
-    // Day chip
     dayChip: {
-        alignSelf: 'center',
-        backgroundColor: '#D1FAE5',
-        paddingHorizontal: 16, paddingVertical: 5,
-        borderRadius: 14, marginVertical: 12,
-        elevation: 1, borderWidth: 1, borderColor: '#A7F3D0',
+        alignSelf: 'center', backgroundColor: '#E2E8F0',
+        paddingHorizontal: 16, paddingVertical: 6,
+        borderRadius: 16, marginVertical: 16,
     },
-    dayText: { fontSize: 11.5, color: '#065F46', fontWeight: '700' },
+    dayText: { fontSize: 11, color: '#475569', fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
 
-    // Message rows
-    msgRow: { marginBottom: 5 },
+    msgRow: { marginBottom: 6 },
     rowMe: { alignItems: 'flex-end' },
     rowThem: { alignItems: 'flex-start' },
 
     bubble: {
-        maxWidth: '78%',
-        paddingHorizontal: 13, paddingTop: 9, paddingBottom: 7,
-        borderRadius: 14,
-        elevation: 2,
-        shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
-        position: 'relative',
-    },
-    bubbleMe: { backgroundColor: MY_BUBBLE, borderTopRightRadius: 3 },
-    bubbleThem: { backgroundColor: THEIR_BUBBLE, borderTopLeftRadius: 3, borderWidth: 1, borderColor: '#E8F5EE' },
-
-    tailRight: {
-        position: 'absolute', top: 0, right: -8,
-        width: 0, height: 0,
-        borderTopWidth: 11, borderTopColor: MY_BUBBLE,
-        borderLeftWidth: 9, borderLeftColor: 'transparent',
-    },
-    tailLeft: {
-        position: 'absolute', top: 0, left: -8,
-        width: 0, height: 0,
-        borderTopWidth: 11, borderTopColor: THEIR_BUBBLE,
-        borderRightWidth: 9, borderRightColor: 'transparent',
-    },
-
-    msgText: { fontSize: 14.5, lineHeight: 21 },
-    metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 5, gap: 3 },
-    msgTime: { fontSize: 10.5 },
-
-    // ── Quick Replies ────────────────────────────
-    quickWrap: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E8F5EE', paddingBottom: 2 },
-    quickList: { paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', gap: 8 },
-    quickChip: {
-        backgroundColor: '#F0FDF6',
+        maxWidth: '82%',
+        paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10,
         borderRadius: 20,
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-        borderWidth: 1.5,
-        borderColor: '#A7F3D0',
-        elevation: 0,
     },
-    quickText: { fontSize: 13, color: PRIMARY, fontWeight: '700' },
+    bubbleMe: { backgroundColor: MY_BUBBLE, borderBottomRightRadius: 4 },
+    bubbleThem: { 
+        backgroundColor: THEIR_BUBBLE, 
+        borderBottomLeftRadius: 4,
+        shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+        elevation: 2
+    },
 
-    // ── Input Bar ────────────────────────────────
+    msgText: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
+    metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4, gap: 2 },
+    msgTime: { fontSize: 11, fontWeight: '600' },
+
+    // Quick replies
+    quickWrap: { backgroundColor: 'transparent', paddingBottom: 8, paddingTop: 8 },
+    quickList: { paddingHorizontal: 16, flexDirection: 'row', gap: 8 },
+    quickChip: {
+        backgroundColor: '#ECFDF5',
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+    },
+    quickText: { fontSize: 14, color: PRIMARY, fontWeight: '800' },
+
+    // Input bar
     inputBar: {
         flexDirection: 'row', alignItems: 'flex-end',
-        gap: 8, paddingHorizontal: 10, paddingVertical: 10,
-        backgroundColor: '#fff',
-        borderTopWidth: 1, borderTopColor: '#E8F5EE',
+        gap: 10, paddingHorizontal: 16, paddingVertical: 12,
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1, borderTopColor: '#F1F5F9',
+        elevation: 10, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: -4 }
     },
     inputWrap: {
         flex: 1, flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 26, borderWidth: 1.5, borderColor: '#D1FAE5',
-        paddingVertical: 6, paddingRight: 10, minHeight: 46,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 24,
+        paddingVertical: 4, paddingRight: 6, paddingLeft: 6, minHeight: 50,
     },
     input: {
-        flex: 1, fontSize: 15, color: '#1E293B',
-        paddingHorizontal: 10, maxHeight: 110, lineHeight: 20,
+        flex: 1, fontSize: 16, color: '#0F172A',
+        paddingHorizontal: 12, maxHeight: 120, lineHeight: 22, fontWeight: '500'
     },
     sendBtn: {
         width: 46, height: 46, borderRadius: 23,
+        backgroundColor: PRIMARY,
         alignItems: 'center', justifyContent: 'center',
         elevation: 2,
     },
+    blockedBar: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        paddingVertical: 18, backgroundColor: '#F8FAFC',
+        borderTopWidth: 1, borderTopColor: '#E2E8F0',
+    },
+    blockedText: {
+        fontSize: 14, color: '#64748B', fontWeight: '600',
+    },
+
+    // Modal
+    modalOverlay: {
+        flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.4)',
+        justifyContent: 'flex-end',
+    },
+    optionsSheet: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        paddingHorizontal: 20, paddingBottom: 30, paddingTop: 12,
+        shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 10,
+    },
+    sheetHandle: {
+        width: 40, height: 4, borderRadius: 2,
+        backgroundColor: '#E2E8F0',
+        alignSelf: 'center', marginBottom: 20,
+    },
+    sheetTitle: {
+        fontSize: 18, fontWeight: '800', color: '#0F172A',
+        marginBottom: 16,
+    },
+    optionRow: {
+        flexDirection: 'row', alignItems: 'center', gap: 14,
+        paddingVertical: 14,
+        borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
+    },
+    optionIcon: {
+        width: 40, height: 40, borderRadius: 20,
+        justifyContent: 'center', alignItems: 'center',
+    },
+    optionText: {
+        fontSize: 16, fontWeight: '600', color: '#0F172A',
+    }
 });

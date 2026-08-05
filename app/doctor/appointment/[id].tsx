@@ -263,8 +263,9 @@ export default function AppointmentDetailScreen() {
 
                         {(() => {
                             const isOnline = appt.paymentMode === 'ONLINE';
+                            const isWallet = appt.paymentMode === 'WALLET';
                             const isPaid = appt.paymentStatus === 'COMPLETED';
-                            const paymentLabel = isOnline ? (isPaid ? 'Paid online' : 'Online (pending)') : 'Cash on pay';
+                            const paymentLabel = isWallet ? 'Paid via Wallet' : isOnline ? (isPaid ? 'Paid online' : 'Online (pending)') : 'Cash on pay';
 
                             return [
                                 { label: 'Date', value: appt.date ? new Date(appt.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-' },

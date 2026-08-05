@@ -6,11 +6,10 @@ import {
     TouchableOpacity,
     KeyboardAvoidingView,
     Platform,
-    Alert,
     ActivityIndicator,
     ScrollView,
     StyleSheet,
-    Modal
+    Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -20,19 +19,14 @@ import { authService } from '@/services/auth.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { Ionicons } from '@expo/vector-icons';
 
-// Removed Google Sign-in imports
-
 export default function LoginScreen() {
     const router = useRouter();
     const { setToken, setUser } = useAuthStore();
     const [mobile, setMobile] = useState('');
     const [loading, setLoading] = useState(false);
+    const [focused, setFocused] = useState(false);
     const [showRestoreModal, setShowRestoreModal] = useState(false);
     const [restoring, setRestoring] = useState(false);
-
-    // Google Sign-in initialization removed
-
-    // Google Sign-in handler removed
 
     const handleSendOtp = async () => {
         const cleaned = mobile.replace(/\D/g, '');
@@ -47,32 +41,21 @@ export default function LoginScreen() {
         }
         setLoading(true);
         try {
-            // Real OTP integration
-            
             await authService.sendOtp(cleaned);
-            
             Toast.show({
                 type: 'success',
                 text1: 'OTP Sent',
                 text2: `A verification code has been sent to +91 ${cleaned}`,
                 position: 'top'
             });
-
             router.push({ pathname: '/(auth)/otp', params: { mobile: cleaned } });
         } catch (err: any) {
-            console.error('[Login] Send OTP Error:', err);
-            let msg = err?.response?.data?.message || err?.message || "Failed to send OTP.";
-            
-            if (msg === "ACCOUNT_DELETED") {
+            let msg = err?.response?.data?.message || err?.message || 'Failed to send OTP.';
+            if (msg === 'ACCOUNT_DELETED') {
                 setShowRestoreModal(true);
                 return;
             }
-            Toast.show({
-                type: 'error',
-                text1: 'Send OTP Failed',
-                text2: msg,
-                position: 'top'
-            });
+            Toast.show({ type: 'error', text1: 'Send OTP Failed', text2: msg, position: 'top' });
         } finally {
             setLoading(false);
         }
@@ -85,7 +68,6 @@ export default function LoginScreen() {
             await authService.api.post(`/patient/auth/restore`, { mobileNumber: cleaned });
             setShowRestoreModal(false);
             Toast.show({ type: 'success', text1: 'Account Restored', text2: 'Your account is active again!', position: 'top' });
-            // Automatically send OTP now
             handleSendOtp();
         } catch (err: any) {
             Toast.show({ type: 'error', text1: 'Restore Failed', text2: err?.response?.data?.message || 'Could not restore account', position: 'top' });
@@ -95,104 +77,168 @@ export default function LoginScreen() {
     };
 
     return (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <StatusBar style="dark" />
-            <LinearGradient colors={["#C8E6F9", "#EBF5FB", "#FFFFFF"]} style={StyleSheet.absoluteFill} />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <StatusBar style="light" />
 
-            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 28, paddingBottom: 48 }}>
-                {/* Back */}
-                {router.canGoBack() && (
-                    <TouchableOpacity onPress={() => router.back()} style={{ marginBottom: 20 }}>
-                        <Text style={styles.back}>← Back</Text>
-                    </TouchableOpacity>
-                )}
+            {/* Full-screen split: top hero + bottom form */}
+            <ScrollView
+                contentContainerStyle={{ flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+            >
+                {/* ── Top Hero ── */}
+                <LinearGradient
+                    colors={['#0B3370', '#1A5FAD', '#2878D0']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={styles.hero}
+                >
+                    {/* Blobs */}
+                    <View style={styles.blob1} />
+                    <View style={styles.blob2} />
+                    <View style={styles.blob3} />
 
-                {/* Logo */}
-                <Text style={styles.logo}>
-                    <Text style={{ color: "#1A7FD4" }}>A1</Text>
-                    <Text style={{ color: "#27AE60" }}>Care</Text>
-                    <Text style={{ color: "#1A7FD4" }}> 24/7</Text>
-                </Text>
+                    {/* Back */}
+                    {router.canGoBack() && (
+                        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                            <Ionicons name="arrow-back" size={20} color="#fff" />
+                        </TouchableOpacity>
+                    )}
 
-                <Text style={styles.heading}>Welcome Back</Text>
-                <Text style={styles.sub}>Sign in to your healthcare account</Text>
-
-                <View style={styles.form}>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Mobile Number <Text style={{ color: '#E74C3C' }}>*</Text></Text>
-                        <View style={styles.inputWrapper}>
-                            <Text style={styles.prefix}>+91</Text>
-                            <TextInput
-                                style={styles.flexInput}
-                                placeholder="9876543210"
-                                keyboardType="phone-pad"
-                                value={mobile}
-                                onChangeText={(text) => setMobile(text.replace(/\D/g, ''))}
-                                maxLength={10}
-                                placeholderTextColor="#9CB3C4"
-                            />
-                        </View>
+                    {/* Logo mark */}
+                    <View style={styles.logoMark}>
+                        <Ionicons name="heart-circle" size={38} color="#fff" />
                     </View>
 
-                    <TouchableOpacity onPress={handleSendOtp} disabled={loading} activeOpacity={0.85}>
+                    <Text style={styles.brandName}>
+                        <Text style={{ color: '#7DD3FC' }}>A1</Text>
+                        <Text style={{ color: '#fff' }}>Care </Text>
+                        <Text style={{ color: '#93C5FD' }}>24/7</Text>
+                    </Text>
+                    <Text style={styles.heroTitle}>Welcome Back 👋</Text>
+                    <Text style={styles.heroSub}>Your trusted healthcare companion</Text>
+
+                    {/* Trust strips */}
+                    <View style={styles.trustRow}>
+                        {[
+                            { icon: 'shield-checkmark-outline' as const, label: '100% Secure' },
+                            { icon: 'time-outline' as const, label: '24/7 Support' },
+                            { icon: 'people-outline' as const, label: '10K+ Users' },
+                        ].map((t, i) => (
+                            <View key={i} style={styles.trustPill}>
+                                <Ionicons name={t.icon} size={13} color="rgba(255,255,255,0.9)" />
+                                <Text style={styles.trustText}>{t.label}</Text>
+                            </View>
+                        ))}
+                    </View>
+                </LinearGradient>
+
+                {/* ── Bottom Form Card ── */}
+                <View style={styles.formCard}>
+                    <View style={styles.dragHandle} />
+
+                    <Text style={styles.formTitle}>Sign In / Register</Text>
+                    <Text style={styles.formSub}>Enter your mobile number to get started</Text>
+
+                    {/* Mobile input */}
+                    <View style={styles.inputLabel}>
+                        <Text style={styles.labelText}>Mobile Number</Text>
+                        <Text style={styles.required}> *</Text>
+                    </View>
+
+                    <View style={[styles.inputWrapper, focused && styles.inputWrapperFocused]}>
+                        <View style={styles.prefixBox}>
+                            <Ionicons name="call-outline" size={16} color="#0B3370" />
+                            <Text style={styles.prefix}>+91</Text>
+                        </View>
+                        <View style={styles.inputDivider} />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="98765 43210"
+                            keyboardType="phone-pad"
+                            value={mobile}
+                            onChangeText={(text) => setMobile(text.replace(/\D/g, ''))}
+                            maxLength={10}
+                            placeholderTextColor="#CBD5E1"
+                            onFocus={() => setFocused(true)}
+                            onBlur={() => setFocused(false)}
+                        />
+                        {mobile.length === 10 && (
+                            <View style={styles.validCheck}>
+                                <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
+                            </View>
+                        )}
+                    </View>
+
+                    {/* OTP Button */}
+                    <TouchableOpacity
+                        onPress={handleSendOtp}
+                        disabled={loading}
+                        activeOpacity={0.88}
+                        style={styles.ctaWrap}
+                    >
                         <LinearGradient
-                            colors={["#1A7FD4", "#0D5FA0"]}
+                            colors={['#0B3370', '#2563EB']}
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                             style={styles.cta}
                         >
                             {loading ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                     <ActivityIndicator color="#fff" />
-                                    <Text style={styles.ctaText}>Contacting Server...</Text>
+                                    <Text style={styles.ctaText}>Sending OTP...</Text>
                                 </View>
                             ) : (
-                                <Text style={styles.ctaText}>Send OTP</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <Text style={styles.ctaText}>Send OTP</Text>
+                                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                                </View>
                             )}
                         </LinearGradient>
                     </TouchableOpacity>
 
-                    {/* Google Sign-in button removed */}
-
-                    <Text style={styles.disclaimer}>
-                        By continuing, you agree to our <Text onPress={() => router.push('/terms')} style={{ color: "#1A7FD4", fontWeight: "700" }}>Terms</Text> and <Text onPress={() => router.push('/privacy')} style={{ color: "#1A7FD4", fontWeight: "700" }}>Privacy Policy</Text>
-                    </Text>
-
-                    <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={{ marginTop: 8, alignItems: 'center', paddingVertical: 10 }}>
-                        <Text style={{ fontSize: 14, color: "#4A6E8A", fontWeight: "600" }}>
-                            Browse as Guest →
-                        </Text>
+                    {/* Guest link */}
+                    <TouchableOpacity
+                        onPress={() => router.replace('/(tabs)')}
+                        style={styles.guestBtn}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.guestText}>Continue as Guest</Text>
+                        <Ionicons name="chevron-forward" size={14} color="#64748B" />
                     </TouchableOpacity>
-                </View>
 
-                {/* Trust badges */}
-                <View style={styles.badges}>
-                    {['🔒 100% Secure', '⚡ 24/7 Available'].map((b) => (
-                        <View key={b} style={styles.badge}>
-                            <Text style={styles.badgeText}>{b}</Text>
-                        </View>
-                    ))}
+                    {/* Disclaimer */}
+                    <Text style={styles.disclaimer}>
+                        By continuing, you agree to our{' '}
+                        <Text onPress={() => router.push('/terms')} style={styles.disclaimerLink}>Terms</Text>
+                        {' & '}
+                        <Text onPress={() => router.push('/privacy')} style={styles.disclaimerLink}>Privacy Policy</Text>
+                    </Text>
                 </View>
             </ScrollView>
 
-            <Modal visible={showRestoreModal} transparent animationType="slide">
+            {/* ── Restore Account Modal ── */}
+            <Modal visible={showRestoreModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.iconContainer}>
-                            <Ionicons name="warning" size={32} color="#EF4444" />
+                    <View style={styles.modalSheet}>
+                        <View style={styles.modalIconCircle}>
+                            <Ionicons name="warning-outline" size={34} color="#EF4444" />
                         </View>
-                        <Text style={styles.modalTitle}>Account Unavailable</Text>
+                        <Text style={styles.modalTitle}>Account Disabled</Text>
                         <Text style={styles.modalDesc}>
-                            Your account is currently disabled and scheduled for deletion. If this was a mistake or you changed your mind, you can reactivate it right now.
+                            Your account is currently disabled and scheduled for deletion. You can reactivate it right now if this was a mistake.
                         </Text>
-                        
-                        <TouchableOpacity style={styles.restoreBtn} onPress={handleRestoreAccount} disabled={restoring}>
-                            <LinearGradient colors={["#27AE60", "#1E8449"]} style={styles.restoreBtnGradient}>
-                                {restoring ? <ActivityIndicator color="#FFF" /> : <Text style={styles.restoreBtnText}>Restore My Account</Text>}
+                        <TouchableOpacity
+                            style={styles.restoreBtn}
+                            onPress={handleRestoreAccount}
+                            disabled={restoring}
+                            activeOpacity={0.88}
+                        >
+                            <LinearGradient colors={['#16A34A', '#15803D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.restoreGrad}>
+                                {restoring ? <ActivityIndicator color="#fff" /> : <Text style={styles.restoreText}>Restore My Account</Text>}
                             </LinearGradient>
                         </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowRestoreModal(false)} disabled={restoring}>
-                            <Text style={styles.cancelBtnText}>Cancel</Text>
+                        <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowRestoreModal(false)} disabled={restoring} activeOpacity={0.85}>
+                            <Text style={styles.cancelText}>Cancel</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -202,58 +248,169 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-    back: { fontSize: 16, color: "#1A7FD4", fontWeight: "600" },
-    logo: { fontSize: 26, fontWeight: "900", textAlign: "center", marginBottom: 8 },
-    heading: { fontSize: 26, fontWeight: "800", color: "#0D2E4D", textAlign: "center" },
-    sub: { fontSize: 14, color: "#4A6E8A", textAlign: "center", marginTop: 6, marginBottom: 28 },
-    form: { gap: 16 },
-    inputGroup: { gap: 8 },
-    label: { fontSize: 13, fontWeight: "700", color: "#1A4D7A", marginLeft: 4 },
+    // ── Hero ──
+    hero: {
+        paddingTop: 60,
+        paddingBottom: 44,
+        paddingHorizontal: 28,
+        alignItems: 'center',
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    blob1: { position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.06)' },
+    blob2: { position: 'absolute', bottom: -40, left: -40, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.05)' },
+    blob3: { position: 'absolute', top: 20, left: 10, width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(255,255,255,0.04)' },
+
+    backBtn: {
+        position: 'absolute', top: 18, left: 18,
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        justifyContent: 'center', alignItems: 'center',
+    },
+    logoMark: {
+        width: 70, height: 70, borderRadius: 35,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)',
+        justifyContent: 'center', alignItems: 'center',
+        marginBottom: 14,
+    },
+    brandName: { fontSize: 22, fontWeight: '900', marginBottom: 8, letterSpacing: 0.5 },
+    heroTitle: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: -0.5, marginBottom: 8 },
+    heroSub: { fontSize: 14, color: 'rgba(255,255,255,0.75)', fontWeight: '500', marginBottom: 24 },
+
+    trustRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
+    trustPill: {
+        flexDirection: 'row', alignItems: 'center', gap: 5,
+        backgroundColor: 'rgba(255,255,255,0.14)',
+        borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    },
+    trustText: { fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: '700' },
+
+    // ── Form Card ──
+    formCard: {
+        flex: 1,
+        backgroundColor: '#F4F7FC',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        marginTop: -24,
+        paddingHorizontal: 24,
+        paddingTop: 20,
+        paddingBottom: 48,
+    },
+    dragHandle: {
+        width: 42, height: 4, borderRadius: 2,
+        backgroundColor: '#CBD5E1',
+        alignSelf: 'center',
+        marginBottom: 24,
+    },
+    formTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', letterSpacing: -0.4, marginBottom: 6 },
+    formSub: { fontSize: 14, color: '#64748B', fontWeight: '500', marginBottom: 28 },
+
+    inputLabel: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    labelText: { fontSize: 13, fontWeight: '800', color: '#0F172A' },
+    required: { fontSize: 13, color: '#EF4444', fontWeight: '900' },
+
     inputWrapper: {
-        flexDirection: "row",
-        alignItems: "center",
-        height: 52, backgroundColor: "#FFFFFF", borderRadius: 16,
-        paddingHorizontal: 18,
-        shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-        borderWidth: 1.5, borderColor: "#D8EAF5",
+        flexDirection: 'row', alignItems: 'center',
+        height: 58,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 18,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        paddingHorizontal: 16,
+        shadowColor: '#0A1A3A',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        elevation: 3,
+        marginBottom: 20,
+        gap: 0,
     },
-    prefix: { fontSize: 15, color: "#4A6E8A", fontWeight: "600", marginRight: 8 },
-    flexInput: { flex: 1, fontSize: 15, color: "#0D2E4D" },
+    inputWrapperFocused: {
+        borderColor: '#2563EB',
+        shadowColor: '#2563EB',
+        shadowOpacity: 0.12,
+        shadowRadius: 14,
+        elevation: 5,
+    },
+    prefixBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 12 },
+    prefix: { fontSize: 15, fontWeight: '800', color: '#0B3370' },
+    inputDivider: { width: 1, height: 22, backgroundColor: '#E2E8F0', marginRight: 14 },
+    input: { flex: 1, fontSize: 17, color: '#0F172A', fontWeight: '700', letterSpacing: 1 },
+    validCheck: { marginLeft: 8 },
+
+    ctaWrap: {
+        borderRadius: 30,
+        overflow: 'hidden',
+        shadowColor: '#0B3370',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.28,
+        shadowRadius: 20,
+        elevation: 8,
+        marginBottom: 16,
+    },
     cta: {
-        height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center",
-        shadowColor: "#1A7FD4", shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
-        marginTop: 8,
+        height: 58,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    ctaText: { fontSize: 17, fontWeight: "800", color: "#fff" },
-    disclaimer: { fontSize: 12, color: "#6B8A9E", textAlign: "center", marginTop: 15 },
-    divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 18, gap: 12 },
-    dividerLine: { flex: 1, height: 1.5, backgroundColor: "#D8EAF5" },
-    dividerText: { fontSize: 12, fontWeight: "700", color: "#9CB3C4" },
-    googleBtn: {
-        height: 56, backgroundColor: "#FFFFFF", borderRadius: 28,
-        flexDirection: "row", alignItems: "center", justifyContent: "center",
-        borderWidth: 1.5, borderColor: "#D8EAF5",
-        shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+    ctaText: { fontSize: 17, fontWeight: '900', color: '#fff', letterSpacing: 0.3 },
+
+    guestBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        gap: 4, paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 22,
+        borderWidth: 1, borderColor: '#E2E8F0',
+        marginBottom: 20,
     },
-    googleBtnText: { fontSize: 15, fontWeight: "700", color: "#0D2E4D" },
-    badges: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 30 },
-    badge: {
-        backgroundColor: 'rgba(26, 127, 212, 0.1)',
-        borderRadius: 20,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+    guestText: { fontSize: 14, color: '#64748B', fontWeight: '700' },
+
+    disclaimer: { fontSize: 12, color: '#94A3B8', textAlign: 'center', lineHeight: 18, fontWeight: '500' },
+    disclaimerLink: { color: '#2563EB', fontWeight: '800' },
+
+    // ── Restore Modal ──
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(10,20,50,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 28,
     },
-    badgeText: { color: '#1A7FD4', fontSize: 12, fontWeight: '600' },
-    
-    // Modal Styles
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(13, 46, 77, 0.4)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 32, paddingBottom: Platform.OS === 'ios' ? 48 : 32, alignItems: 'center' },
-    iconContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-    modalTitle: { fontSize: 24, fontWeight: '800', color: '#0D2E4D', marginBottom: 12, textAlign: 'center' },
-    modalDesc: { fontSize: 15, color: '#4A6E8A', textAlign: 'center', lineHeight: 22, marginBottom: 32, paddingHorizontal: 12 },
-    restoreBtn: { width: '100%', height: 56, borderRadius: 28, overflow: 'hidden', marginBottom: 16 },
-    restoreBtnGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    restoreBtnText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
-    cancelBtn: { width: '100%', height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#D8EAF5' },
-    cancelBtnText: { fontSize: 16, fontWeight: '700', color: '#64748B' },
+    modalSheet: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 32,
+        padding: 28,
+        width: '100%',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 20 },
+        shadowOpacity: 0.15,
+        shadowRadius: 40,
+        elevation: 20,
+    },
+    modalIconCircle: {
+        width: 76, height: 76, borderRadius: 38,
+        backgroundColor: '#FEF2F2',
+        justifyContent: 'center', alignItems: 'center',
+        marginBottom: 18,
+    },
+    modalTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A', marginBottom: 10, letterSpacing: -0.3, textAlign: 'center' },
+    modalDesc: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22, fontWeight: '500', marginBottom: 28 },
+    restoreBtn: {
+        width: '100%', borderRadius: 28, overflow: 'hidden', marginBottom: 12,
+        shadowColor: '#16A34A', shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25, shadowRadius: 14, elevation: 6,
+    },
+    restoreGrad: { height: 56, alignItems: 'center', justifyContent: 'center' },
+    restoreText: { fontSize: 16, fontWeight: '900', color: '#fff', letterSpacing: 0.3 },
+    cancelBtn: {
+        paddingVertical: 14, width: '100%',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 22,
+        borderWidth: 1, borderColor: '#E2E8F0',
+    },
+    cancelText: { color: '#64748B', fontSize: 15, fontWeight: '800' },
 });

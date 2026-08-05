@@ -14,6 +14,7 @@ import {
     KeyboardAvoidingView,
     Dimensions,
     useWindowDimensions,
+    Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -34,6 +35,7 @@ import { FontSize } from '@/constants/spacing';
 import { Button } from '@/components/ui/Button';
 import { DoctorCard } from '@/components/ui/DoctorCard';
 import { EmptyState, ErrorState } from '@/components/ui/EmptyState';
+import { SkeletonBox } from '@/components/ui/Skeleton';
 import { formatCurrency } from '@/utils/formatters';
 import type { Address } from '@/types';
 import RazorpayCheckout from 'react-native-razorpay';
@@ -815,10 +817,11 @@ export default function ServiceDetailScreen() {
     };
 
     const bookMutation = useMutation({
-        mutationFn: () => {
+        mutationFn: (variables?: { overridePaymentMethod?: string }) => {
             if (submitting.current) throw new Error('Already submitting');
             submitting.current = true;
             const addr = addresses?.find((a) => a._id === selectedAddressId);
+            const actualPaymentMethod = variables?.overridePaymentMethod || paymentMethod;
             const isHosp = service?.fulfillmentMode === 'HOSPITAL_VISIT' || (subName && /hospital/i.test(subName));
 
             if (shouldUseDoctorAppointment) {
@@ -837,12 +840,14 @@ export default function ServiceDetailScreen() {
                     startingTime: startTime,
                     endingTime: endTime,
                     totalAmount: priceParam ? parseFloat(priceParam) : 0,
-                    paymentMode: paymentMethod === 'COD'
+                    paymentMode: actualPaymentMethod === 'COD'
                         ? 'OFFLINE'
-                        : paymentMethod === 'WALLET'
+                        : actualPaymentMethod === 'WALLET'
                             ? 'WALLET'
                             : 'ONLINE',
-                    isGatewayPayment: paymentMethod === 'ONLINE', serviceName: nameParam ?? service?.name ?? 'Doctor Consult',
+                    isGatewayPayment: actualPaymentMethod === 'ONLINE', 
+                    serviceName: nameParam ?? service?.name ?? 'Doctor Consult',
+                    ...(couponApplied ? { couponCode: couponApplied.code, discount: couponApplied.discount } : {}),
                 });
             }
 
@@ -856,7 +861,7 @@ export default function ServiceDetailScreen() {
                 bookingType: 'SCHEDULED',
                 fulfillmentMode: (service?.fulfillmentMode) ?? (isHosp ? 'HOSPITAL_VISIT' : 'HOME_VISIT'),
                 price: finalPrice,
-                paymentMode: paymentMethod === 'COD' ? 'OFFLINE' : paymentMethod === 'WALLET' ? 'WALLET' : 'ONLINE',
+                paymentMode: actualPaymentMethod === 'COD' ? 'OFFLINE' : actualPaymentMethod === 'WALLET' ? 'WALLET' : 'ONLINE',
                 ...(couponApplied ? { couponCode: couponApplied.code, discount: couponApplied.discount } : {}),
             });
         },
@@ -904,8 +909,10 @@ export default function ServiceDetailScreen() {
         }
 
         const payableAmount = couponApplied?.finalAmount ?? (priceParam ? parseFloat(priceParam) : 0);
+        // If the coupon brings the total to 0, process it internally as a WALLET payment to skip Razorpay
+        const effectivePaymentMethod = payableAmount === 0 ? 'WALLET' : paymentMethod;
 
-        if (paymentMethod === 'WALLET') {
+        if (effectivePaymentMethod === 'WALLET') {
             const walletBalance = wallet?.balance ?? 0;
             if (walletBalance < payableAmount) {
                 showToast.warn(
@@ -917,17 +924,38 @@ export default function ServiceDetailScreen() {
             let createdBookingId: string | null = null;
             try {
                 setSubmittingOnline(true);
-                const booking = await bookMutation.mutateAsync();
+                const booking = await bookMutation.mutateAsync({ overridePaymentMethod: 'WALLET' });
                 createdBookingId = booking._id;
-                const order = await paymentService.createOrder({
-                    amount: payableAmount,
-                    type: "BOOKING",
-                    referenceId: booking._id,
-                });
-                await paymentService.payWithWallet(order._id);
+                
+                // Backend automatically processes wallet deductions and marks payment status correctly.
+                // We do NOT need to call paymentService.createOrder or payWithWallet,
+                // as that leads to double deduction and errors for 0-amount transactions.
+
                 sendBookingNotification(booking);
                 setSubmitted(true);
                 setSubmittedBookingId(booking?._id ?? null);
+                qc.invalidateQueries({ queryKey: ['service-bookings'] });
+                
+                if (shouldUseDoctorAppointment) {
+                    // For doctor appointment, navigation is handled in onSuccess of bookMutation
+                    // We just need to make sure we don't proceed to checkout/status
+                    return;
+                }
+                
+                router.replace({
+                    pathname: '/checkout/status' as any,
+                    params: {
+                        status: 'SUCCESS',
+                        txnId: booking._id, // Use booking ID as transaction ID for zero-cost / wallet
+                        amount: String(payableAmount),
+                        type: 'BOOKING',
+                        description: `Booking for ${service?.name || nameParam}`,
+                        bookingId: booking._id,
+                        date: todayYmd,
+                        providerName: '',
+                        paymentMode: 'WALLET',
+                    },
+                });
             } catch (err: any) {
                 if (createdBookingId) {
                     bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
@@ -940,8 +968,9 @@ export default function ServiceDetailScreen() {
             } finally {
                 setSubmittingOnline(false);
             }
-        } else if (paymentMethod === 'ONLINE') {
+        } else if (effectivePaymentMethod === 'ONLINE') {
             let createdBookingId: string | null = null;
+            let createdTxnId: string | null = null;
             try {
                 setSubmittingOnline(true);
                 const booking = await bookMutation.mutateAsync();
@@ -951,6 +980,7 @@ export default function ServiceDetailScreen() {
                     type: "BOOKING",
                     referenceId: booking._id
                 });
+                createdTxnId = order.txnId;
                 const razorData = await paymentService.initiateRazorpay(order._id);
                 const data = await RazorpayCheckout.open({
                     key: razorData.key,
@@ -1003,6 +1033,7 @@ export default function ServiceDetailScreen() {
                             amount: String(payableAmount),
                             type: 'BOOKING',
                             description: `Booking for ${service?.name || nameParam}`,
+                            txnId: createdTxnId || '',
                         },
                     });
                 }
@@ -1094,11 +1125,69 @@ export default function ServiceDetailScreen() {
 
     if (serviceLoading || !step) {
         return (
-            <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={{ marginTop: 12, color: Colors.muted }}>Loading service...</Text>
+            <SafeAreaView style={styles.root} edges={['top']}>
+                <View style={styles.header}>
+                    <SkeletonBox width={36} height={36} borderRadius={10} />
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                        <SkeletonBox width={120} height={20} borderRadius={6} />
+                    </View>
+                    <View style={{ width: 36 }} />
                 </View>
+
+                <View style={styles.stepWrap}>
+                    <View style={[styles.stepRow, { paddingVertical: 8, justifyContent: 'center' }]}>
+                        <SkeletonBox width="80%" height={28} borderRadius={14} />
+                    </View>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+                    <View style={styles.stepContent}>
+                        {/* Premium Card Header Skeleton */}
+                        <View style={[styles.card, { marginBottom: 20 }]}>
+                            <View style={{ alignItems: 'center' }}>
+                                <SkeletonBox width="100%" height={220} borderRadius={16} style={{ marginBottom: 16 }} />
+                                <SkeletonBox width="60%" height={26} borderRadius={8} style={{ marginBottom: 10 }} />
+                                <SkeletonBox width="90%" height={14} borderRadius={6} style={{ marginBottom: 6 }} />
+                                <SkeletonBox width="70%" height={14} borderRadius={6} />
+                            </View>
+
+                            <View style={[styles.cardDivider, { marginVertical: 18 }]} />
+
+                            {/* Service Details Grid Skeleton */}
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <View style={[styles.infoItem, { flex: 1 }]}>
+                                    <SkeletonBox width={60} height={12} borderRadius={4} style={{ marginBottom: 8 }} />
+                                    <SkeletonBox width={100} height={18} borderRadius={6} />
+                                </View>
+                                <View style={[styles.infoItem, { flex: 1 }]}>
+                                    <SkeletonBox width={90} height={12} borderRadius={4} style={{ marginBottom: 8 }} />
+                                    <SkeletonBox width={80} height={22} borderRadius={6} />
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Why Choose Us / Service Perks Skeleton */}
+                        <View style={[styles.card, { marginBottom: 20 }]}>
+                            <SkeletonBox width={140} height={20} borderRadius={6} style={{ marginBottom: 16 }} />
+                            <View style={{ gap: 14 }}>
+                                {[1, 2, 3].map(i => (
+                                    <View key={i} style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                                        <SkeletonBox width={36} height={36} borderRadius={10} style={{ marginTop: 2 }} />
+                                        <View style={{ flex: 1 }}>
+                                            <SkeletonBox width="60%" height={16} borderRadius={6} style={{ marginBottom: 8 }} />
+                                            <SkeletonBox width="90%" height={12} borderRadius={4} />
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Trust Badge Skeleton */}
+                        <View style={{ alignItems: 'center', marginTop: 4 }}>
+                            <SkeletonBox width={180} height={16} borderRadius={6} />
+                        </View>
+                    </View>
+                </ScrollView>
             </SafeAreaView>
         );
     }
@@ -1121,47 +1210,58 @@ export default function ServiceDetailScreen() {
             >
                 {step === 'info' && service && (
                     <View style={styles.stepContent}>
-                        {/* Premium Card Header */}
-                        <View style={[styles.card, { marginBottom: 20 }]}>
-                            <View style={{ alignItems: 'center' }}>
-                                <View style={[styles.heroIconBg, { backgroundColor: '#EFF6FF', marginBottom: 16 }]}>
-                                    <Ionicons name="medical" size={40} color={Colors.primary} />
+                        {/* Hero Section */}
+                        <View style={{ marginBottom: 24, backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', elevation: 3, shadowColor: '#94A3B8', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 }}>
+                            <Image 
+                                source={{ uri: service?.imageUrl || 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=800&q=80' }}
+                                style={{ width: '100%', height: 220, backgroundColor: '#EFF6FF' }} 
+                                resizeMode="cover" 
+                            />
+                            
+                            <View style={{ padding: 24, backgroundColor: '#fff' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                    <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+                                        <Text style={{ color: '#4338CA', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>{isDoctorService ? 'Expert Care' : 'Premium Service'}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 }}>
+                                        <Ionicons name="star" size={14} color="#D97706" />
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E', marginLeft: 4 }}>4.9</Text>
+                                    </View>
                                 </View>
-                                <Text style={styles.heroTitle}>{service.name}</Text>
-                                <Text style={styles.heroDesc}>{service.description || 'Professional healthcare service delivered in the safety and comfort of your home.'}</Text>
-                            </View>
-
-                            <View style={[styles.cardDivider, { marginVertical: 18 }]} />
-
-                            {/* Service Details Grid */}
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                <View style={styles.infoItem}>
-                                    <Text style={styles.infoLabel}>CATEGORY</Text>
-                                    <Text style={styles.infoValue}>{subName || 'General Health'}</Text>
-                                </View>
-                                <View style={styles.infoItem}>
-                                    <Text style={styles.infoLabel}>CONSULTATION FEE</Text>
-                                    <Text style={[styles.infoValue, { color: Colors.primary, fontWeight: '900' }]}>{formatCurrency(priceParam ? parseFloat(priceParam) : 0)}</Text>
+                                
+                                <Text style={{ fontSize: 24, fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>{service.name}</Text>
+                                <Text style={{ fontSize: 14, color: '#475569', lineHeight: 22, marginBottom: 24 }}>{service.description || 'Professional healthcare service delivered safely and securely in the comfort of your home.'}</Text>
+                                
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                                    <View>
+                                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Category</Text>
+                                        <Text style={{ fontSize: 15, fontWeight: '800', color: '#1E293B' }} numberOfLines={1}>{subName || 'General Health'}</Text>
+                                    </View>
+                                    <View style={{ width: 1, height: 40, backgroundColor: '#E2E8F0' }} />
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Consultation Fee</Text>
+                                        <Text style={{ fontSize: 22, fontWeight: '900', color: Colors.primary }}>{formatCurrency(priceParam ? parseFloat(priceParam) : 0)}</Text>
+                                    </View>
                                 </View>
                             </View>
                         </View>
 
-                        {/* Why Choose Us / Service Perks */}
-                        <View style={[styles.card, { marginBottom: 20 }]}>
-                            <Text style={[styles.cardTitle, { marginBottom: 16 }]}>Service Inclusions</Text>
-                            <View style={{ gap: 14 }}>
+                        {/* What's Included */}
+                        <View style={{ marginBottom: 24, paddingHorizontal: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 16 }}>What's Included</Text>
+                            <View style={{ gap: 12 }}>
                                 {[
-                                    { title: 'Verified Medical Experts', desc: 'Consultations by certified & registered professionals only.', icon: 'shield-checkmark-outline', color: '#10B981' },
-                                    { title: 'At-Home Comfort', desc: 'Avoid long hospital queues. Receive complete care at your doorstep.', icon: 'home-outline', color: '#3B82F6' },
-                                    { title: '24/7 Clinical Support', desc: 'Post-service follow-up queries and constant support.', icon: 'chatbubbles-outline', color: '#F59E0B' },
+                                    { title: 'Verified Medical Experts', desc: 'Consultations by certified & registered professionals only.', icon: 'shield-checkmark', color: '#059669', bg: '#D1FAE5' },
+                                    { title: 'At-Home Comfort', desc: 'Avoid long hospital queues. Receive complete care at your doorstep.', icon: 'home', color: '#2563EB', bg: '#DBEAFE' },
+                                    { title: '24/7 Clinical Support', desc: 'Post-service follow-up queries and constant support.', icon: 'chatbubbles', color: '#D97706', bg: '#FEF3C7' },
                                 ].map((perk, index) => (
-                                    <View key={index} style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-                                        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: perk.color + '15', justifyContent: 'center', alignItems: 'center', marginTop: 2 }}>
-                                            <Ionicons name={perk.icon as any} size={18} color={perk.color} />
+                                    <View key={index} style={{ flexDirection: 'row', gap: 16, alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 }}>
+                                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: perk.bg, justifyContent: 'center', alignItems: 'center' }}>
+                                            <Ionicons name={perk.icon as any} size={20} color={perk.color} />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E293B' }}>{perk.title}</Text>
-                                            <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2, lineHeight: 16 }}>{perk.desc}</Text>
+                                            <Text style={{ fontSize: 15, fontWeight: '700', color: '#1E293B', marginBottom: 2 }}>{perk.title}</Text>
+                                            <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 18 }}>{perk.desc}</Text>
                                         </View>
                                     </View>
                                 ))}
@@ -1169,9 +1269,9 @@ export default function ServiceDetailScreen() {
                         </View>
 
                         {/* Trust Badge */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4 }}>
-                            <Ionicons name="shield-checkmark" size={16} color="#64748B" />
-                            <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Safe & Secure Healthcare Bookings</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4, paddingBottom: 16 }}>
+                            <Ionicons name="shield-checkmark" size={16} color="#94A3B8" />
+                            <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '600', letterSpacing: 0.2 }}>Safe & Secure Healthcare Bookings</Text>
                         </View>
                     </View>
                 )}
@@ -1222,12 +1322,12 @@ export default function ServiceDetailScreen() {
                                 >
                                     <TouchableOpacity
                                         onPress={() => setSelectedAddressId(a._id)}
-                                        style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 14, width: '100%' }}
+                                        style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 16, width: '100%', backgroundColor: isActive ? '#F8FAFC' : '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
                                     >
                                         <View style={[styles.iconBox, { backgroundColor: config.bg }]}>
                                             <MaterialCommunityIcons name={config.icon as any} size={24} color={config.color} />
                                         </View>
-                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <View style={{ flex: 1, marginLeft: 14 }}>
                                             <Text style={styles.addrLabel}>{a.label}</Text>
                                             <Text style={styles.addrStreet} numberOfLines={2}>{getStreetValue(a)}</Text>
                                             <Text style={styles.addrCity}>{a.city}, {a.pincode}</Text>
@@ -1249,9 +1349,9 @@ export default function ServiceDetailScreen() {
                                         width: '100%',
                                         gap: 16
                                     }}>
-                                        <TouchableOpacity onPress={() => handleEditAddress(a)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                            <Ionicons name="pencil" size={15} color={Colors.primary} />
-                                            <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '700' }}>Edit</Text>
+                                        <TouchableOpacity onPress={() => handleEditAddress(a)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Ionicons name="pencil" size={15} color="#0B3370" />
+                                            <Text style={{ fontSize: 13, color: '#0B3370', fontWeight: '800' }}>Edit</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity onPress={() => {
                                             if (a._id) {
@@ -1267,9 +1367,9 @@ export default function ServiceDetailScreen() {
                                                     ]);
                                                 }
                                             }
-                                        }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        }} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <Ionicons name="trash" size={15} color="#EF4444" />
-                                            <Text style={{ fontSize: 12, color: '#EF4444', fontWeight: '700' }}>Delete</Text>
+                                            <Text style={{ fontSize: 13, color: '#EF4444', fontWeight: '800' }}>Delete</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -1299,15 +1399,15 @@ export default function ServiceDetailScreen() {
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
-                                <Text style={styles.fieldLabel}>Select Time Slot <Text style={{ color: '#EF4444' }}>*</Text></Text>
-                                <View style={styles.timeGrid}>
-                                    {timeSlots.map(t => (
-                                        <TouchableOpacity key={t} onPress={() => setScheduledTime(t)} style={[styles.timeChip, scheduledTime === t && styles.timeChipActive]}>
-                                            <Text style={[styles.timeChipText, scheduledTime === t && { color: '#fff' }]}>{t}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                                {timeSlots.length === 0 && (
+                        <Text style={styles.fieldLabel}>Select Time Slot <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                        <View style={styles.timeGrid}>
+                            {timeSlots.map(t => (
+                                <TouchableOpacity key={t} onPress={() => setScheduledTime(t)} style={[styles.timeChip, scheduledTime === t && styles.timeChipActive]}>
+                                    <Text style={[styles.timeChipText, scheduledTime === t && { color: '#0B3370', fontWeight: '900' }]}>{t}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        {timeSlots.length === 0 && (
                                     <View style={styles.noSlotsCard}>
                                         <Text style={styles.noSlotsIcon}>⚠️</Text>
                                         <View style={{ flex: 1 }}>
@@ -1340,14 +1440,24 @@ export default function ServiceDetailScreen() {
                                             }
                                             setPaymentMethod(opt.id as any);
                                         }}
-                                        style={[styles.payMethodCard, paymentMethod === opt.id && { borderColor: opt.color, borderWidth: 2.5 }, opt.disabled && { opacity: 0.6 }]}
+                                        style={[
+                                            styles.payMethodCard, 
+                                            paymentMethod === opt.id && { borderColor: '#0B3370', borderWidth: 2, backgroundColor: '#F8FAFC' }, 
+                                            opt.disabled && { opacity: 0.6 }
+                                        ]}
                                     >
-                                        <Ionicons name={opt.icon as any} size={24} color={paymentMethod === opt.id ? opt.color : Colors.textSecondary} />
+                                        <View style={[styles.payMethodIconBox, { backgroundColor: paymentMethod === opt.id ? '#EEF4FF' : '#F1F5F9' }]}>
+                                            <Ionicons name={opt.icon as any} size={24} color={paymentMethod === opt.id ? '#0B3370' : '#64748B'} />
+                                        </View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.payMethodTitle}>{opt.label}</Text>
                                             <Text style={[styles.payMethodSub, opt.disabled && { color: '#EF4444' }]}>{opt.sub}</Text>
                                         </View>
-                                        {!opt.disabled && <View style={[styles.radioOuter, paymentMethod === opt.id && { borderColor: opt.color }]}>{paymentMethod === opt.id && <View style={[styles.radioInner, { backgroundColor: opt.color }]} />}</View>}
+                                        {!opt.disabled && (
+                                            <View style={[styles.radioOuter, paymentMethod === opt.id && styles.radioActive]}>
+                                                {paymentMethod === opt.id && <View style={styles.radioInner} />}
+                                            </View>
+                                        )}
                                     </TouchableOpacity>
                                 ));
                             })()}
@@ -1364,47 +1474,61 @@ export default function ServiceDetailScreen() {
                     return (
                         <View style={styles.stepContent}>
                             <Text style={styles.stepTitle}>Review Booking</Text>
-                            <Text style={{ fontSize: 13, color: Colors.textSecondary, marginBottom: 16, marginTop: -8 }}>Please review your booking details before confirming</Text>
+                            <Text style={{ fontSize: 14, color: '#475569', marginBottom: 20, marginTop: -4, fontWeight: '500' }}>Please review your booking details before confirming</Text>
 
-                            {/* Service + Address combined */}
+                            {/* Unified Booking Summary Card */}
                             <View style={styles.reviewSection}>
-                                <View style={styles.reviewRow}>
-                                    <Text style={styles.reviewLabel}>Service</Text>
-                                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                                        <Text style={[styles.reviewValue, { color: Colors.primary, fontWeight: '700', textAlign: 'right' }]}>{service?.name || serviceName}</Text>
-                                        <Text style={{ fontSize: 13, color: Colors.muted, marginTop: 2, textAlign: 'right' }}>
-                                            {isDoctorService ? 'Doctor booking' : 'Service booking'} • {service?.fulfillmentMode === 'HOSPITAL_VISIT' ? 'Hospital' : service?.fulfillmentMode === 'VIRTUAL' ? 'Online' : 'Home'}
+                                <View style={[styles.reviewRow, { borderBottomWidth: 1, borderBottomColor: '#F1F5F9', borderStyle: 'dashed' }]}>
+                                    <View style={styles.reviewIconBox}>
+                                        <Ionicons name="medical" size={18} color="#0B3370" />
+                                    </View>
+                                    <View style={{ flex: 1, paddingLeft: 12 }}>
+                                        <Text style={styles.reviewLabelAlt}>Service</Text>
+                                        <Text style={styles.reviewValueAlt}>{service?.name || serviceName}</Text>
+                                        <Text style={{ fontSize: 13, color: '#64748B', marginTop: 2, fontWeight: '600' }}>
+                                            {isDoctorService ? 'Doctor consultation' : 'Service'} • {service?.fulfillmentMode === 'HOSPITAL_VISIT' ? 'Hospital' : service?.fulfillmentMode === 'VIRTUAL' ? 'Online' : 'Home'}
                                         </Text>
                                     </View>
                                 </View>
+                                
                                 {addrText && (
-                                    <View style={styles.reviewRow}>
-                                        <Text style={styles.reviewLabel}>Address</Text>
-                                        <Text style={[styles.reviewValue, { flex: 1 }]}>{addrText}</Text>
+                                    <View style={[styles.reviewRow, { borderBottomWidth: 1, borderBottomColor: '#F1F5F9', borderStyle: 'dashed' }]}>
+                                        <View style={styles.reviewIconBox}>
+                                            <Ionicons name="location" size={18} color="#0B3370" />
+                                        </View>
+                                        <View style={{ flex: 1, paddingLeft: 12 }}>
+                                            <Text style={styles.reviewLabelAlt}>Service Location</Text>
+                                            <Text style={styles.reviewValueAlt}>{addrText}</Text>
+                                        </View>
                                     </View>
                                 )}
-                            </View>
 
-                            {/* Schedule */}
-                            <View style={styles.reviewSection}>
-                                <View style={styles.reviewRow}>
-                                    <Text style={styles.reviewLabel}>Date & Time</Text>
-                                    <Text style={[styles.reviewValue, { fontWeight: '700' }]}>{getDisplaySchedule()}</Text>
+                                <View style={[styles.reviewRow, { borderBottomWidth: 0 }]}>
+                                    <View style={styles.reviewIconBox}>
+                                        <Ionicons name="calendar" size={18} color="#0B3370" />
+                                    </View>
+                                    <View style={{ flex: 1, paddingLeft: 12 }}>
+                                        <Text style={styles.reviewLabelAlt}>Date & Time</Text>
+                                        <Text style={styles.reviewValueAlt}>{getDisplaySchedule()}</Text>
+                                    </View>
                                 </View>
                             </View>
 
                             {/* Coupon Code */}
                             <View style={styles.reviewSection}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                    <Text style={[styles.reviewLabel, { fontWeight: '700', width: 'auto', marginBottom: 0 }]}>Coupon Code</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <Ionicons name="pricetag" size={18} color="#D97706" />
+                                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Apply Coupon</Text>
+                                    </View>
                                     <TouchableOpacity onPress={() => setShowCouponModal(true)}>
-                                        <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>View Available Coupons</Text>
+                                        <Text style={{ fontSize: 13, color: '#0B3370', fontWeight: '800' }}>View Offers</Text>
                                     </TouchableOpacity>
                                 </View>
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
                                     <TextInput
-                                        style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: couponApplied ? '#16A34A' : '#E2E8F0', paddingHorizontal: 12, fontSize: 14, fontWeight: '700', color: '#0F172A', letterSpacing: 1 }}
-                                        placeholder="Enter coupon code"
+                                        style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: couponApplied ? '#16A34A' : '#E2E8F0', paddingHorizontal: 16, fontSize: 15, fontWeight: '800', color: '#0F172A', letterSpacing: 1 }}
+                                        placeholder="Enter code"
                                         placeholderTextColor="#94A3B8"
                                         value={couponInput}
                                         onChangeText={t => { setCouponInput(t.toUpperCase()); setCouponApplied(null); }}
@@ -1412,12 +1536,12 @@ export default function ServiceDetailScreen() {
                                         editable={!couponApplied}
                                     />
                                     {couponApplied ? (
-                                        <TouchableOpacity onPress={() => { setCouponApplied(null); setCouponInput(''); }} style={{ height: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#FEE2E2', justifyContent: 'center' }}>
-                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#EF4444' }}>Remove</Text>
+                                        <TouchableOpacity onPress={() => { setCouponApplied(null); setCouponInput(''); }} style={{ height: 48, paddingHorizontal: 18, borderRadius: 12, backgroundColor: '#FEE2E2', justifyContent: 'center', borderWidth: 1, borderColor: '#FECACA' }}>
+                                            <Text style={{ fontSize: 14, fontWeight: '900', color: '#EF4444' }}>Remove</Text>
                                         </TouchableOpacity>
                                     ) : (
-                                        <TouchableOpacity onPress={() => handleApplyCoupon()} disabled={couponChecking} style={{ height: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: Colors.primary, justifyContent: 'center' }}>
-                                            {couponChecking ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFF' }}>Apply</Text>}
+                                        <TouchableOpacity onPress={() => handleApplyCoupon()} disabled={couponChecking} style={{ height: 48, paddingHorizontal: 24, borderRadius: 12, backgroundColor: '#0B3370', justifyContent: 'center' }}>
+                                            {couponChecking ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFF' }}>Apply</Text>}
                                         </TouchableOpacity>
                                     )}
                                 </View>
@@ -1430,30 +1554,31 @@ export default function ServiceDetailScreen() {
                             </View>
 
                             {/* Payment Summary */}
-                            <View style={[styles.reviewSection, { borderColor: Colors.primary, borderWidth: 1.5 }]}>
-                                <View style={styles.reviewRow}>
-                                    <Text style={styles.reviewLabel}>Method</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <View style={{ backgroundColor: paymentMethod === 'ONLINE' ? '#e8f5e9' : '#fff3e0', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
-                                            <Text style={{ fontSize: 12, fontWeight: '700', color: paymentMethod === 'ONLINE' ? '#2e7d32' : '#e65100' }}>{paymentMethod}</Text>
-                                        </View>
-                                    </View>
+                            <View style={[styles.reviewSection, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 16 }}>Bill Details</Text>
+                                
+                                <View style={[styles.reviewRow, { paddingVertical: 4 }]}>
+                                    <Text style={styles.billLabel}>Item Total</Text>
+                                    <Text style={styles.billValue}>{formatCurrency(amount)}</Text>
                                 </View>
+                                
                                 {couponApplied && (
-                                    <View style={styles.reviewRow}>
-                                        <Text style={styles.reviewLabel}>Original Price</Text>
-                                        <Text style={{ fontSize: 15, color: '#94A3B8', textDecorationLine: 'line-through' }}>{formatCurrency(amount)}</Text>
+                                    <View style={[styles.reviewRow, { paddingVertical: 4 }]}>
+                                        <Text style={[styles.billLabel, { color: '#16A34A' }]}>Coupon Discount</Text>
+                                        <Text style={[styles.billValue, { color: '#16A34A' }]}>-{formatCurrency(couponApplied.discount)}</Text>
                                     </View>
                                 )}
-                                {couponApplied && (
-                                    <View style={styles.reviewRow}>
-                                        <Text style={[styles.reviewLabel, { color: '#16A34A' }]}>Discount</Text>
-                                        <Text style={{ fontSize: 15, fontWeight: '700', color: '#16A34A' }}>-{formatCurrency(couponApplied.discount)}</Text>
-                                    </View>
-                                )}
-                                <View style={[styles.reviewRow, { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 8, paddingTop: 12 }]}>
-                                    <Text style={[styles.reviewLabel, { fontSize: 15, fontWeight: '700', color: Colors.textPrimary }]}>Total Amount</Text>
-                                    <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.primary }}>{formatCurrency(couponApplied ? couponApplied.finalAmount : amount)}</Text>
+                                
+                                <View style={[styles.reviewRow, { paddingVertical: 4 }]}>
+                                    <Text style={styles.billLabel}>Payment Method</Text>
+                                    <Text style={[styles.billValue, { color: paymentMethod === 'ONLINE' ? '#059669' : '#D97706' }]}>{paymentMethod}</Text>
+                                </View>
+
+                                <View style={{ height: 1, backgroundColor: '#CBD5E1', borderStyle: 'dashed', marginVertical: 14 }} />
+
+                                <View style={[styles.reviewRow, { paddingVertical: 0, alignItems: 'center' }]}>
+                                    <Text style={{ flex: 1, fontSize: 18, fontWeight: '900', color: '#0F172A' }}>To Pay</Text>
+                                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#0B3370', letterSpacing: -0.5 }}>{formatCurrency(couponApplied ? couponApplied.finalAmount : amount)}</Text>
                                 </View>
                             </View>
                         </View>
@@ -1505,7 +1630,7 @@ export default function ServiceDetailScreen() {
                                             key={l}
                                             style={[
                                                 styles.chip,
-                                                isActive && { backgroundColor: config.bg, borderColor: config.color }
+                                                isActive && { backgroundColor: '#EEF4FF', borderColor: '#0B3370', borderWidth: 2 }
                                             ]}
                                             onPress={() => {
                                                 if (editingAddressId) {
@@ -1532,13 +1657,13 @@ export default function ServiceDetailScreen() {
                                                 <MaterialCommunityIcons
                                                     name={config.icon as any}
                                                     size={16}
-                                                    color={isActive ? config.color : '#64748B'}
+                                                    color={isActive ? '#0B3370' : '#64748B'}
                                                     style={styles.chipIcon}
                                                 />
                                             </View>
                                             <Text style={[
                                                 styles.chipText,
-                                                isActive && { color: config.color }
+                                                isActive && { color: '#0B3370' }
                                             ]}>{l}</Text>
                                         </TouchableOpacity>
                                     );
@@ -1796,44 +1921,48 @@ const styles = StyleSheet.create({
     // Address
     addressCard: {
         backgroundColor: Colors.card,
-        borderRadius: 14,
-        padding: 14,
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 12,
-        marginBottom: 10,
+        borderRadius: 16,
+        padding: 0,
+        flexDirection: 'column',
+        gap: 0,
+        marginBottom: 14,
         borderWidth: 1.5,
-        borderColor: Colors.border,
-        ...Shadows.card,
+        borderColor: '#E2E8F0',
+        elevation: 2,
+        shadowColor: '#0F172A',
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        overflow: 'hidden',
     },
-    addressCardActive: { borderColor: Colors.primary, borderWidth: 2.5 },
+    addressCardActive: { borderColor: '#0B3370', borderWidth: 2 },
     iconBox: {
-        width: 52,
-        height: 52,
-        borderRadius: 18,
+        width: 48,
+        height: 48,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
     },
     radioOuter: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         borderWidth: 2,
-        borderColor: Colors.border,
+        borderColor: '#CBD5E1',
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: 1,
+        marginTop: 2,
     },
-    radioActive: { borderColor: Colors.primary },
+    radioActive: { borderColor: '#0B3370', backgroundColor: '#0B3370' },
     radioInner: {
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: Colors.primary,
+        backgroundColor: '#FFF',
     },
-    addrLabel: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.primary, marginBottom: 2 },
-    addrStreet: { fontSize: FontSize.base, color: Colors.textPrimary, fontWeight: '500', lineHeight: 22 },
-    addrCity: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+    addrLabel: { fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 2, letterSpacing: -0.2 },
+    addrStreet: { fontSize: 14, color: '#475569', fontWeight: '600', lineHeight: 20 },
+    addrCity: { fontSize: 13, color: '#64748B', marginTop: 2, fontWeight: '500' },
     primaryBadge: {
         backgroundColor: Colors.primaryLight,
         borderRadius: 20,
@@ -1860,18 +1989,19 @@ const styles = StyleSheet.create({
     },
 
     addAddrMiniBtn: {
-        paddingVertical: 12,
+        paddingVertical: 16,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: Colors.primary,
-        borderStyle: 'dashed',
-        borderRadius: 12,
+        backgroundColor: '#EEF4FF',
+        borderRadius: 16,
         marginTop: 8,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
     },
     addAddrMiniText: {
-        fontSize: FontSize.sm,
-        color: Colors.primary,
-        fontWeight: '700',
+        fontSize: 15,
+        color: '#0B3370',
+        fontWeight: '900',
+        letterSpacing: -0.2,
     },
     addAddrForm: {
         backgroundColor: '#fff',
@@ -1931,11 +2061,11 @@ const styles = StyleSheet.create({
 
     // Fields
     fieldLabel: {
-        fontSize: FontSize.sm,
-        fontWeight: '700',
-        color: Colors.textPrimary,
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#0F172A',
         marginBottom: 8,
-        marginTop: 4,
+        marginTop: 12,
     },
     input: {
         backgroundColor: Colors.card,
@@ -1990,34 +2120,40 @@ const styles = StyleSheet.create({
     },
     dateScroll: {
         marginTop: 12,
-        marginBottom: 20,
+        marginBottom: 24,
     },
     dateChip: {
-        width: 65,
-        height: 85,
-        backgroundColor: '#fff',
-        borderRadius: 14,
+        width: 68,
+        height: 88,
+        backgroundColor: '#FFF',
+        borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 10,
+        marginRight: 12,
         borderWidth: 1.5,
         borderColor: '#E2E8F0',
     },
     dateChipActive: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primary,
+        backgroundColor: '#0B3370',
+        borderColor: '#0B3370',
+        shadowColor: '#0B3370',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 6,
     },
     dateChipDay: {
-        fontSize: 10,
-        fontWeight: '600',
+        fontSize: 12,
+        fontWeight: '800',
         color: '#64748B',
         textTransform: 'uppercase',
     },
     dateChipNum: {
-        fontSize: 20,
-        fontWeight: '800',
-        color: Colors.textPrimary,
-        marginVertical: 2,
+        fontSize: 24,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginVertical: 4,
+        letterSpacing: -0.5,
     },
     dateChipMonth: {
         fontSize: 10,
@@ -2027,27 +2163,28 @@ const styles = StyleSheet.create({
     timeGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
-        marginTop: 12,
+        gap: 10,
+        marginTop: 14,
     },
     timeChip: {
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderRadius: 10,
-        backgroundColor: '#fff',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: 14,
+        backgroundColor: '#F8FAFC',
         borderWidth: 1.5,
         borderColor: '#E2E8F0',
-        minWidth: '22%',
+        minWidth: '28%',
         alignItems: 'center',
     },
     timeChipActive: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primary,
+        backgroundColor: '#EEF4FF',
+        borderColor: '#0B3370',
+        borderWidth: 2,
     },
     timeChipText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: Colors.textPrimary,
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#475569',
     },
     asapIcon: { fontSize: 18 },
     asapText: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
@@ -2082,19 +2219,28 @@ const styles = StyleSheet.create({
     payMethodCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        backgroundColor: Colors.card,
-        borderRadius: 16,
+        gap: 14,
+        backgroundColor: '#FFF',
+        borderRadius: 20,
         padding: 16,
         marginBottom: 12,
         borderWidth: 1.5,
-        borderColor: Colors.border,
-        ...Shadows.card,
+        borderColor: '#E2E8F0',
+        elevation: 2,
+        shadowColor: '#0F172A',
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
     },
-    payMethodActive: { borderColor: Colors.health, borderWidth: 2.5 },
-    payMethodDisabled: { opacity: 0.6 },
-    payMethodTitle: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textPrimary, marginBottom: 3 },
-    payMethodSub: { fontSize: FontSize.xs, color: Colors.textSecondary },
+    payMethodIconBox: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    payMethodTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 2, letterSpacing: -0.2 },
+    payMethodSub: { fontSize: 13, color: '#64748B', fontWeight: '600' },
     comingSoonBadge: {
         backgroundColor: '#D1D5DB',
         borderRadius: 20,
@@ -2116,38 +2262,36 @@ const styles = StyleSheet.create({
 
     // Review
     reviewSection: {
-        backgroundColor: Colors.card,
-        borderRadius: 14,
-        padding: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    reviewSectionTitle: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: Colors.textPrimary,
-        marginBottom: 12,
-    },
-    reviewCard: {
-        backgroundColor: Colors.card,
+        backgroundColor: '#FFF',
         borderRadius: 16,
-        overflow: 'hidden',
-        ...Shadows.card,
-        marginBottom: 14,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        elevation: 2,
+        shadowColor: '#0F172A',
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
     },
     reviewRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'flex-start',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-        gap: 12,
+        paddingVertical: 14,
     },
-    reviewLabel: { fontSize: FontSize.sm, color: Colors.textSecondary, flexShrink: 0, width: 75 },
-    reviewValue: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textPrimary, textAlign: 'right', flex: 1 },
+    reviewIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#EEF4FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    reviewLabelAlt: { fontSize: 13, color: '#64748B', fontWeight: '700', marginBottom: 2 },
+    reviewValueAlt: { fontSize: 15, fontWeight: '800', color: '#0F172A', lineHeight: 22 },
+    
+    billLabel: { fontSize: 14, color: '#475569', fontWeight: '600', flex: 1 },
+    billValue: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
 
     disclaimerBox: { padding: 12 },
     disclaimerText: { fontSize: FontSize.xs, color: Colors.muted, textAlign: 'center', lineHeight: 18 },
@@ -2383,19 +2527,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 28,
     },
-    modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
-    modalInputLabel: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8, marginTop: 16 },
+    modalTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
+    modalInputLabel: { fontSize: 13, fontWeight: '800', color: '#475569', marginBottom: 8, marginTop: 20 },
     modalInput: {
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
+        backgroundColor: '#FFF',
+        borderWidth: 1.5,
         borderColor: '#E2E8F0',
         borderRadius: 16,
         paddingHorizontal: 16,
-        paddingVertical: 14,
-        fontSize: 16,
-        color: Colors.textPrimary,
+        paddingVertical: 16,
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#0F172A',
     },
     modalInputWrap: {
         position: 'relative',
@@ -2417,12 +2562,12 @@ const styles = StyleSheet.create({
     chip: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 14,
-        borderWidth: 1,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 24,
+        borderWidth: 1.5,
         borderColor: '#E2E8F0',
-        backgroundColor: '#fff',
+        backgroundColor: '#FFF',
         gap: 8,
     },
     chipIconWrap: {
@@ -2434,16 +2579,20 @@ const styles = StyleSheet.create({
     chipIcon: {
         textAlignVertical: 'center',
     },
-    chipText: { fontSize: 14, lineHeight: 18, fontWeight: '700', color: Colors.textPrimary },
+    chipText: { fontSize: 14, lineHeight: 18, fontWeight: '800', color: '#475569' },
     saveAddrBtn: {
-        backgroundColor: Colors.primary,
+        backgroundColor: '#0B3370',
         borderRadius: 16,
         paddingVertical: 18,
         alignItems: 'center',
-        marginTop: 32,
-        marginBottom: 20,
-        ...Shadows.card,
+        marginTop: 36,
+        marginBottom: 24,
+        elevation: 8,
+        shadowColor: '#0B3370',
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
     },
-    saveAddrBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+    saveAddrBtnText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
 });
 

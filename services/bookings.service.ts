@@ -65,11 +65,11 @@ export const bookingsService = {
     // Doctor appointments
     bookDoctor: async (
         doctorId: string,
-        data: { date: string; startingTime: string; endingTime: string; totalAmount?: number; paymentMode?: 'ONLINE' | 'OFFLINE' | 'WALLET'; isGatewayPayment?: boolean; serviceName?: string }
+        data: { date: string; startingTime: string; endingTime: string; totalAmount?: number; paymentMode?: 'ONLINE' | 'OFFLINE' | 'WALLET'; isGatewayPayment?: boolean; serviceName?: string; couponCode?: string; discount?: number }
     ) => {
         const payload = {
             ...data,
-            paymentMode: data.paymentMode === 'WALLET' ? 'ONLINE' : data.paymentMode,
+            paymentMode: data.paymentMode,
             isGatewayPayment: data.isGatewayPayment || data.paymentMode === 'ONLINE',
             // paymentStatus intentionally omitted — backend sets it after payment verification
         };
@@ -113,6 +113,8 @@ export const bookingsService = {
         paymentMode?: 'ONLINE' | 'OFFLINE' | 'WALLET';
         isGatewayPayment?: boolean;
         notes?: string;
+        couponCode?: string;
+        discount?: number;
     }) => {
         const payload = {
             childServiceId: data.childServiceId,
@@ -132,9 +134,11 @@ export const bookingsService = {
             bookingType: data.bookingType,
             fulfillmentMode: data.fulfillmentMode,
             price: data.price,
-            paymentMode: data.paymentMode === 'WALLET' ? 'ONLINE' : (data.paymentMode || 'OFFLINE'),
+            paymentMode: data.paymentMode || 'OFFLINE',
             isGatewayPayment: data.isGatewayPayment || data.paymentMode === 'ONLINE',
-            notes: data.notes
+            notes: data.notes,
+            couponCode: data.couponCode,
+            discount: data.discount
         };
         const res = await api.post<ApiResponse<ServiceRequest>>(
             Endpoints.CREATE_SERVICE_BOOKING,

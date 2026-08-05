@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { servicesService } from '@/services/services.service';
@@ -530,7 +531,7 @@ export default function ServicesScreen() {
             ) : (
                 <View style={styles.header}>
                     <TouchableOpacity onPress={goBack} style={styles.backBtn}>
-                        <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
+                        <Ionicons name="arrow-back" size={22} color="#0F172A" />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.headerTitle}>
@@ -546,7 +547,7 @@ export default function ServicesScreen() {
                         )}
                     </View>
                     <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8} onPress={() => router.push('/(tabs)/notifications')}>
-                        <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
+                        <Ionicons name="notifications-outline" size={22} color="#0F172A" />
                     </TouchableOpacity>
                 </View>
             )}
@@ -633,6 +634,20 @@ export default function ServicesScreen() {
                                 style={styles.categoryBannerImage}
                                 resizeMode="cover"
                             />
+                            {/* Dark gradient overlay at bottom for readability */}
+                            <LinearGradient
+                                colors={['transparent', 'rgba(10,20,50,0.55)']}
+                                style={StyleSheet.absoluteFillObject}
+                                start={{ x: 0, y: 0.4 }}
+                                end={{ x: 0, y: 1 }}
+                            />
+                            {/* Sub-count pill over banner */}
+                            <View style={styles.bannerPill}>
+                                <Ionicons name="grid-outline" size={12} color="#fff" />
+                                <Text style={styles.bannerPillText}>
+                                    {(subServices ?? []).length} Specialties
+                                </Text>
+                            </View>
                         </View>
                     )}
 
@@ -830,33 +845,41 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: Colors.card,
+        backgroundColor: '#FFFFFF',
         gap: 16,
+        shadowColor: '#0A1A3A',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 4,
     },
     backBtn: {
-        width: 42,
-        height: 42,
-        borderRadius: 14,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: '#F1F5F9',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    headerTitle: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 },
-    headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, fontWeight: '500' },
+    headerTitle: { fontSize: 28, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
+    headerSub: { fontSize: 13, color: '#64748B', marginTop: 4, fontWeight: '600' },
 
     // Search
     searchWrap: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        marginVertical: 12,
-        backgroundColor: Colors.card,
+        paddingHorizontal: 20,
+        marginVertical: 16,
+        backgroundColor: '#FFFFFF',
         marginHorizontal: 16,
-        borderRadius: 20,
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0',
-        ...Shadows.card,
-        shadowOpacity: 0.05,
+        borderRadius: 28,
+        borderWidth: 1,
+        borderColor: '#E8EEF5',
+        shadowColor: '#0A1A3A',
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 4,
     },
     searchIcon: { paddingLeft: 4, paddingRight: 4 },
     searchInput: {
@@ -882,13 +905,17 @@ const styles = StyleSheet.create({
     },
     gridCard: {
         width: CARD_WIDTH,
-        backgroundColor: Colors.card,
-        borderRadius: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
         overflow: 'hidden',
-        marginBottom: 0,
-        ...Shadows.card,
+        marginBottom: 4,
         borderWidth: 1,
-        borderColor: '#E8EDF5',
+        borderColor: '#E8EEF5',
+        shadowColor: '#00266B',
+        shadowOpacity: 0.03,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 4,
     },
     gridCardImage: {
         width: '100%',
@@ -917,16 +944,18 @@ const styles = StyleSheet.create({
         paddingBottom: 4,
     },
     gridCardName: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: Colors.textPrimary,
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#0F172A',
         lineHeight: 20,
-        marginBottom: 3,
+        marginBottom: 4,
+        letterSpacing: 0.2,
     },
     gridCardSub: {
-        fontSize: 11,
-        color: Colors.textSecondary,
-        lineHeight: 15,
+        fontSize: 12,
+        color: '#64748B',
+        fontWeight: '500',
+        lineHeight: 16,
     },
     gridCardFooter: {
         paddingHorizontal: 12,
@@ -968,82 +997,111 @@ const styles = StyleSheet.create({
     // Category hero banner
     categoryBanner: {
         overflow: 'hidden',
-        marginBottom: 16,
+        marginBottom: 20,
         marginHorizontal: -16,
-        height: 200,
+        height: 210,
+        position: 'relative',
     },
     categoryBannerImage: {
         width: '100%',
         height: '100%',
     },
+    bannerPill: {
+        position: 'absolute',
+        bottom: 14,
+        left: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.35)',
+    },
+    bannerPillText: { color: '#fff', fontWeight: '800', fontSize: 12, letterSpacing: 0.3 },
 
     // Sub-service card (level=sub) — image flush left
     subCard: {
-        backgroundColor: Colors.card,
-        borderRadius: 20,
-        marginBottom: 12,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        marginBottom: 14,
         overflow: 'hidden',
-        ...Shadows.card,
+        shadowColor: '#00266B',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.04,
+        shadowRadius: 18,
+        elevation: 5,
         borderWidth: 1,
-        borderColor: '#E8EDF5',
+        borderColor: '#E8EEF5',
     },
     subCardTop: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        padding: 16,
-        gap: 14,
+        padding: 18,
+        gap: 16,
     },
     subIconBox: {
-        width: 72,
-        height: 72,
-        borderRadius: 16,
-        backgroundColor: Colors.primaryLight,
+        width: 80,
+        height: 80,
+        borderRadius: 20,
+        backgroundColor: '#EEF4FF',
         justifyContent: 'center',
         alignItems: 'center',
         overflow: 'hidden',
     },
     subCardContent: { flex: 1 },
-    subCardName: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary, marginBottom: 4 },
-    subCardDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18, marginBottom: 5 },
+    subCardName: { fontSize: 17, fontWeight: '900', color: '#0F172A', marginBottom: 5, letterSpacing: 0.1 },
+    subCardDesc: { fontSize: 13, color: '#64748B', lineHeight: 19, marginBottom: 8, fontWeight: '500' },
     subPriceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
-    subStartingPrice: { fontSize: 13, fontWeight: '600', color: '#10B981' },
-    subStartingPriceAmount: { fontSize: 15, fontWeight: '800', color: '#10B981' },
+    subStartingPrice: { fontSize: 13, fontWeight: '700', color: '#059669' },
+    subStartingPriceAmount: { fontSize: 16, fontWeight: '900', color: '#059669' },
     subChevronBtn: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: Colors.primary,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: '#0B3370',
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#0B3370',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 4,
     },
 
     // Child bookable service card
     // Child section header
-    childSectionHeader: { marginBottom: 14 },
-    childSectionTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
-    childSectionSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+    childSectionHeader: { marginBottom: 16 },
+    childSectionTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 },
+    childSectionSub: { fontSize: 14, color: '#64748B', marginTop: 4, fontWeight: '500' },
 
     // Child card
     childCard: {
-        backgroundColor: Colors.card,
-        borderRadius: 20,
-        marginBottom: 16,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        marginBottom: 18,
         overflow: 'hidden',
-        ...Shadows.card,
+        shadowColor: '#00266B',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.05,
+        shadowRadius: 20,
+        elevation: 6,
         borderWidth: 1,
-        borderColor: '#E8EDF5',
+        borderColor: '#E8EEF5',
     },
     childCardTop: {
         flexDirection: 'row',
-        gap: 10,
-        padding: 12,
-        paddingBottom: 10,
+        gap: 14,
+        padding: 16,
+        paddingBottom: 12,
     },
     childCardImage: {
-        width: 80,
-        height: 80,
-        borderRadius: 12,
-        backgroundColor: Colors.primaryLight,
+        width: 90,
+        height: 90,
+        borderRadius: 18,
+        backgroundColor: '#EEF4FF',
         overflow: 'hidden',
         justifyContent: 'center',
         alignItems: 'center',
@@ -1051,58 +1109,62 @@ const styles = StyleSheet.create({
     childBadgeRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 5,
-        marginBottom: 5,
+        gap: 6,
+        marginBottom: 7,
     },
     childBadgeMostBooked: {
         backgroundColor: '#FFF0E6',
         borderRadius: 20,
-        paddingHorizontal: 7,
-        paddingVertical: 2,
+        paddingHorizontal: 9,
+        paddingVertical: 3,
     },
-    childBadgeMostBookedText: { fontSize: 10, fontWeight: '700', color: '#E8610A' },
+    childBadgeMostBookedText: { fontSize: 10, fontWeight: '800', color: '#E8610A' },
     childBadgeAvailable: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#ECFDF5',
         borderRadius: 20,
-        paddingHorizontal: 7,
-        paddingVertical: 2,
+        paddingHorizontal: 9,
+        paddingVertical: 3,
         gap: 4,
     },
     childAvailableDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
-    childBadgeAvailableText: { fontSize: 10, fontWeight: '700', color: '#16A34A' },
-    childCardName: { fontSize: 17, fontWeight: '800', color: Colors.textPrimary, marginBottom: 3 },
-    childCardDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
+    childBadgeAvailableText: { fontSize: 10, fontWeight: '800', color: '#16A34A' },
+    childCardName: { fontSize: 18, fontWeight: '900', color: '#0F172A', marginBottom: 4, letterSpacing: 0.1 },
+    childCardDesc: { fontSize: 13, color: '#64748B', lineHeight: 19, fontWeight: '500' },
 
     // Bottom strip
     childCardBottom: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
         borderTopWidth: 1,
         borderTopColor: '#F1F5F9',
         gap: 4,
     },
-    childPriceCol: { marginRight: 4 },
-    childCardPrice: { fontSize: 16, fontWeight: '900', color: Colors.textPrimary },
-    childPriceLabel: { fontSize: 8, color: Colors.textSecondary, fontWeight: '500' },
-    childFeatureCol: { flex: 1, alignItems: 'center', gap: 1 },
-    childFeatureVal: { fontSize: 9, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
-    childFeatureLabel: { fontSize: 8, color: Colors.textSecondary, textAlign: 'center' },
+    childPriceCol: { marginRight: 6 },
+    childCardPrice: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
+    childPriceLabel: { fontSize: 9, color: '#94A3B8', fontWeight: '600', marginTop: 1 },
+    childFeatureCol: { flex: 1, alignItems: 'center', gap: 2 },
+    childFeatureVal: { fontSize: 10, fontWeight: '800', color: '#334155', textAlign: 'center' },
+    childFeatureLabel: { fontSize: 9, color: '#94A3B8', textAlign: 'center', fontWeight: '500' },
 
     bookBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
-        backgroundColor: Colors.primary,
-        borderRadius: 12,
-        paddingHorizontal: 10,
-        paddingVertical: 9,
-        ...Shadows.float,
+        gap: 4,
+        backgroundColor: '#0B3370',
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 11,
+        shadowColor: '#0B3370',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 6,
     },
-    bookBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+    bookBtnText: { color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 0.3 },
 
 });
 

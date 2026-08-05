@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { servicesService } from '@/services/services.service';
 import { bookingsService } from '@/services/bookings.service';
 import { walletService } from '@/services/wallet.service';
@@ -25,12 +25,12 @@ import { useAuthStore } from '@/stores/auth.store';
 import RazorpayCheckout from 'react-native-razorpay';
 
 const DEPARTMENTS = [
-    { id: 'ortho', name: 'Orthopaedics', icon: 'body-outline' },
-    { id: 'pulmo', name: 'Pulmonology', icon: 'lungs-outline' },
-    { id: 'cardio', name: 'Cardiology', icon: 'heart-outline' },
-    { id: 'pedia', name: 'Paediatrics', icon: 'happy-outline' },
-    { id: 'neuro', name: 'Neurology', icon: 'brain-outline' },
-    { id: 'gyna', name: 'Gynaecology', icon: 'female-outline' },
+    { id: 'ortho', name: 'Orthopaedics', icon: 'bone' },
+    { id: 'pulmo', name: 'Pulmonology', icon: 'lungs' },
+    { id: 'cardio', name: 'Cardiology', icon: 'heart-pulse' },
+    { id: 'pedia', name: 'Paediatrics', icon: 'baby-carriage' },
+    { id: 'neuro', name: 'Neurology', icon: 'brain' },
+    { id: 'gyna', name: 'Gynaecology', icon: 'gender-female' },
 ];
 
 const SYMPTOMS = [
@@ -199,8 +199,8 @@ export default function HospitalBookingScreen() {
         }
 
         if (step === 'details') {
-            if (!selectedDept && !selectedSymptom) {
-                showToast.warn('Select Reason', 'Please select a department or symptom to proceed.');
+            if (!selectedDept) {
+                showToast.warn('Select Specialization', 'Please select a specialization to proceed.');
                 return;
             }
             if (!selectedTime) {
@@ -412,145 +412,156 @@ export default function HospitalBookingScreen() {
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 {step === 'details' ? (
                     <>
+                        {/* Premium Header */}
+                        <View style={{ marginBottom: 24, padding: 24, backgroundColor: '#EFF6FF', borderRadius: 24, overflow: 'hidden' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <View style={{ flex: 1, paddingRight: 16 }}>
+                                    <Text style={{ fontSize: 22, fontWeight: '800', color: '#1E3A8A', marginBottom: 6 }}>Book Consultation</Text>
+                                    <Text style={{ fontSize: 14, color: '#3B82F6', lineHeight: 20 }}>Schedule an in-person visit with our top specialists.</Text>
+                                </View>
+                                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center' }}>
+                                    <Ionicons name="medical" size={32} color="#2563EB" />
+                                </View>
+                            </View>
+                        </View>
+
                         {/* 1. Specializations */}
-                        <Text style={styles.sectionTitle}>Choose Specialization</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+                        <Text style={[styles.sectionTitle, { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 14 }]}>Specialization</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 28 }}>
                             {DEPARTMENTS.map((dept) => (
                                 <TouchableOpacity
                                     key={dept.id}
-                                    style={[styles.deptCard, selectedDept === dept.id && styles.activeChip]}
+                                    style={[styles.premiumDeptCard, selectedDept === dept.id && styles.premiumDeptCardActive]}
                                     onPress={() => {
                                         setSelectedDept(dept.id);
                                         setSelectedSymptom('');
                                     }}
+                                    activeOpacity={0.7}
                                 >
-                                    <View style={[styles.deptIconBg, selectedDept === dept.id && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                                        <Ionicons
+                                    <View style={[styles.premiumDeptIcon, selectedDept === dept.id && styles.premiumDeptIconActive]}>
+                                        <MaterialCommunityIcons
                                             name={dept.icon as any}
-                                            size={20}
-                                            color={selectedDept === dept.id ? '#fff' : Colors.primary}
+                                            size={28}
+                                            color={selectedDept === dept.id ? '#fff' : '#3B82F6'}
                                         />
                                     </View>
-                                    <Text style={[styles.deptName, selectedDept === dept.id && { color: '#fff' }]}>{dept.name}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-
-                        {/* 2. Symptoms */}
-                        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Common Symptoms (General)</Text>
-                        <View style={styles.symptomGrid}>
-                            {SYMPTOMS.map((sym) => (
-                                <TouchableOpacity
-                                    key={sym.id}
-                                    style={[styles.symptomChip, selectedSymptom === sym.id && styles.activeChip]}
-                                    onPress={() => {
-                                        setSelectedSymptom(sym.id);
-                                        setSelectedDept('');
-                                    }}
-                                >
-                                    <Ionicons
-                                        name={sym.icon as any}
-                                        size={14}
-                                        color={selectedSymptom === sym.id ? '#fff' : Colors.textSecondary}
-                                    />
-                                    <Text style={[styles.symptomText, selectedSymptom === sym.id && { color: '#fff' }]}>{sym.name}</Text>
+                                    <Text style={[styles.premiumDeptName, selectedDept === dept.id && styles.premiumDeptNameActive]}>{dept.name}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
 
                         {/* 3. Date Selection */}
-                        <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Select Visit Date</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
+                        <Text style={[styles.sectionTitle, { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 14 }]}>Date & Time</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
                             {dates.map((d) => (
                                 <TouchableOpacity
                                     key={d.full}
-                                    style={[styles.dateChip, selectedDate === d.full && styles.dateChipActive]}
+                                    style={[styles.premiumDateCard, selectedDate === d.full && styles.premiumDateCardActive]}
                                     onPress={() => setSelectedDate(d.full)}
+                                    activeOpacity={0.7}
                                 >
-                                    <Text style={[styles.dateDay, selectedDate === d.full && { color: '#fff' }]}>{d.dayName}</Text>
-                                    <Text style={[styles.dateNum, selectedDate === d.full && { color: '#fff' }]}>{d.dayNum}</Text>
+                                    <Text style={[styles.premiumDateMonth, selectedDate === d.full && { color: '#93C5FD' }]}>{d.month}</Text>
+                                    <Text style={[styles.premiumDateNum, selectedDate === d.full && { color: '#fff' }]}>{d.dayNum}</Text>
+                                    <Text style={[styles.premiumDateDay, selectedDate === d.full && { color: '#93C5FD' }]}>{d.dayName}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
 
                         {/* 4. Time Selection */}
-                        <Text style={styles.sectionTitle}>Select Preferred Slot</Text>
-                        <View style={styles.timeGrid}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
                             {timeSlots.map((slot) => (
                                 <TouchableOpacity
                                     key={slot}
-                                    style={[styles.timeChip, selectedTime === slot && styles.timeChipActive]}
+                                    style={[styles.premiumTimeChip, selectedTime === slot && styles.premiumTimeChipActive]}
                                     onPress={() => setSelectedTime(slot)}
+                                    activeOpacity={0.7}
                                 >
-                                    <Text style={[styles.timeText, selectedTime === slot && { color: '#fff' }]}>{slot}</Text>
+                                    <Text style={[styles.premiumTimeText, selectedTime === slot && styles.premiumTimeTextActive]}>{slot}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
                         {timeSlots.length === 0 && (
-                            <Text style={styles.noteText}>No slots remaining today. Please choose another date.</Text>
+                            <View style={{ padding: 16, backgroundColor: '#FEF2F2', borderRadius: 12, marginBottom: 24 }}>
+                                <Text style={{ fontSize: 13, color: '#991B1B', fontWeight: '500', textAlign: 'center' }}>No slots remaining today. Please choose another date.</Text>
+                            </View>
                         )}
-
-                        <View style={styles.noteBox}>
-                            <Text style={styles.noteText}>
-                                <Ionicons name="information-circle" size={14} color={Colors.textSecondary} />
-                                {" "}OP Registration fee of ₹{service?.price || 200} can be paid at the hospital counter.
-                            </Text>
-                        </View>
                     </>
                 ) : (
                     <View style={{ gap: 20 }}>
 
 
+                        {/* Premium Payment Header */}
+                        <View style={{ marginBottom: 10 }}>
+                            <Text style={{ fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 4 }}>Select Payment</Text>
+                            <Text style={{ fontSize: 14, color: '#64748B' }}>Choose how you'd like to pay for your token</Text>
+                        </View>
+
                         {/* Payment Method: A1 Wallet */}
                         <TouchableOpacity
-                            style={[styles.payCard, paymentMethod === 'WALLET' && styles.activePayCard]}
+                            style={[styles.premiumPayCard, paymentMethod === 'WALLET' && styles.premiumPayCardActive]}
                             onPress={() => setPaymentMethod('WALLET')}
+                            activeOpacity={0.8}
                         >
-                            <View style={[styles.payIcon, { backgroundColor: paymentMethod === 'WALLET' ? '#16A34A' : '#ECFDF5' }]}>
-                                <Ionicons name="wallet-outline" size={24} color={paymentMethod === 'WALLET' ? '#fff' : '#16A34A'} />
+                            <View style={[styles.premiumPayIcon, paymentMethod === 'WALLET' ? { backgroundColor: '#16A34A' } : { backgroundColor: '#F0FDF4' }]}>
+                                <Ionicons name="wallet" size={24} color={paymentMethod === 'WALLET' ? '#fff' : '#16A34A'} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.payTitle}>A1 Wallet</Text>
-                                <Text style={styles.paySub}>Balance: ₹{(wallet?.balance ?? 0).toFixed(2)}</Text>
+                                <Text style={[styles.premiumPayTitle, paymentMethod === 'WALLET' && { color: '#0F172A' }]}>A1 Wallet</Text>
+                                <Text style={styles.premiumPaySub}>
+                                    Balance: ₹{(wallet?.balance ?? 0).toFixed(2)}
+                                </Text>
                             </View>
-                            <View style={[styles.radio, paymentMethod === 'WALLET' && styles.radioActive]}>
-                                {paymentMethod === 'WALLET' && <View style={styles.radioInner} />}
+                            <View style={[styles.premiumRadio, paymentMethod === 'WALLET' && styles.premiumRadioActive]}>
+                                {paymentMethod === 'WALLET' && <View style={styles.premiumRadioInner} />}
                             </View>
                         </TouchableOpacity>
+                        
+                        {/* Check Balance Logic */}
+                        {paymentMethod === 'WALLET' && (wallet?.balance ?? 0) < (service?.price || 200) && (
+                            <View style={{ marginTop: -8, backgroundColor: '#FEF2F2', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#FCA5A5' }}>
+                                <Text style={{ color: '#991B1B', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>⚠️ Insufficient wallet balance. Please top up or choose another method.</Text>
+                            </View>
+                        )}
 
                         {/* Payment Method: Online */}
                         <TouchableOpacity
-                            style={[styles.payCard, paymentMethod === 'ONLINE' && styles.activePayCard]}
+                            style={[styles.premiumPayCard, paymentMethod === 'ONLINE' && styles.premiumPayCardActive]}
                             onPress={() => setPaymentMethod('ONLINE')}
+                            activeOpacity={0.8}
                         >
-                            <View style={[styles.payIcon, { backgroundColor: paymentMethod === 'ONLINE' ? '#7C3AED' : '#F3EEFF' }]}>
-                                <Ionicons name="card-outline" size={24} color={paymentMethod === 'ONLINE' ? '#fff' : '#7C3AED'} />
+                            <View style={[styles.premiumPayIcon, paymentMethod === 'ONLINE' ? { backgroundColor: '#2563EB' } : { backgroundColor: '#EFF6FF' }]}>
+                                <Ionicons name="card" size={24} color={paymentMethod === 'ONLINE' ? '#fff' : '#2563EB'} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.payTitle}>Pay Online</Text>
-                                <Text style={styles.paySub}>UPI, Card, Net Banking via Easebuzz</Text>
+                                <Text style={[styles.premiumPayTitle, paymentMethod === 'ONLINE' && { color: '#0F172A' }]}>Pay Online / UPI</Text>
+                                <Text style={styles.premiumPaySub}>GPay, PhonePe, Cards, Net Banking</Text>
                             </View>
-                            <View style={[styles.radio, paymentMethod === 'ONLINE' && styles.radioActive]}>
-                                {paymentMethod === 'ONLINE' && <View style={styles.radioInner} />}
+                            <View style={[styles.premiumRadio, paymentMethod === 'ONLINE' && styles.premiumRadioActive]}>
+                                {paymentMethod === 'ONLINE' && <View style={styles.premiumRadioInner} />}
                             </View>
                         </TouchableOpacity>
 
                         {/* Booking Summary */}
-                        <View style={styles.summaryBox}>
-                            <Text style={styles.summaryTitle}>Booking Summary</Text>
-                            <View style={styles.summaryRow}>
-                                <Text style={styles.summaryLabel}>Registration Fee</Text>
-                                <Text style={styles.summaryVal}>₹{service?.price || 200}</Text>
+                        <View style={styles.premiumSummaryBox}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 8 }}>
+                                <Ionicons name="receipt" size={20} color="#64748B" />
+                                <Text style={styles.premiumSummaryTitle}>Booking Summary</Text>
                             </View>
-                            <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12, marginTop: 12 }]}>
-                                <Text style={[styles.summaryLabel, { fontWeight: '700', color: Colors.textPrimary }]}>Total Payable</Text>
-                                <Text style={[styles.summaryVal, { color: Colors.primary, fontSize: 18 }]}>₹{service?.price || 200}</Text>
+                            <View style={styles.premiumSummaryRow}>
+                                <Text style={styles.premiumSummaryLabel}>Consultation Fee</Text>
+                                <Text style={styles.premiumSummaryVal}>₹{service?.price || 200}</Text>
                             </View>
-                            {paymentMethod === 'WALLET' && (wallet?.balance ?? 0) < (service?.price || 200) && (
-                                <View style={{ marginTop: 10, backgroundColor: '#FEF3C7', padding: 10, borderRadius: 10 }}>
-                                    <Text style={{ color: '#92400E', fontSize: 12, fontWeight: '600' }}>⚠️ Insufficient wallet balance. Please top up or choose another method.</Text>
-                                </View>
-                            )}
+                            <View style={styles.premiumSummaryRow}>
+                                <Text style={styles.premiumSummaryLabel}>Platform Fee</Text>
+                                <Text style={[styles.premiumSummaryVal, { color: '#16A34A' }]}>Free</Text>
+                            </View>
+                            
+                            <View style={styles.premiumSummaryDivider} />
+                            
+                            <View style={styles.premiumSummaryRow}>
+                                <Text style={[styles.premiumSummaryLabel, { fontWeight: '800', color: '#0F172A', fontSize: 16 }]}>Total Payable</Text>
+                                <Text style={[styles.premiumSummaryVal, { color: '#2563EB', fontSize: 20, fontWeight: '900' }]}>₹{service?.price || 200}</Text>
+                            </View>
                         </View>
                     </View>
                 )}
@@ -798,7 +809,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8,
     },
     summaryLabel: {
         fontSize: 14,
@@ -808,5 +818,215 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: Colors.textPrimary,
+    },
+
+    // Premium UI Overrides
+    premiumDeptCard: {
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 20,
+        alignItems: 'center',
+        width: '31%',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    premiumDeptCardActive: {
+        backgroundColor: '#2563EB',
+        borderColor: '#2563EB',
+        shadowColor: '#2563EB',
+        shadowOpacity: 0.2,
+    },
+    premiumDeptIcon: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#EFF6FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    premiumDeptIconActive: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    premiumDeptName: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1E293B',
+        textAlign: 'center',
+    },
+    premiumDeptNameActive: {
+        color: '#ffffff',
+    },
+    premiumSymptomChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        backgroundColor: '#fff',
+        borderRadius: 100,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+        elevation: 1,
+    },
+    premiumSymptomChipActive: {
+        backgroundColor: '#1E293B',
+        borderColor: '#1E293B',
+    },
+    premiumSymptomText: {
+        fontSize: 14,
+        color: '#475569',
+        fontWeight: '600',
+    },
+    premiumSymptomTextActive: {
+        color: '#fff',
+    },
+    premiumDateCard: {
+        width: 68,
+        height: 84,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    premiumDateCardActive: {
+        backgroundColor: '#2563EB',
+        borderColor: '#2563EB',
+        shadowColor: '#2563EB',
+        shadowOpacity: 0.25,
+    },
+    premiumDateMonth: { fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 2 },
+    premiumDateNum: { fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 2 },
+    premiumDateDay: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+    premiumTimeChip: {
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: '#fff',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        width: '31%',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    premiumTimeChipActive: {
+        backgroundColor: '#2563EB',
+        borderColor: '#2563EB',
+    },
+    premiumTimeText: { fontSize: 14, fontWeight: '700', color: '#475569' },
+    premiumTimeTextActive: { color: '#fff' },
+
+    // Premium Payment Styles
+    premiumPayCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        gap: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    premiumPayCardActive: {
+        backgroundColor: '#F8FAFC',
+        borderColor: '#2563EB',
+        shadowColor: '#2563EB',
+        shadowOpacity: 0.1,
+    },
+    premiumPayIcon: {
+        width: 52,
+        height: 52,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    premiumPayTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#334155',
+    },
+    premiumPaySub: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: '#64748B',
+        marginTop: 4,
+    },
+    premiumRadio: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#CBD5E1',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+    },
+    premiumRadioActive: {
+        borderColor: '#2563EB',
+    },
+    premiumRadioInner: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#2563EB',
+    },
+    premiumSummaryBox: {
+        marginTop: 12,
+        backgroundColor: '#F8FAFC',
+        padding: 24,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    premiumSummaryTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#0F172A',
+    },
+    premiumSummaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    premiumSummaryLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#475569',
+    },
+    premiumSummaryVal: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#0F172A',
+    },
+    premiumSummaryDivider: {
+        height: 1,
+        backgroundColor: '#E2E8F0',
+        marginVertical: 16,
     },
 });

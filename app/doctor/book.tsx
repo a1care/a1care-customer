@@ -234,7 +234,7 @@ export default function DoctorBookingScreen() {
                     date: selectedDate,
                     startingTime: selectedSlot.startingTime,
                     endingTime: selectedSlot.endingTime,
-                    paymentMode: 'ONLINE',
+                    paymentMode: 'WALLET',
                     serviceName: chosenSpecialization || 'Doctor Consultation',
                 });
                 const order = await paymentService.createOrder({ amount: fee, type: 'BOOKING', referenceId: booking._id });
@@ -254,6 +254,7 @@ export default function DoctorBookingScreen() {
                         date: selectedDate,
                         timeSlot: selectedSlot ? formatSlotTimeLocal(selectedSlot.startingTime) : '',
                         providerName: doctor?.name || '',
+                        paymentMode: 'WALLET',
                     },
                 });
             } catch (err: any) {
@@ -461,7 +462,12 @@ export default function DoctorBookingScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.payLabel}>A1 Wallet</Text>
-                            <Text style={styles.paySub}>Balance: {formatCurrency(wallet?.balance ?? 0)}</Text>
+                            <Text style={styles.paySub}>
+                                Balance: {formatCurrency(wallet?.balance ?? 0)}
+                                {((wallet?.balance ?? 0) < (doctor?.consultationFee ?? 0)) && (
+                                    <Text style={{ color: '#EF4444', fontWeight: 'bold' }}> (Insufficient balance)</Text>
+                                )}
+                            </Text>
                         </View>
                         <View style={[styles.radio, paymentMethod === 'WALLET' && styles.radioActive]}>
                             {paymentMethod === 'WALLET' && <View style={styles.radioInner} />}
@@ -478,7 +484,7 @@ export default function DoctorBookingScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.payLabel}>Pay Online</Text>
-                            <Text style={styles.paySub}>UPI, Card, Net Banking via Easebuzz</Text>
+                            <Text style={styles.paySub}>UPI, Card, Net Banking</Text>
                         </View>
                         <View style={[styles.radio, paymentMethod === 'ONLINE' && styles.radioActive]}>
                             {paymentMethod === 'ONLINE' && <View style={styles.radioInner} />}

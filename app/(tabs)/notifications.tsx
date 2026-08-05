@@ -35,6 +35,9 @@ import { useNotificationStore } from '@/stores/notification.store';
 import { useCallback } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { showToast } from '@/utils/toast';
+import { CustomAlert } from '@/stores/alert.store';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import NotificationDetailSheet, { isNavigableNotification } from '@/components/ui/NotificationDetailSheet';
 
 // ── Icon/Color Mapping ───────────────────────────────────────────────────
 const TYPE_META: Record<string, { icon: any; color: string; bgColor: string }> = {
@@ -95,13 +98,18 @@ const mergeNotifications = (remoteList: any[], localList: any[]) => {
 
 const NotificationsSkeleton = ({ pulseAnim }: { pulseAnim: Animated.Value }) => {
     return (
-        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-                <Animated.View 
-                    key={i} 
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
+            {[1, 2, 3, 4, 5].map((i) => (
+                <Animated.View
+                    key={i}
                     style={[
-                        styles.card, 
-                        { opacity: pulseAnim, backgroundColor: '#E2E8F0', height: 86, elevation: 0 }
+                        {
+                            opacity: pulseAnim,
+                            backgroundColor: '#E8EEF5',
+                            height: 88,
+                            borderRadius: 24,
+                            marginBottom: 14,
+                        }
                     ]}
                 />
             ))}
@@ -115,6 +123,9 @@ export default function NotificationsScreen() {
     const { setUnreadCount } = useNotificationStore();
     const [localList, setLocalList] = useState<any[]>([]);
     const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+    const [showClearModal, setShowClearModal] = useState(false);
+    const [selectedNotif, setSelectedNotif] = useState<any | null>(null);
+    const [sheetVisible, setSheetVisible] = useState(false);
 
     const { isAuthenticated } = useAuthStore();
 
@@ -229,17 +240,36 @@ export default function NotificationsScreen() {
     });
 
     const handlePress = (n: any) => {
+        // Always mark as read
         if (!n.isRead) markOneMutation.mutate(n._id);
+
         const screen = n.data?.screen;
         if (screen) {
             router.push(screen as any);
             return;
         }
+
+        // Booking-related → navigate directly
+        if (isNavigableNotification(n.refType)) {
+            switch (n.refType) {
+                case 'DoctorAppointment':
+                    router.push('/(tabs)/bookings' as any);
+                    break;
+                case 'ServiceRequest':
+                    router.push('/(tabs)/bookings' as any);
+                    break;
+            }
+            return;
+        }
+
+        // Everything else → open the premium detail sheet
+        setSelectedNotif(n);
+        setSheetVisible(true);
+    };
+
+    // Called from the sheet's action button for non-booking types
+    const handleSheetAction = (n: any) => {
         switch (n.refType) {
-            case 'DoctorAppointment':
-            case 'ServiceRequest':
-                router.push('/(tabs)/bookings' as any);
-                break;
             case 'Wallet':
                 router.push('/wallet' as any);
                 break;
@@ -247,40 +277,20 @@ export default function NotificationsScreen() {
                 router.push('/support/index' as any);
                 break;
             case 'Message':
-                if (n.data?.type === "BOOKING_CHAT") {
+                if (n.data?.type === 'BOOKING_CHAT') {
                     router.push(`/booking/chat?id=${n.data.threadId}` as any);
-                } else if (n.data?.type === "TICKET_CHAT") {
+                } else if (n.data?.type === 'TICKET_CHAT') {
                     router.push(`/support/chat?id=${n.data.threadId}` as any);
                 }
                 break;
-            case 'Broadcast':
-            case 'Auth':
-                showToast.info(n.title || 'Notification', n.body || undefined);
-                break;
             default:
-                if (n.title || n.body) {
-                    showToast.info(n.title || 'Notification', n.body || undefined);
-                }
                 break;
         }
     };
 
     const handleClearAll = () => {
         if (localList.length === 0) return;
-        if (Platform.OS === 'web') {
-            if (window.confirm('Are you sure you want to delete all notifications? This cannot be undone.')) {
-                clearAllMutation.mutate();
-            }
-        } else {
-            Alert.alert(
-                "Clear Notifications",
-                "Are you sure you want to delete all notifications? This cannot be undone.",
-                [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Clear All", style: "destructive", onPress: () => clearAllMutation.mutate() }
-                ]
-            );
-        }
+        setShowClearModal(true);
     };
 
     const handleManualRefresh = async () => {
@@ -294,73 +304,103 @@ export default function NotificationsScreen() {
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
-            <LinearGradient colors={['#F8FAFE', '#FFFFFF']} style={StyleSheet.absoluteFillObject} />
 
+            {/* ── Header ── */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.backBtn}>
-                    <ChevronLeft size={20} color="#1E293B" />
+                    <ChevronLeft size={20} color="#0F172A" />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.headerTitle}>Alerts & Updates</Text>
                     <Text style={styles.headerSub}>
-                        {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
+                        {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up ✓'}
                     </Text>
                 </View>
-
-
-
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity
-                        style={[styles.headerActionBtn, { backgroundColor: '#FFF1F2' }]}
-                        onPress={handleClearAll}
-                        disabled={localList.length === 0 || clearAllMutation.isPending}
-                    >
-                        {clearAllMutation.isPending 
-                            ? <ActivityIndicator size="small" color="#E11D48" />
-                            : <Text style={[styles.markAllText, { color: '#E11D48' }]}>Clear All</Text>
-                        }
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                    style={[styles.clearBtn, (localList.length === 0 || clearAllMutation.isPending) && { opacity: 0.4 }]}
+                    onPress={handleClearAll}
+                    disabled={localList.length === 0 || clearAllMutation.isPending}
+                >
+                    {clearAllMutation.isPending
+                        ? <ActivityIndicator size="small" color="#E11D48" />
+                        : <Text style={styles.clearBtnText}>Clear All</Text>
+                    }
+                </TouchableOpacity>
             </View>
+
+            {/* ── Mark all read strip ── */}
+            {unreadCount > 0 && (
+                <TouchableOpacity
+                    style={styles.markAllStrip}
+                    onPress={() => markAllMutation.mutate()}
+                    disabled={markAllMutation.isPending}
+                    activeOpacity={0.8}
+                >
+                    <CheckCircle2 size={14} color="#2563EB" />
+                    <Text style={styles.markAllStripText}>
+                        Mark all {unreadCount} as read
+                    </Text>
+                </TouchableOpacity>
+            )}
 
             {isLoading ? (
                 <NotificationsSkeleton pulseAnim={pulseAnim} />
+            ) : localList.length === 0 ? (
+                <View style={styles.emptyState}>
+                    <View style={styles.emptyIconCircle}>
+                        <Bell size={36} color="#2563EB" />
+                    </View>
+                    <Text style={styles.emptyTitle}>You're all caught up!</Text>
+                    <Text style={styles.emptySub}>No notifications right now. We'll alert you when something needs your attention.</Text>
+                </View>
             ) : (
                 <ScrollView
                     contentContainerStyle={styles.list}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
-                        <RefreshControl refreshing={isPullRefreshing} onRefresh={handleManualRefresh} />
+                        <RefreshControl refreshing={isPullRefreshing} onRefresh={handleManualRefresh} tintColor="#2563EB" />
                     }
                 >
                     {localList.map((n) => {
                         const meta = getMeta(n.refType);
                         const Icon = meta.icon;
+                        const isUnread = !n.isRead;
                         return (
                             <TouchableOpacity
                                 key={n._id}
-                                style={[styles.card, !n.isRead && styles.cardUnread]}
+                                style={[styles.card, isUnread && styles.cardUnread]}
                                 onPress={() => handlePress(n)}
+                                activeOpacity={0.88}
                             >
+                                {/* Unread left accent */}
+                                {isUnread && <View style={[styles.unreadAccent, { backgroundColor: meta.color }]} />}
+
+                                {/* Icon */}
                                 <View style={[styles.iconBox, { backgroundColor: meta.bgColor }]}>
                                     <Icon size={22} color={meta.color} />
                                 </View>
+
+                                {/* Content */}
                                 <View style={styles.content}>
                                     <View style={styles.row}>
-                                        <Text style={[styles.title, { flex: 1 }]}>{n.title}</Text>
+                                        <Text style={[styles.notifTitle, isUnread && styles.notifTitleUnread]} numberOfLines={1}>
+                                            {n.title}
+                                        </Text>
                                         <TouchableOpacity
                                             onPress={(e) => { e.stopPropagation(); deleteOneMutation.mutate(n._id); }}
-                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                            style={{ marginLeft: 8 }}
+                                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                            style={styles.deleteBtn}
                                         >
-                                            <Trash2 size={14} color={Colors.muted} />
+                                            <Trash2 size={16} color="#EF4444" />
                                         </TouchableOpacity>
                                     </View>
-                                    <Text style={styles.body} numberOfLines={2}>{n.body}</Text>
-                                    <View style={styles.footer}>
-                                        <Clock size={11} color={Colors.muted} />
-                                        <Text style={styles.time}>{timeAgo(n.createdAt)}</Text>
-                                        {!n.isRead && <View style={styles.dot} />}
+                                    <Text style={styles.notifBody} numberOfLines={2}>{n.body}</Text>
+                                    <View style={styles.notifFooter}>
+                                        <Clock size={11} color="#94A3B8" />
+                                        <Text style={styles.notifTime}>{timeAgo(n.createdAt)}</Text>
+                                        {isUnread && (
+                                            <View style={[styles.unreadDot, { backgroundColor: meta.color }]} />
+                                        )}
                                     </View>
                                 </View>
                             </TouchableOpacity>
@@ -369,42 +409,153 @@ export default function NotificationsScreen() {
                     <View style={{ height: 100 }} />
                 </ScrollView>
             )}
+
+            <ConfirmModal
+                visible={showClearModal}
+                title="Clear All Notifications?"
+                body="This will permanently delete all your notifications. This action cannot be undone."
+                confirmLabel="Yes, Clear All"
+                icon="trash-outline"
+                confirmColor="#E11D48"
+                loading={clearAllMutation.isPending}
+                onConfirm={() => { setShowClearModal(false); clearAllMutation.mutate(); }}
+                onCancel={() => setShowClearModal(false)}
+            />
+
+            <NotificationDetailSheet
+                visible={sheetVisible}
+                notification={selectedNotif}
+                onClose={() => setSheetVisible(false)}
+                onAction={handleSheetAction}
+            />
+
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    root: { flex: 1 },
-    center: { flex: 1, justifyContent: 'center' },
-    header: { flexDirection: 'row', justifyContent: 'space-between', padding: 20 },
-    backBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: '#F1F5F9',
+    root: { flex: 1, backgroundColor: '#F4F7FC' },
+
+    // Header
+    header: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-        alignSelf: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#0A1A3A',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 4,
     },
-    headerTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A' },
-    headerSub: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
+    backBtn: {
+        width: 44, height: 44, borderRadius: 22,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center', justifyContent: 'center',
+        marginRight: 14,
+    },
+    headerTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 },
+    headerSub: { fontSize: 12, color: '#94A3B8', fontWeight: '600', marginTop: 2 },
+    clearBtn: {
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 14, paddingVertical: 8,
+        backgroundColor: '#FFF1F2',
+        borderRadius: 20,
+        borderWidth: 1, borderColor: '#FCA5A5',
+    },
+    clearBtnText: { fontSize: 12, fontWeight: '900', color: '#E11D48' },
+
+    // Mark all strip
+    markAllStrip: {
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        marginHorizontal: 20, marginTop: 12, marginBottom: 4,
+        backgroundColor: '#EEF4FF',
+        borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10,
+        borderWidth: 1, borderColor: '#BFDBFE',
+    },
+    markAllStripText: { fontSize: 13, fontWeight: '800', color: '#2563EB', flex: 1 },
     markAllText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
-    headerActionBtn: { 
-        flexDirection: 'row', alignItems: 'center', gap: 6, 
-        paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, 
-        backgroundColor: '#EBF3FD' 
+    headerActionBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+        backgroundColor: '#EBF3FD'
     },
-    list: { paddingHorizontal: 20 },
-    card: { 
-        flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 20, 
-        padding: 16, marginBottom: 12, elevation: 1 
+
+    list: { paddingHorizontal: 20, paddingTop: 14 },
+
+    // Cards
+    card: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 16,
+        marginBottom: 12,
+        shadowColor: '#0A1A3A',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.04,
+        shadowRadius: 14,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#E8EEF5',
+        overflow: 'hidden',
+        position: 'relative',
     },
-    cardUnread: { backgroundColor: '#F8FBFF', borderWidth: 1, borderColor: '#EBF3FD' },
-    deleteBtn: { padding: 4 },
-    iconBox: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-    content: { flex: 1, marginLeft: 12 },
-    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    cardUnread: {
+        backgroundColor: '#FAFCFF',
+        borderColor: '#BFDBFE',
+        shadowColor: '#2563EB',
+        shadowOpacity: 0.06,
+    },
+    unreadAccent: {
+        position: 'absolute',
+        left: 0, top: 0, bottom: 0,
+        width: 4,
+        borderTopLeftRadius: 24,
+        borderBottomLeftRadius: 24,
+    },
+    iconBox: {
+        width: 52, height: 52, borderRadius: 18,
+        justifyContent: 'center', alignItems: 'center',
+        marginRight: 14,
+        flexShrink: 0,
+    },
+    content: { flex: 1 },
+    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5 },
+    notifTitle: { fontSize: 14, fontWeight: '700', color: '#334155', flex: 1, lineHeight: 20 },
+    notifTitleUnread: { fontWeight: '900', color: '#0F172A' },
+    deleteBtn: {
+        width: 32, height: 32, borderRadius: 16,
+        backgroundColor: '#FEF2F2',
+        justifyContent: 'center', alignItems: 'center',
+        marginLeft: 10,
+    },
+    notifBody: { fontSize: 13, color: '#64748B', lineHeight: 19, marginBottom: 8, fontWeight: '500' },
+    notifFooter: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    notifTime: { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
+    unreadDot: { width: 7, height: 7, borderRadius: 3.5, marginLeft: 4 },
+
+    // Empty state
+    emptyState: {
+        flex: 1, alignItems: 'center', justifyContent: 'center',
+        paddingHorizontal: 40, paddingVertical: 60,
+    },
+    emptyIconCircle: {
+        width: 100, height: 100, borderRadius: 50,
+        backgroundColor: '#EEF4FF',
+        justifyContent: 'center', alignItems: 'center',
+        marginBottom: 22,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 18, elevation: 5,
+    },
+    emptyTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A', textAlign: 'center', letterSpacing: -0.3, marginBottom: 10 },
+    emptySub: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22, fontWeight: '500' },
+
+    // legacy aliases kept for skeleton
+    center: { flex: 1, justifyContent: 'center' },
     title: { fontSize: 14, fontWeight: '800', color: '#0F172A' },
     dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary },
     body: { fontSize: 13, color: '#64748B', lineHeight: 18, marginBottom: 8 },
