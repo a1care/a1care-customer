@@ -18,8 +18,7 @@ import {
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, Link } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useQuery } from '@tanstack/react-query';
@@ -511,7 +510,7 @@ export default function HomeScreen() {
 
     const doctorRoleId = roles?.find(r => r.name.toLowerCase().includes('doctor'))?._id;
 
-    const { data: allDoctors, refetch: refetchDoctors } = useQuery({
+    const { data: allDoctors, refetch: refetchDoctors, isLoading: doctorsLoading } = useQuery({
         queryKey: ['doctors', doctorRoleId],
         queryFn: () => doctorsService.getByRole(doctorRoleId!),
         enabled: isAuthenticated && !!doctorRoleId,
@@ -530,6 +529,14 @@ export default function HomeScreen() {
         queryFn: async () => {
             const res = await api.get(Endpoints.HEALTH_PACKAGES);
             return res.data.data as any[];
+        },
+    });
+
+    const { data: serviceableAreas = [], isLoading: loadingAreas } = useQuery({
+        queryKey: ['serviceable-areas'],
+        queryFn: async () => {
+            const res = await api.get('/serviceable-areas/public');
+            return res.data?.data || [];
         },
     });
 
@@ -797,98 +804,128 @@ export default function HomeScreen() {
                             </View>
                         </TouchableOpacity>
 
-                        {/* Area Picker Modal */}
+                        {/* Area Picker Modal - Premium Apollo Style */}
                         <Modal visible={showAreaPicker} transparent animationType="slide" onRequestClose={() => setShowAreaPicker(false)}>
-                            <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} activeOpacity={1} onPress={() => setShowAreaPicker(false)} />
-                            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32, position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-                                <View style={{ alignItems: 'center', paddingVertical: 12 }}>
-                                    <View style={{ width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2 }} />
-                                    <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 10, color: '#1a1a1a' }}>Select Your Area</Text>
-                                </View>
-                                <ScrollView style={{ maxHeight: 300 }}>
-                                    {recentAreas.length > 0 && (
-                                        <View>
-                                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#888', paddingHorizontal: 24, paddingVertical: 8, backgroundColor: '#f9f9f9' }}>RECENT</Text>
-                                            {recentAreas.map((area) => (
-                                                <TouchableOpacity
-                                                    key={`recent-${area}`}
-                                                    onPress={async () => {
-                                                        setLocArea(area);
-                                                        setLocCity('Hyderabad');
-                                                        await AsyncStorage.setItem('last_city', 'Hyderabad');
-                                                        await AsyncStorage.setItem('last_area', area);
-                                                        
-                                                        let newRecents = [area, ...recentAreas.filter(a => a !== area)].slice(0, 3);
-                                                        setRecentAreas(newRecents);
-                                                        await AsyncStorage.setItem('recent_areas', JSON.stringify(newRecents));
-                                                        
-                                                        setShowAreaPicker(false);
-                                                    }}
-                                                    style={{
-                                                        flexDirection: 'row',
-                                                        alignItems: 'center',
-                                                        paddingHorizontal: 24,
-                                                        paddingVertical: 14,
-                                                        borderBottomWidth: 1,
-                                                        borderBottomColor: '#f0f0f0',
-                                                        backgroundColor: locArea === area ? '#EBF5FB' : '#fff',
-                                                    }}
-                                                >
-                                                    <MapPin size={16} color={Colors.primary} style={{ marginRight: 12 }} />
-                                                    <Text style={{ fontSize: 15, color: '#1a1a1a', fontWeight: locArea === area ? '700' : '400' }}>{area}</Text>
-                                                    {locArea === area && <Text style={{ marginLeft: 'auto', color: Colors.primary, fontSize: 18 }}>✓</Text>}
-                                                </TouchableOpacity>
-                                            ))}
-                                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#888', paddingHorizontal: 24, paddingVertical: 8, backgroundColor: '#f9f9f9' }}>ALL AREAS</Text>
+                            <View style={{ flex: 1, backgroundColor: 'rgba(10,20,50,0.55)', justifyContent: 'flex-end' }}>
+                                <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setShowAreaPicker(false)} />
+                                <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', maxHeight: '80%' }}>
+                                    {/* Gradient Header */}
+                                    <View style={{ background: '#fff', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                                        <View style={{ width: 44, height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#EEF4FF', justifyContent: 'center', alignItems: 'center' }}>
+                                                <MapPin size={20} color="#2563EB" />
+                                            </View>
+                                            <View>
+                                                <Text style={{ fontSize: 19, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 }}>Select Your Area</Text>
+                                                <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '500', marginTop: 2 }}>Hyderabad, Telangana</Text>
+                                            </View>
                                         </View>
-                                    )}
-                                    {[
-                                        'Safilguda',
-                                        'Neredmet',
-                                        'Malkajgiri',
-                                        'Anand Bagh',
-                                        'Dayanand Nagar',
-                                        'Moula Ali',
-                                        'A.S. Rao Nagar',
-                                        'Sainikpuri',
-                                    ].map((area) => (
+                                        {/* GPS Detect Button */}
                                         <TouchableOpacity
-                                            key={area}
-                                            onPress={async () => {
-                                                setLocArea(area);
-                                                setLocCity('Hyderabad');
-                                                await AsyncStorage.setItem('last_city', 'Hyderabad');
-                                                await AsyncStorage.setItem('last_area', area);
-                                                
-                                                let newRecents = [area, ...recentAreas.filter(a => a !== area)].slice(0, 3);
-                                                setRecentAreas(newRecents);
-                                                await AsyncStorage.setItem('recent_areas', JSON.stringify(newRecents));
-                                                
-                                                setShowAreaPicker(false);
-                                            }}
-                                            style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                paddingHorizontal: 24,
-                                                paddingVertical: 14,
-                                                borderBottomWidth: 1,
-                                                borderBottomColor: '#f0f0f0',
-                                                backgroundColor: locArea === area ? '#EBF5FB' : '#fff',
-                                            }}
+                                            onPress={() => { setShowAreaPicker(false); handleGetLocation(); }}
+                                            activeOpacity={0.85}
+                                            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, backgroundColor: '#EEF4FF', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 13, borderWidth: 1, borderColor: '#BFDBFE' }}
                                         >
-                                            <MapPin size={16} color={Colors.primary} style={{ marginRight: 12 }} />
-                                            <Text style={{ fontSize: 15, color: '#1a1a1a', fontWeight: locArea === area ? '700' : '400' }}>{area}</Text>
-                                            {locArea === area && <Text style={{ marginLeft: 'auto', color: Colors.primary, fontSize: 18 }}>✓</Text>}
+                                            <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center' }}>
+                                                <MapPin size={14} color="#fff" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '800', color: '#2563EB' }}>Use my current location</Text>
+                                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Auto-detect via GPS</Text>
+                                            </View>
+                                            <MapPin size={16} color="#93C5FD" />
                                         </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-                                <TouchableOpacity
-                                    onPress={() => { setShowAreaPicker(false); handleGetLocation(); }}
-                                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}
-                                >
-                                    <MapPin size={16} color={Colors.primary} style={{ marginRight: 12 }} />
-                                    <Text style={{ fontSize: 15, color: Colors.primary, fontWeight: '600' }}>Use my current location</Text>
-                                </TouchableOpacity>
+                                    </View>
+
+                                    {/* Area List */}
+                                    <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+                                        {recentAreas.length > 0 && (
+                                            <View>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+                                                    <View style={{ width: 3, height: 14, backgroundColor: '#F59E0B', borderRadius: 2 }} />
+                                                    <Text style={{ fontSize: 11, fontWeight: '900', color: '#94A3B8', letterSpacing: 1.2 }}>RECENTLY SELECTED</Text>
+                                                </View>
+                                                {recentAreas.map((area) => (
+                                                    <TouchableOpacity
+                                                        key={`recent-${area}`}
+                                                        onPress={async () => {
+                                                            setLocArea(area);
+                                                            setLocCity('Hyderabad');
+                                                            await AsyncStorage.setItem('last_city', 'Hyderabad');
+                                                            await AsyncStorage.setItem('last_area', area);
+                                                            let newRecents = [area, ...recentAreas.filter(a => a !== area)].slice(0, 3);
+                                                            setRecentAreas(newRecents);
+                                                            await AsyncStorage.setItem('recent_areas', JSON.stringify(newRecents));
+                                                            setShowAreaPicker(false);
+                                                        }}
+                                                        activeOpacity={0.7}
+                                                        style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: locArea === area ? '#F0F7FF' : '#fff', borderBottomWidth: 1, borderBottomColor: '#F8FAFC', gap: 14 }}
+                                                    >
+                                                        <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: locArea === area ? '#DBEAFE' : '#F8FAFC', justifyContent: 'center', alignItems: 'center' }}>
+                                                            <MapPin size={16} color={locArea === area ? '#2563EB' : '#94A3B8'} />
+                                                        </View>
+                                                        <Text style={{ flex: 1, fontSize: 15, fontWeight: locArea === area ? '800' : '600', color: locArea === area ? '#1E3A8A' : '#334155' }}>{area}</Text>
+                                                        {locArea === area ? (
+                                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center' }}>
+                                                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>✓</Text>
+                                                            </View>
+                                                        ) : (
+                                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#F1F5F9' }} />
+                                                        )}
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
+
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+                                            <View style={{ width: 3, height: 14, backgroundColor: Colors.primary, borderRadius: 2 }} />
+                                            <Text style={{ fontSize: 11, fontWeight: '900', color: '#94A3B8', letterSpacing: 1.2 }}>ALL SERVICEABLE AREAS</Text>
+                                        </View>
+                                        {loadingAreas ? (
+                                            <View style={{ padding: 24, alignItems: 'center' }}>
+                                                <ActivityIndicator size="small" color={Colors.primary} />
+                                            </View>
+                                        ) : serviceableAreas.length === 0 ? (
+                                            <View style={{ padding: 24, alignItems: 'center' }}>
+                                                <Text style={{ color: '#64748B', fontSize: 14 }}>No serviceable areas available</Text>
+                                            </View>
+                                        ) : serviceableAreas.map((areaObj: any) => (
+                                            <TouchableOpacity
+                                                key={areaObj._id}
+                                                onPress={async () => {
+                                                    const area = areaObj.name;
+                                                    setLocArea(area);
+                                                    setLocCity(areaObj.city);
+                                                    await AsyncStorage.setItem('last_city', areaObj.city);
+                                                    await AsyncStorage.setItem('last_area', area);
+                                                    let newRecents = [area, ...recentAreas.filter(a => a !== area)].slice(0, 3);
+                                                    setRecentAreas(newRecents);
+                                                    await AsyncStorage.setItem('recent_areas', JSON.stringify(newRecents));
+                                                    setShowAreaPicker(false);
+                                                }}
+                                                activeOpacity={0.7}
+                                                style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: locArea === areaObj.name ? '#F0FDF8' : '#fff', borderBottomWidth: 1, borderBottomColor: '#F8FAFC', gap: 14 }}
+                                            >
+                                                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: locArea === areaObj.name ? '#D1FAE5' : '#F8FAFC', justifyContent: 'center', alignItems: 'center' }}>
+                                                    <MapPin size={16} color={locArea === areaObj.name ? Colors.primary : '#94A3B8'} />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={{ fontSize: 15, fontWeight: locArea === areaObj.name ? '800' : '600', color: locArea === areaObj.name ? '#064E3B' : '#334155' }}>{areaObj.name}</Text>
+                                                    <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{areaObj.city}, {areaObj.state}</Text>
+                                                </View>
+                                                {locArea === areaObj.name ? (
+                                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' }}>
+                                                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>✓</Text>
+                                                    </View>
+                                                ) : (
+                                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#F1F5F9' }} />
+                                                )}
+                                            </TouchableOpacity>
+                                        ))}
+                                        <View style={{ height: 20 }} />
+                                    </ScrollView>
+                                </View>
                             </View>
                         </Modal>
 
@@ -1062,10 +1099,12 @@ export default function HomeScreen() {
                         <View style={styles.servicesGridContainer}>
                             <View style={styles.servicesHeader}>
                                 <Text style={[styles.sectionTitle, { fontSize: 18 }]}>Our Services</Text>
-                                <TouchableOpacity onPress={() => router.push('/services' as any)} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                    <Text style={styles.seeAll}>View All</Text>
-                                    <ChevronRight size={14} color={Colors.primary} />
-                                </TouchableOpacity>
+                                <Link href="/services" asChild>
+                                    <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                        <Text style={styles.seeAll}>View All</Text>
+                                        <ChevronRight size={14} color={Colors.primary} />
+                                    </TouchableOpacity>
+                                </Link>
                             </View>
 
                             <View style={styles.servicesGridWrap}>
@@ -1260,9 +1299,11 @@ export default function HomeScreen() {
                                         {searchQuery ? `${topDoctors.length} matched professionals` : 'Available experts near you'}
                                     </Text>
                                 </View>
-                                <TouchableOpacity onPress={() => router.push('/doctor/list')}>
-                                    <Text style={styles.seeAll}>See All</Text>
-                                </TouchableOpacity>
+                                <Link href="/doctor/list" asChild>
+                                    <TouchableOpacity>
+                                        <Text style={styles.seeAll}>See All</Text>
+                                    </TouchableOpacity>
+                                </Link>
                             </View>
                             <ScrollView
                                 horizontal
@@ -1270,7 +1311,24 @@ export default function HomeScreen() {
                                 style={styles.doctorScroll}
                                 contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 10 }}
                             >
-                                {topDoctors.length > 0 ? topDoctors.map(d => (
+                                {doctorsLoading ? (
+                                    [1, 2, 3].map(i => (
+                                        <View key={i} style={[styles.doctorCardSkeleton, { opacity: 0.7 }]}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#E2E8F0' }} />
+                                                <View style={{ marginLeft: 12, flex: 1 }}>
+                                                    <View style={{ width: '80%', height: 16, backgroundColor: '#E2E8F0', borderRadius: 4, marginBottom: 6 }} />
+                                                    <View style={{ width: '50%', height: 14, backgroundColor: '#E2E8F0', borderRadius: 4 }} />
+                                                </View>
+                                            </View>
+                                            <View style={{ width: '100%', height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <View style={{ width: '40%', height: 14, backgroundColor: '#E2E8F0', borderRadius: 4 }} />
+                                                <View style={{ width: '30%', height: 28, backgroundColor: '#E2E8F0', borderRadius: 14 }} />
+                                            </View>
+                                        </View>
+                                    ))
+                                ) : topDoctors.length > 0 ? topDoctors.map(d => (
                                     <DoctorCard
                                         key={d._id}
                                         name={d.name || "Doctor"}
@@ -1284,7 +1342,7 @@ export default function HomeScreen() {
                                     />
                                 )) : (
                                     <View style={styles.emptyCard}>
-                                        <Text style={styles.emptyText}>Loading experts...</Text>
+                                        <Text style={styles.emptyText}>No experts available at the moment.</Text>
                                     </View>
                                 )}
                             </ScrollView>
@@ -1297,11 +1355,20 @@ export default function HomeScreen() {
                                     <Text style={styles.sectionTitle}>Health Packages</Text>
                                     <Text style={styles.sectionSub}>Bundled checkups at best prices</Text>
                                 </View>
+                                <Link href="/package" asChild>
+                                    <TouchableOpacity 
+                                        style={{ flexDirection: 'row', alignItems: 'center' }} 
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E40AF', marginRight: 2 }}>View All</Text>
+                                        <ChevronRight size={14} color="#1E40AF" />
+                                    </TouchableOpacity>
+                                </Link>
                             </View>
                             <ScrollView
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
+                                contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 24 }}
                             >
                                 {healthPackages && healthPackages.length > 0 ? (
                                     healthPackages.map((pkg: any) => {
@@ -1422,7 +1489,9 @@ export default function HomeScreen() {
                                                     <View style={styles.bookingTag}>
                                                         <Text style={styles.bookingTagText}>Active</Text>
                                                     </View>
-                                                    <Text style={styles.bookingTitle}>{b.childServiceId?.name ?? 'Service'}</Text>
+                                                    <Text style={styles.bookingTitle}>
+                                                        {b.childServiceId?.serviceId?.name ? `${b.childServiceId.serviceId.name} - ${b.childServiceId.name}` : (b.childServiceId?.name ?? 'Service')}
+                                                    </Text>
                                                     <View style={styles.bookingInfoRow}>
                                                         <ShieldCheck size={14} color={Colors.health} />
                                                         <Text style={styles.bookingSub}>
@@ -1998,7 +2067,7 @@ const styles = StyleSheet.create({
 
     // 4. Sections & Top Doctors
     section: {
-        marginBottom: 32,
+        marginBottom: 40,
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -2022,8 +2091,20 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: Colors.primary,
     },
-    doctorScroll: {
-        marginTop: 4,
+    doctorScroll: { paddingVertical: 10 },
+    doctorCardSkeleton: {
+        width: width * 0.75,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 16,
+        marginRight: 16,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
+        elevation: 2,
     },
     emptyCard: {
         width: 200,

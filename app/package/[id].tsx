@@ -19,6 +19,7 @@ import { Endpoints } from '@/constants/api';
 import { bookingsService } from '@/services/bookings.service';
 import { paymentService } from '@/services/payment.service';
 import { walletService } from '@/services/wallet.service';
+import { packagesService } from '@/services/packages.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Button } from '@/components/ui/Button';
@@ -87,19 +88,14 @@ export default function HealthPackageDetail() {
 
     const bookMutation = useMutation({
         mutationFn: async (mode: 'ONLINE' | 'OFFLINE' | 'WALLET') => {
-            return await bookingsService.createServiceBooking({
+            return await packagesService.purchasePackage({
                 healthPackageId: id!,
-                price: pkg.price,
                 paymentMode: mode === 'WALLET' ? 'WALLET' : mode,
-                addressId: primaryAddress?._id,
-                bookingType: 'SCHEDULED',
-                fulfillmentMode: 'HOME_VISIT',
-                scheduledTime: new Date().toISOString(),
             });
         },
         onSuccess: (data, variables) => {
-            qc.invalidateQueries({ queryKey: ['service-bookings'] });
-            qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+            qc.invalidateQueries({ queryKey: ['active-packages'] });
+            qc.invalidateQueries({ queryKey: ['wallet'] });
             if (variables === 'OFFLINE') {
                 setSubmitted(true);
             }
@@ -126,16 +122,15 @@ export default function HealthPackageDetail() {
             }
             try {
                 setSubmitting(true);
-                const booking = await bookMutation.mutateAsync('WALLET');
+                const packageResp = await bookMutation.mutateAsync('WALLET');
                 const order = await paymentService.createOrder({
                     amount: pkg.price,
-                    type: "BOOKING",
-                    referenceId: booking._id,
+                    type: "PACKAGE",
+                    referenceId: packageResp._id,
                 });
                 await paymentService.payWithWallet(order._id);
                 qc.invalidateQueries({ queryKey: ['wallet'] });
-                qc.invalidateQueries({ queryKey: ['service-bookings'] });
-                qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+                qc.invalidateQueries({ queryKey: ['active-packages'] });
                 setSubmitted(true);
             } catch (err: any) {
                 const msg = err?.response?.data?.message || err?.message || 'Wallet payment failed.';
@@ -144,15 +139,15 @@ export default function HealthPackageDetail() {
                 setSubmitting(false);
             }
         } else if (mode === 'ONLINE') {
-            let createdBookingId: string | null = null;
+            let createdPackageId: string | null = null;
             try {
                 setSubmitting(true);
-                const booking = await bookMutation.mutateAsync('ONLINE');
-                createdBookingId = booking._id;
+                const packageResp = await bookMutation.mutateAsync('ONLINE');
+                createdPackageId = packageResp._id;
                 const order = await paymentService.createOrder({
                     amount: pkg.price,
-                    type: "BOOKING",
-                    referenceId: booking._id
+                    type: "PACKAGE",
+                    referenceId: packageResp._id
                 });
                 const razorData = await paymentService.initiateRazorpay(order._id);
                 const data = await RazorpayCheckout.open({
@@ -176,8 +171,7 @@ export default function HealthPackageDetail() {
                     orderId: order._id,
                 });
                 
-                qc.invalidateQueries({ queryKey: ['service-bookings'] });
-                qc.invalidateQueries({ queryKey: ['service-bookings-all'] });
+                qc.invalidateQueries({ queryKey: ['active-packages'] });
                 
                 router.replace({
                     pathname: '/checkout/status' as any,
@@ -185,25 +179,23 @@ export default function HealthPackageDetail() {
                         status: 'SUCCESS',
                         txnId: order.txnId,
                         amount: String(pkg.price),
-                        type: 'BOOKING',
+                        type: 'PACKAGE',
                         description: `Health Package: ${pkg.name}`,
-                        bookingId: booking._id,
+                        bookingId: packageResp._id,
                         date: new Date().toISOString(),
                     },
                 });
             } catch (err: any) {
-                if (createdBookingId) {
-                    bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
-                }
+                // Ignore rollback for packages for now, it's PENDING.
                 if (err.code === 2) {
-                    showToast.warn('Payment Cancelled', 'You cancelled the payment. Your booking was not confirmed.');
+                    showToast.warn('Payment Cancelled', 'You cancelled the payment.');
                 } else {
                     router.replace({
                         pathname: '/checkout/status' as any,
                         params: {
                             status: 'FAILED',
                             amount: String(pkg.price),
-                            type: 'BOOKING',
+                            type: 'PACKAGE',
                             description: `Health Package: ${pkg.name}`,
                         },
                     });
@@ -231,15 +223,15 @@ export default function HealthPackageDetail() {
                     <View style={styles.successIconBox}>
                         <Text style={{ fontSize: 60 }}>✅</Text>
                     </View>
-                    <Text style={styles.successTitle}>Booking Placed!</Text>
+                    <Text style={styles.successTitle}>Package Purchased!</Text>
                     <Text style={styles.successSub}>
-                        Your health package request has been received. Our partner will visit your doorstep for sample collection.
+                        Your health package is now active. You can use it to book covered services for free.
                     </Text>
                     <TouchableOpacity
                         style={styles.successBtn}
-                        onPress={() => router.replace('/bookings')}
+                        onPress={() => router.replace('/profile/my-packages')}
                     >
-                        <Text style={styles.successBtnText}>View Bookings</Text>
+                        <Text style={styles.successBtnText}>View My Packages</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>

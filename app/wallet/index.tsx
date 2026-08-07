@@ -85,28 +85,34 @@ export default function WalletScreen() {
     const addMoneyMutation = useMutation({
         mutationFn: async (amount: number) => {
             const order = await paymentService.createOrder({ amount, type: "WALLET_TOPUP" });
-            const razorData = await paymentService.initiateRazorpay(order._id);
-            const paymentData = await RazorpayCheckout.open({
-                key: razorData.key,
-                amount: razorData.razorOrder.amount,
-                currency: 'INR',
-                name: 'A1Care 24/7',
-                description: 'Wallet Top-up',
-                order_id: razorData.razorOrder.id,
-                prefill: {
-                    email: razorData.customer.email || '',
-                    contact: razorData.customer.contact || '',
-                    name: razorData.customer.name || '',
-                },
-                theme: { color: Colors.primary },
-            });
-            await paymentService.verifyRazorpay({
-                razorpay_order_id: (paymentData as any).razorpay_order_id,
-                razorpay_payment_id: (paymentData as any).razorpay_payment_id,
-                razorpay_signature: (paymentData as any).razorpay_signature,
-                orderId: order._id,
-            });
-            return { order };
+            try {
+                const razorData = await paymentService.initiateRazorpay(order._id);
+                const paymentData = await RazorpayCheckout.open({
+                    key: razorData.key,
+                    amount: razorData.razorOrder.amount,
+                    currency: 'INR',
+                    name: 'A1Care 24/7',
+                    description: 'Wallet Top-up',
+                    order_id: razorData.razorOrder.id,
+                    prefill: {
+                        email: razorData.customer.email || '',
+                        contact: razorData.customer.contact || '',
+                        name: razorData.customer.name || '',
+                    },
+                    theme: { color: Colors.primary },
+                });
+                await paymentService.verifyRazorpay({
+                    razorpay_order_id: (paymentData as any).razorpay_order_id,
+                    razorpay_payment_id: (paymentData as any).razorpay_payment_id,
+                    razorpay_signature: (paymentData as any).razorpay_signature,
+                    orderId: order._id,
+                });
+                return { order };
+            } catch (err: any) {
+                err.txnId = order.txnId;
+                err.amount = order.amount;
+                throw err;
+            }
         },
         onSuccess: ({ order }) => {
             qc.invalidateQueries({ queryKey: ['wallet'] });
@@ -121,7 +127,7 @@ export default function WalletScreen() {
                 },
             });
         },
-        onError: (err: any) => {
+        onError: (err: any, variables: number) => {
             if (err.code === 2) {
                 Alert.alert('Payment Cancelled', 'You cancelled the top-up transaction.');
             } else {
@@ -129,7 +135,8 @@ export default function WalletScreen() {
                     pathname: '/checkout/status' as any,
                     params: {
                         status: 'FAILED',
-                        amount: String(amountInput),
+                        txnId: err.txnId || 'N/A',
+                        amount: String(err.amount || variables),
                         type: 'WALLET_TOPUP',
                         description: 'Wallet Top-up',
                     },
@@ -146,7 +153,7 @@ export default function WalletScreen() {
         }
         addMoneyMutation.mutate(amt);
         setIsAddModalVisible(false);
-        setAmountInput('');
+        // Do not clear amountInput here, so if it fails we still have it (though we now use variables).
     };
 
     const quickAmounts = [100, 500, 1000, 2000];

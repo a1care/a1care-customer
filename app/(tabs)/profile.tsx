@@ -286,6 +286,13 @@ export default function ProfileScreen() {
                         subtitle="Upload & manage medical reports"
                         onPress={() => router.push("/profile/health-vault")}
                     />
+                    <MenuLink
+                        icon={<MaterialCommunityIcons name="star-circle" size={20} color="#F59E0B" />}
+                        bgColor="#FEF3C7"
+                        title="My Packages"
+                        subtitle="View your active health packages"
+                        onPress={() => router.push("/profile/my-packages")}
+                    />
                 </View>
 
                 {/* Account & Settings */}

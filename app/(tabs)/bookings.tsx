@@ -123,7 +123,9 @@ function ServiceCard({ booking, onPress, onDelete }: { booking: ServiceRequest; 
 
     const baseName =
         typeof booking.childServiceId === 'object' && booking.childServiceId
-            ? (booking.childServiceId as any).name ?? 'Home Service'
+            ? ((booking.childServiceId as any).serviceId?.name 
+                ? `${(booking.childServiceId as any).serviceId.name} - ${(booking.childServiceId as any).name}`
+                : (booking.childServiceId as any).name ?? 'Home Service')
             : 'Home Service';
 
     const packageName =

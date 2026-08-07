@@ -328,20 +328,7 @@ export default function NotificationsScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* ── Mark all read strip ── */}
-            {unreadCount > 0 && (
-                <TouchableOpacity
-                    style={styles.markAllStrip}
-                    onPress={() => markAllMutation.mutate()}
-                    disabled={markAllMutation.isPending}
-                    activeOpacity={0.8}
-                >
-                    <CheckCircle2 size={14} color="#2563EB" />
-                    <Text style={styles.markAllStripText}>
-                        Mark all {unreadCount} as read
-                    </Text>
-                </TouchableOpacity>
-            )}
+
 
             {isLoading ? (
                 <NotificationsSkeleton pulseAnim={pulseAnim} />

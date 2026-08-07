@@ -13,7 +13,7 @@ import { bookingsService } from '@/services/bookings.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import Map from '@/components/Map';
 import { socketService } from '@/services/socket.service';
 
 export default function TrackingScreen() {
@@ -112,33 +112,44 @@ export default function TrackingScreen() {
                 <View style={styles.center}>
                     <Ionicons name="navigate-outline" size={60} color={Colors.muted} />
                     <Text style={styles.noLocText}>Provider location not available yet.</Text>
-                    <Text style={styles.noLocSub}>They will appear here once they start the journey.</Text>
                 </View>
             ) : (
                 <View style={{ flex: 1 }}>
-                    <WebView
-                        source={{ uri: `https://www.google.com/maps/embed/v1/place?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${location.latitude},${location.longitude}&zoom=17` }}
-                        style={{ flex: 1 }}
-                    />
+                    <Map location={location} destLatNum={destLatNum} destLngNum={destLngNum} />
                     
-                    <View style={styles.infoCard}>
+                    <View style={styles.infoSheet}>
+                        <View style={styles.dragHandle} />
+                        
+                        <View style={styles.sheetHeader}>
+                            <View style={styles.pulseContainer}>
+                                <View style={styles.pulseDot} />
+                                <Text style={styles.liveText}>LIVE TRACKING</Text>
+                            </View>
+                            <Text style={styles.arrivingText}>Arriving in <Text style={styles.timeBold}>{durationStr}</Text></Text>
+                        </View>
+                        
+                        <View style={styles.divider} />
+                        
                         <View style={styles.providerRow}>
                             <View style={styles.markerCircle}>
-                                <FontAwesome5 name="motorcycle" size={20} color={Colors.primary} />
+                                <FontAwesome5 name="motorcycle" size={20} color="#F97316" />
                             </View>
-                            <View>
-                                <Text style={styles.cardTitle}>Provider is on the way</Text>
-                                <Text style={styles.cardSub}>Updating live every 10 seconds</Text>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.cardTitle}>{provider?.name || 'Your Provider'} is on the way</Text>
+                                <Text style={styles.cardSub} numberOfLines={1}>{provider?.role || 'Service Professional'}</Text>
                             </View>
+                            <TouchableOpacity onPress={() => Linking.openURL(`tel:${provider?.mobile}`)} style={styles.callCircle}>
+                                <Ionicons name="call" size={20} color="#059669" />
+                            </TouchableOpacity>
                         </View>
                         
                         <View style={styles.statGrid}>
                             <View style={styles.statBox}>
-                                <Text style={styles.statLabel}>DISTANCE TO REACH</Text>
+                                <Text style={styles.statLabel}>DISTANCE REMAINING</Text>
                                 <Text style={styles.statVal}>{distanceStr}</Text>
                             </View>
-                            <View style={styles.statBox}>
-                                <Text style={styles.statLabel}>TIME TO REACH</Text>
+                            <View style={styles.statBoxRight}>
+                                <Text style={styles.statLabel}>ESTIMATED TIME</Text>
                                 <Text style={styles.statVal}>{durationStr}</Text>
                             </View>
                         </View>
@@ -151,34 +162,46 @@ export default function TrackingScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-    header: { flexDirection: "row", alignItems: "center", padding: 16, backgroundColor: Colors.card, ...Shadows.card },
+    header: { flexDirection: "row", alignItems: "center", padding: 16, backgroundColor: Colors.white, ...Shadows.card, zIndex: 10 },
     backButton: { marginRight: 15 },
     headerInfo: { flex: 1 },
-    headerTitle: { fontSize: FontSize.base, fontWeight: "700", color: Colors.textPrimary },
-    headerSub: { fontSize: FontSize.xs, color: Colors.primary },
-    refreshBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primaryLight, justifyContent: 'center', alignItems: 'center' },
+    headerTitle: { fontSize: FontSize.base, fontWeight: "800", color: '#0F172A' },
+    headerSub: { fontSize: FontSize.xs, color: '#F97316', fontWeight: '600' },
     center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 30 },
     loadingText: { marginTop: 15, color: Colors.textSecondary, fontSize: FontSize.sm },
-    noLocText: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textPrimary, marginTop: 20 },
-    noLocSub: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', marginTop: 8 },
-    infoCard: {
+    infoSheet: {
         position: 'absolute',
-        bottom: 30,
-        left: 20,
-        right: 20,
+        bottom: 0,
+        left: 0,
+        right: 0,
         backgroundColor: Colors.white,
-        borderRadius: 24,
-        padding: 20,
-        ...Shadows.card,
-        borderWidth: 1,
-        borderColor: Colors.border,
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        padding: 24,
+        paddingTop: 12,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 20,
     },
-    providerRow: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 20 },
-    markerCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primaryLight, justifyContent: 'center', alignItems: 'center' },
-    cardTitle: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textPrimary },
-    cardSub: { fontSize: 12, color: Colors.health, fontWeight: '600' },
-    statGrid: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 15 },
-    statBox: { flex: 1, alignItems: 'center' },
-    statLabel: { fontSize: 9, color: Colors.muted, fontWeight: '800', marginBottom: 4 },
-    statVal: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+    dragHandle: { width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+    sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    pulseContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 6 },
+    pulseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#DC2626' },
+    liveText: { fontSize: 10, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 },
+    arrivingText: { fontSize: FontSize.sm, color: '#64748B', fontWeight: '500' },
+    timeBold: { fontSize: FontSize.lg, color: '#0F172A', fontWeight: '800' },
+    divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 20 },
+    providerRow: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 24 },
+    markerCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#FFEDD5' },
+    callCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center' },
+    cardTitle: { fontSize: FontSize.base, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
+    cardSub: { fontSize: 13, color: '#64748B', fontWeight: '500' },
+    statGrid: { flexDirection: 'row', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16 },
+    statBox: { flex: 1, borderRightWidth: 1, borderRightColor: '#E2E8F0' },
+    statBoxRight: { flex: 1, alignItems: 'flex-end' },
+    statLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '700', letterSpacing: 0.5, marginBottom: 4 },
+    statVal: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+    noLocText: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textPrimary, marginTop: 20 },
 });

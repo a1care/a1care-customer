@@ -389,8 +389,8 @@ export default function BookingDetailScreen() {
                                     style={styles.actionBtn}
                                     onPress={() => {
                                         const addr = booking.addressId;
-                                        const lat = (addr && typeof addr === 'object') ? addr.latitude : booking.location?.lat;
-                                        const lng = (addr && typeof addr === 'object') ? addr.longitude : booking.location?.lng;
+                                        const lat = (addr && typeof addr === 'object') ? addr.location?.lat : booking.location?.lat;
+                                        const lng = (addr && typeof addr === 'object') ? addr.location?.lng : booking.location?.lng;
                                         router.push({
                                             pathname: '/booking/track' as any,
                                             params: {
@@ -612,7 +612,6 @@ export default function BookingDetailScreen() {
                                         setIsCancelling(true);
                                         await bookingsService.updateServiceBookingStatus(booking._id, 'CANCELLED');
                                         await refetch();
-                                        triggerLocalNotification('Booking Cancelled', 'Your service booking has been cancelled.');
                                         setShowCancelConfirmModal(false);
                                     } catch (error: any) {
                                         showToast.error('Error', error?.response?.data?.message || 'Failed to cancel booking');

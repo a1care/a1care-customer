@@ -18,6 +18,7 @@ import { doctorsService } from '@/services/doctors.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { ErrorState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/Skeleton';
 import type { Doctor, Role } from '@/types';
 
 export default function DoctorListScreen() {
@@ -123,9 +124,21 @@ export default function DoctorListScreen() {
             </View>
 
             {isLoading && !isRefetching ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={styles.loadingText}>Fetching Professionals...</Text>
+                <View style={styles.list}>
+                    {[1, 2, 3, 4, 5].map((item) => (
+                        <View key={item} style={[styles.card, { opacity: 0.8 }]}>
+                            <Skeleton style={styles.avatar} />
+                            <View style={styles.info}>
+                                <Skeleton style={{ height: 16, width: 120, borderRadius: 4, marginBottom: 6 }} />
+                                <Skeleton style={{ height: 12, width: 150, borderRadius: 4, marginBottom: 8 }} />
+                                <Skeleton style={{ height: 12, width: 80, borderRadius: 4 }} />
+                            </View>
+                            <View style={styles.feesCol}>
+                                <Skeleton style={{ height: 10, width: 30, borderRadius: 2, marginBottom: 4 }} />
+                                <Skeleton style={{ height: 16, width: 40, borderRadius: 4 }} />
+                            </View>
+                        </View>
+                    ))}
                 </View>
             ) : isError ? (
                 <ErrorState message="Could not load doctors" onRetry={onRefresh} />

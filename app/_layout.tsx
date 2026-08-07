@@ -1,5 +1,5 @@
-import React from 'react';
-import { Stack } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryProvider } from '@/providers/QueryProvider';
 import GlobalAlert from '../components/GlobalAlert';
 import {
@@ -11,10 +11,8 @@ import {
 } from '@expo-google-fonts/inter';
 import { StatusBar } from 'expo-status-bar';
 import { authService } from '@/services/auth.service';
-import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { useConfigStore } from '@/stores/config.store';
-import { useRouter, useSegments } from 'expo-router';
 import { ActivityIndicator, View, Image, Text, Animated, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -368,7 +366,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         const currentSegment = (segments as string[])[0];
         const isAtRoot = !segments.length || currentSegment === 'index';
         const inAuthGroup = currentSegment === '(auth)';
-        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq', 'index', '(tabs)', 'service'];
+        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq', 'index', '(tabs)', 'service', 'hospital'];
         // Treat unresolved route (empty segments) as excluded to avoid premature redirect
         const isExcluded = !segments.length || excludedSegments.includes(currentSegment);
 
@@ -481,6 +479,8 @@ export default function RootLayout() {
                             headerShown: false,
                             animation: 'slide_from_right',
                             contentStyle: { backgroundColor: Colors.background },
+                            gestureEnabled: true,
+                            fullScreenGestureEnabled: true,
                         }}
                     >
                         <Stack.Screen name="(auth)" />

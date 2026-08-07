@@ -50,37 +50,13 @@ export default function PrivacyScreen() {
                 <TouchableOpacity onPress={() => router.push('/profile')} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#0F172A" />
                 </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.headerTitle}>Privacy Policy</Text>
-                    <Text style={styles.headerSub}>How we protect your data</Text>
-                </View>
+                <View style={{ flex: 1 }} />
                 <View style={{ width: 44 }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-                {/* Hero Card */}
-                <LinearGradient
-                    colors={['#0B3370', '#1A5FAD', '#2878D0']}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={styles.heroCard}
-                >
-                    <View style={styles.heroBlob1} />
-                    <View style={styles.heroBlob2} />
-                    <View style={styles.heroIconCircle}>
-                        <Ionicons name="shield-checkmark" size={36} color="#fff" />
-                    </View>
-                    <Text style={styles.heroTitle}>Your Privacy Matters</Text>
-                    <Text style={styles.heroSub}>
-                        At A1Care, your privacy and the security of your health data are our top priorities.
-                    </Text>
-                    <View style={styles.heroPill}>
-                        <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.9)" />
-                        <Text style={styles.heroPillText}>Effective Date: January 1, 2026</Text>
-                    </View>
-                </LinearGradient>
-
-                {/* Dynamic HTML content OR fallback cards */}
+                {/* Dynamic HTML content */}
                 {privacyData?.content ? (
                     <View style={styles.htmlCard}>
                         <RenderHtml
@@ -97,25 +73,7 @@ export default function PrivacyScreen() {
                             }}
                         />
                     </View>
-                ) : (
-                    <>
-                        <Text style={styles.introText}>
-                            This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and related healthcare services. Please read this policy carefully.
-                        </Text>
-
-                        {POLICY_SECTIONS.map((sec, i) => (
-                            <View key={i} style={styles.sectionCard}>
-                                <View style={styles.sectionTop}>
-                                    <View style={[styles.sectionIconBox, { backgroundColor: sec.bg }]}>
-                                        <Ionicons name={sec.icon} size={20} color={sec.color} />
-                                    </View>
-                                    <Text style={styles.sectionTitle}>{sec.title}</Text>
-                                </View>
-                                <Text style={styles.sectionBody}>{sec.body}</Text>
-                            </View>
-                        ))}
-                    </>
-                )}
+                ) : null}
 
                 {/* Footer note */}
                 <View style={styles.footerNote}>
@@ -244,10 +202,10 @@ const styles = StyleSheet.create({
         shadowRadius: 18,
         elevation: 4,
     },
-    htmlText: { fontSize: 14, color: '#475569', lineHeight: 24, fontWeight: '500' } as any,
-    htmlH1: { fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 8 } as any,
-    htmlH2: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginTop: 20, marginBottom: 8 } as any,
-    htmlH3: { fontSize: 15, fontWeight: '800', color: '#334155', marginTop: 14, marginBottom: 6 } as any,
+    htmlText: { fontSize: 15, color: '#475569', lineHeight: 26, fontWeight: '500' } as any,
+    htmlH1: { fontSize: 20, fontWeight: '900', color: '#FFFFFF', backgroundColor: '#1D4ED8', padding: 16, borderRadius: 12, overflow: 'hidden', marginBottom: 20, marginTop: 4, letterSpacing: -0.2, lineHeight: 28 } as any,
+    htmlH2: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginTop: 28, marginBottom: 12, letterSpacing: -0.3 } as any,
+    htmlH3: { fontSize: 16, fontWeight: '800', color: '#334155', marginTop: 16, marginBottom: 8 } as any,
     htmlBold: { fontWeight: '800', color: '#0F172A' } as any,
 
     // Footer

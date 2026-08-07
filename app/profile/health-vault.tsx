@@ -84,9 +84,17 @@ function RecordCard({ item, onDelete }: { item: MedicalRecord; onDelete: (id: st
                     <Text style={styles.recordTitle}>
                         {item.diagnosis || typeLabel}
                     </Text>
-                    <Text style={styles.recordDate}>
-                        {new Date(item.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <Text style={styles.recordDate}>
+                            {new Date(item.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </Text>
+                        <View style={styles.statusBadge}>
+                            <Ionicons name={item.doctorId ? "checkmark-done-circle" : "cloud-upload"} size={12} color={item.doctorId ? "#10B981" : "#64748B"} />
+                            <Text style={[styles.statusText, item.doctorId && { color: '#10B981' }]}>
+                                {item.doctorId ? "Verified" : "Self Uploaded"}
+                            </Text>
+                        </View>
+                    </View>
                     {item.clinicalNotes ? (
                         <Text style={styles.notesText} numberOfLines={expanded ? 10 : 1}>{item.clinicalNotes}</Text>
                     ) : null}
@@ -163,8 +171,38 @@ function UploadCard({ type, color, label, icon, onPress, disabled }: {
                 <MaterialCommunityIcons name={icon as any} size={30} color={color} />
             </View>
             <Text style={[styles.uploadLabel, { color }]}>{label}</Text>
-            <Text style={styles.uploadHint}>Camera · Gallery · PDF</Text>
+            <Text style={[styles.uploadLabel, { color }]}>{label}</Text>
         </TouchableOpacity>
+    );
+}
+
+// ── Family Profile Selector ───────────────────────────────────────────────────
+function ProfileSelector({ active, onSelect }: { active: string, onSelect: (p: string) => void }) {
+    const profiles = ['Self', 'Spouse', 'Child', 'Parent'];
+    return (
+        <View style={styles.profileContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+                {profiles.map(p => {
+                    const isActive = active === p;
+                    return (
+                        <TouchableOpacity 
+                            key={p}
+                            style={[styles.profileChip, isActive && styles.profileChipActive]}
+                            onPress={() => onSelect(p)}
+                            activeOpacity={0.8}
+                        >
+                            <View style={[styles.profileAvatar, isActive && { backgroundColor: '#FFF' }]}>
+                                <Ionicons name="person" size={16} color={isActive ? Colors.primary : '#64748B'} />
+                            </View>
+                            <Text style={[styles.profileName, isActive && styles.profileNameActive]}>{p}</Text>
+                        </TouchableOpacity>
+                    );
+                })}
+                <TouchableOpacity style={styles.addProfileBtn} activeOpacity={0.8}>
+                    <Ionicons name="add" size={20} color="#64748B" />
+                </TouchableOpacity>
+            </ScrollView>
+        </View>
     );
 }
 
@@ -189,6 +227,7 @@ export default function HealthVaultScreen() {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadPickerType, setUploadPickerType] = useState<UploadType | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('all');
+    const [activeProfile, setActiveProfile] = useState('Self');
     const webFileInputRef = useRef<HTMLInputElement | null>(null);
     const [pendingWebUploadType, setPendingWebUploadType] = useState<UploadType | null>(null);
 
@@ -347,25 +386,27 @@ export default function HealthVaultScreen() {
 
     const ListHeader = (
         <View>
-            {/* Upload Cards */}
+            <ProfileSelector active={activeProfile} onSelect={setActiveProfile} />
+
+            {/* Quick Actions */}
             <View style={styles.uploadSection}>
-                <Text style={styles.sectionTitle}>Add New Records</Text>
+                <Text style={styles.sectionTitle}>Quick Actions</Text>
                 <View style={styles.uploadRow}>
                     <UploadCard
                         type="prescriptions"
                         color="#6366F1"
-                        label="Prescription"
-                        icon="pill"
+                        label="Scan Prescription"
+                        icon="line-scan"
                         onPress={() => handleWebUpload('prescriptions')}
-                        disabled={isUploading}
+                        disabled={isUploading || activeProfile !== 'Self'}
                     />
                     <UploadCard
                         type="labReports"
                         color="#10B981"
-                        label="Lab Report"
-                        icon="flask-outline"
+                        label="Upload Report"
+                        icon="file-upload-outline"
                         onPress={() => handleWebUpload('labReports')}
-                        disabled={isUploading}
+                        disabled={isUploading || activeProfile !== 'Self'}
                     />
                 </View>
                 {isUploading && (
@@ -430,12 +471,14 @@ export default function HealthVaultScreen() {
                         <View style={styles.emptyState}>
                             <Ionicons name="shield-checkmark-outline" size={72} color="#CBD5E1" />
                             <Text style={styles.emptyTitle}>
-                                {activeTab === 'all' ? 'Your Vault is Empty' : `No ${activeTab === 'prescriptions' ? 'Prescriptions' : 'Lab Reports'} Yet`}
+                                {activeProfile !== 'Self' ? `No Records for ${activeProfile}` : activeTab === 'all' ? 'Your Vault is Empty' : `No ${activeTab === 'prescriptions' ? 'Prescriptions' : 'Lab Reports'} Yet`}
                             </Text>
                             <Text style={styles.emptySub}>
-                                {activeTab === 'all'
-                                    ? 'Upload your prescriptions and lab reports to keep them safe and accessible.'
-                                    : `Tap the upload card above to add your first ${activeTab === 'prescriptions' ? 'prescription' : 'lab report'}.`}
+                                {activeProfile !== 'Self'
+                                    ? `Link ${activeProfile}'s account or upload documents on their behalf.`
+                                    : activeTab === 'all'
+                                        ? 'Upload your prescriptions and lab reports to keep them safe and accessible.'
+                                        : `Tap the upload card above to add your first ${activeTab === 'prescriptions' ? 'prescription' : 'lab report'}.`}
                             </Text>
                         </View>
                     }
@@ -517,21 +560,28 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 20, fontWeight: '800', color: '#1E293B' },
     list: { padding: 16 },
     // Upload section
-    uploadSection: { marginBottom: 8 },
+    uploadSection: { marginBottom: 8, paddingHorizontal: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '700', color: '#475569', marginBottom: 12 },
     uploadRow: { flexDirection: 'row', gap: 12 },
     uploadCard: {
-        flex: 1, backgroundColor: '#FFF', borderRadius: 20, borderWidth: 2,
-        borderStyle: 'dashed', alignItems: 'center', padding: 16, gap: 8, ...Shadows.small,
+        flex: 1, backgroundColor: '#FFF', borderRadius: 20, borderWidth: 1,
+        borderColor: '#E2E8F0', alignItems: 'center', padding: 16, gap: 8, ...Shadows.small,
     },
-    uploadIconWrap: { width: 60, height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+    uploadIconWrap: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
     uploadLabel: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
-    uploadHint: { fontSize: 11, color: '#94A3B8', textAlign: 'center' },
     uploadingBox: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, justifyContent: 'center' },
     uploadingText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
+    // Profile Selector
+    profileContainer: { marginHorizontal: -16, marginBottom: 24, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    profileChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 100, backgroundColor: '#F1F5F9' },
+    profileChipActive: { backgroundColor: Colors.primary },
+    profileAvatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
+    profileName: { fontSize: 14, fontWeight: '600', color: '#64748B', marginRight: 4 },
+    profileNameActive: { color: '#FFF' },
+    addProfileBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
     // Tabs
-    tabsScroll: { marginBottom: 4 },
-    tabsContainer: { flexDirection: 'row', gap: 8, paddingVertical: 12 },
+    tabsScroll: { marginBottom: 4, marginHorizontal: -16 },
+    tabsContainer: { flexDirection: 'row', gap: 8, paddingVertical: 12, paddingHorizontal: 16 },
     tab: {
         flexDirection: 'row', alignItems: 'center', gap: 6,
         paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
@@ -557,7 +607,9 @@ const styles = StyleSheet.create({
     recordHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
     iconBox: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
     recordTitle: { fontSize: 15, fontWeight: '700', color: '#1E293B' },
-    recordDate: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
+    recordDate: { fontSize: 12, color: '#64748B' },
+    statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    statusText: { fontSize: 10, fontWeight: '700', color: '#64748B' },
     notesText: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
     deleteBtn: { padding: 6, marginLeft: 2 },
     filesSection: { backgroundColor: '#F8FAFC', borderTopWidth: 1, borderTopColor: '#F1F5F9', padding: 14 },
