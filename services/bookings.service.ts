@@ -103,6 +103,7 @@ export const bookingsService = {
     createServiceBooking: async (data: {
         childServiceId?: string;
         healthPackageId?: string;
+        userPackageId?: string;
         addressId?: string;
         location?: { lat: number; lng: number };
         assignedProviderId?: string;
@@ -110,7 +111,7 @@ export const bookingsService = {
         bookingType: string;
         fulfillmentMode: string;
         price: number;
-        paymentMode?: 'ONLINE' | 'OFFLINE' | 'WALLET';
+        paymentMode?: 'ONLINE' | 'OFFLINE' | 'WALLET' | 'PACKAGE';
         isGatewayPayment?: boolean;
         notes?: string;
         couponCode?: string;
@@ -119,6 +120,7 @@ export const bookingsService = {
         const payload = {
             childServiceId: data.childServiceId,
             healthPackageId: data.healthPackageId,
+            userPackageId: data.userPackageId,
             addressId: data.addressId,
             location: data.location,
             assignedProviderId: data.assignedProviderId,

@@ -42,6 +42,61 @@ const LAST_AREA_KEY = 'last_area';
 const LAST_LOCATION_SYNC_TS_KEY = 'last_location_sync_ts';
 const LOCATION_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
+// Global debounce to prevent duplicate toasts from FCM and Socket firing simultaneously
+const globalToastDebounce = new Set<string>();
+
+const showSmartToast = (title: string, body: string, data: any, router: any, segments: string[]) => {
+    const currentSegmentStr = segments.join('/');
+    
+    // 1. Suppress if we are on the active chat screen
+    if (data?.type === "BOOKING_CHAT" || data?.type === "TICKET_CHAT") {
+        // Socket data contains threadId. Since we can't perfectly extract searchParams from segments,
+        // we'll just check if we're on a chat screen. The socket listener already does a threadId check,
+        // but it doesn't hurt to have a fallback here.
+        if (currentSegmentStr.includes('chat')) return;
+    }
+    
+    if (data?.screen && data.screen.includes('chat')) {
+        if (currentSegmentStr.includes('chat')) return; 
+    }
+
+    // 2. Debounce identical messages within 2 seconds
+    const key = `${title}:${body}`;
+    if (globalToastDebounce.has(key)) return;
+    
+    globalToastDebounce.add(key);
+    setTimeout(() => globalToastDebounce.delete(key), 2000);
+
+    Toast.show({
+        type: 'info',
+        text1: title,
+        text2: body,
+        position: 'top',
+        visibilityTime: 4000,
+        onPress: () => {
+            const ALLOWED_SCREENS = [
+                '/(tabs)/bookings', '/(tabs)/notifications', '/(tabs)/profile',
+                '/wallet', '/wallet/index', '/wallet_history', '/booking/', '/doctor/appointment/', '/support/'
+            ];
+            
+            if (data?.type === "BOOKING_CHAT") {
+                router.push(`/booking/chat?id=${data.threadId}&name=${encodeURIComponent(data.senderName || title)}` as any);
+            } else if (data?.type === "TICKET_CHAT") {
+                router.push(`/support/chat?id=${data.threadId}&subject=${encodeURIComponent(title)}` as any);
+            } else if (data?.screen && ALLOWED_SCREENS.some(s => (data.screen as string).startsWith(s))) {
+                router.push(data.screen as any);
+            }
+            Toast.hide();
+        },
+        props: {
+            style: {
+                borderLeftColor: Colors.primary,
+                backgroundColor: '#F0F7F4'
+            }
+        }
+    });
+};
+
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, isLoading, user, initialize, postLoginReturn, setPostLoginReturn, token } = useAuthStore();
@@ -53,6 +108,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const [onboardingDone, setOnboardingDone] = React.useState(false);
     const [routerReady, setRouterReady] = React.useState(false);
 
+    // Keep track of segments for the FCM listener which doesn't re-bind on segment changes
+    const segmentsRef = React.useRef(segments);
+    useEffect(() => {
+        segmentsRef.current = segments;
+    }, [segments]);
+
     useEffect(() => {
         initialize();
         fetchConfig();
@@ -61,7 +122,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             setOnboardingChecked(true);
         });
     }, []);
-
 
     // OS-level permission dialog only — safe to call before login (no API calls).
     const requestNotificationPermissionOnly = async () => {
@@ -186,29 +246,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             });
 
             // Show flash banner notification in foreground
-            Toast.show({
-                type: 'info',
-                text1: title,
-                text2: body,
-                position: 'top',
-                visibilityTime: 4000,
-                onPress: () => {
-                    const ALLOWED_SCREENS = [
-                        '/(tabs)/bookings', '/(tabs)/notifications', '/(tabs)/profile',
-                        '/wallet', '/wallet/index', '/wallet_history', '/booking/', '/doctor/appointment/',
-                    ];
-                    if (data?.screen && ALLOWED_SCREENS.some(s => (data.screen as string).startsWith(s))) {
-                        router.push(data.screen as any);
-                    }
-                    Toast.hide();
-                },
-                props: {
-                    style: {
-                        borderLeftColor: Colors.primary,
-                        backgroundColor: '#F0F7F4'
-                    }
-                }
-            });
+            showSmartToast(title, body, data, router, segmentsRef.current);
         });
 
         // Notification tap handler (app in background/foreground)
@@ -276,27 +314,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                         }
                     }).catch(console.error);
 
-                    Toast.show({
-                        type: 'info',
-                        text1: data.title || "New Message",
-                        text2: data.body || "Tap to view",
-                        position: 'top',
-                        onPress: () => {
-                            if (data.type === "BOOKING_CHAT") {
-                                router.push(`/booking/chat?id=${data.threadId}&name=${encodeURIComponent(data.senderName)}`);
-                            } else if (data.type === "TICKET_CHAT") {
-                                router.push(`/support/chat?id=${data.threadId}&subject=${encodeURIComponent(data.title)}`);
-                            }
-                            Toast.hide();
-                        },
-                        visibilityTime: 4000,
-                        props: {
-                            style: {
-                                borderLeftColor: Colors.primary,
-                                backgroundColor: '#F0F7F4'
-                            }
-                        }
-                    });
+                    showSmartToast(data.title || "New Message", data.body || "Tap to view", data, router, segments as string[]);
                 });
             }
         } else {
@@ -366,7 +384,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         const currentSegment = (segments as string[])[0];
         const isAtRoot = !segments.length || currentSegment === 'index';
         const inAuthGroup = currentSegment === '(auth)';
-        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq', 'index', '(tabs)', 'service', 'hospital'];
+        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq', 'index', '(tabs)', 'service', 'hospital', 'doctor', 'package', 'knowledge-base'];
         // Treat unresolved route (empty segments) as excluded to avoid premature redirect
         const isExcluded = !segments.length || excludedSegments.includes(currentSegment);
 

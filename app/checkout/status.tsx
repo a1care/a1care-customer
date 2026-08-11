@@ -128,7 +128,7 @@ export default function PaymentStatusScreen() {
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Method</Text>
                         <Text style={styles.detailValue}>
-                            {String(paymentMode) === 'WALLET' ? 'A1 Wallet' : String(description || '').includes('Easebuzz') ? 'Easebuzz Payment Gateway' : 'UPI / Online Payments'}
+                            {String(paymentMode) === 'PACKAGE' ? 'Free via Package' : String(paymentMode) === 'WALLET' ? 'A1 Wallet' : String(description || '').includes('Easebuzz') ? 'Easebuzz Payment Gateway' : 'UPI / Online Payments'}
                         </Text>
                     </View>
                     <View style={styles.dashedDivider} />

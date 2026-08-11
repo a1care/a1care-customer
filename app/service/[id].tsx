@@ -30,6 +30,7 @@ import { addressService } from '@/services/address.service';
 import { walletService } from '@/services/wallet.service';
 import { paymentService } from '@/services/payment.service';
 import { couponService } from '@/services/referral.service';
+import { packagesService } from '@/services/packages.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Button } from '@/components/ui/Button';
@@ -41,6 +42,7 @@ import type { Address } from '@/types';
 import RazorpayCheckout from 'react-native-razorpay';
 import { triggerLocalNotification } from '@/utils/notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useBookingStore } from '@/stores/booking.store';
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 type Step = 'info' | 'doctor' | 'address' | 'schedule' | 'payment' | 'confirm';
@@ -163,7 +165,7 @@ export default function ServiceDetailScreen() {
     const todayYmd = useMemo(() => toLocalYMD(new Date()), []);
     const [scheduledDate, setScheduledDate] = useState(todayYmd);
     const [scheduledTime, setScheduledTime] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE' | null>(null);
+    const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET' | 'ONLINE' | 'PACKAGE' | null>(null);
     const [submittingOnline, setSubmittingOnline] = useState(false);
     const [couponInput, setCouponInput] = useState('');
     const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; finalAmount: number } | null>(null);
@@ -204,6 +206,31 @@ export default function ServiceDetailScreen() {
         queryFn: () => servicesService.getChildServiceById(id!),
         enabled: !!id && id !== '[id]',
     });
+
+    const { data: userPackages } = useQuery({
+        queryKey: ['active-packages'],
+        queryFn: () => packagesService.getActivePackages(),
+        enabled: isAuthenticated,
+    });
+
+    const applicablePackage = React.useMemo(() => {
+        const packagesList = userPackages?.data || [];
+        if (!packagesList.length || !service) return null;
+        const searchTerms = [service.name, nameParam, subName].filter(Boolean).map(s => s?.toLowerCase());
+        return packagesList.find((up: any) => {
+            const tests = up.packageId?.testsIncluded || [];
+            return tests.some((t: string) => {
+                const tLower = t.toLowerCase();
+                return searchTerms.some(term => term && (tLower.includes(term) || term.includes(tLower)));
+            });
+        });
+    }, [userPackages, service, nameParam, subName]);
+
+    React.useEffect(() => {
+        if (applicablePackage && paymentMethod !== 'PACKAGE') {
+            setPaymentMethod('PACKAGE');
+        }
+    }, [applicablePackage]);
 
     // Reset stale WALLET selection if balance drops below service price
     React.useEffect(() => {
@@ -764,13 +791,43 @@ export default function ServiceDetailScreen() {
 
     React.useEffect(() => {
         if (service && !step && activeSteps.length > 0) {
+            if (entryMode === 'resume' && from === 'home') {
+                const { abandonedBooking } = useBookingStore.getState();
+                if (abandonedBooking && abandonedBooking.serviceId === id && activeSteps.includes(abandonedBooking.lastStep as any)) {
+                    setStep(abandonedBooking.lastStep as any);
+                    const isHosp = service.fulfillmentMode === 'HOSPITAL_VISIT' || (subName && /hospital/i.test(subName));
+                    if (isHosp) setScheduledDate(todayYmd);
+                    return;
+                }
+            }
             setStep(activeSteps[0]);
             const isHosp = service.fulfillmentMode === 'HOSPITAL_VISIT' || (subName && /hospital/i.test(subName));
             if (isHosp) {
                 setScheduledDate(todayYmd); // H9: use local date not UTC
             }
         }
-    }, [service, step, activeSteps, subName]);
+    }, [service, step, activeSteps, subName, entryMode, from, id]);
+
+    // Save abandoned booking when step changes
+    React.useEffect(() => {
+        if (step && step !== 'info' && !submitted) {
+            useBookingStore.getState().saveAbandonedBooking({
+                serviceId: id,
+                name: nameParam || service?.name || '',
+                price: priceParam || '',
+                subName: subName || '',
+                originCategory: originCategory || '',
+                lastStep: step
+            });
+        }
+    }, [step, id, nameParam, service?.name, priceParam, subName, originCategory, submitted]);
+
+    // Clear abandoned booking on success
+    React.useEffect(() => {
+        if (submitted) {
+            useBookingStore.getState().clearAbandonedBooking();
+        }
+    }, [submitted]);
 
     const buildScheduledTime = () => {
         if (scheduledDate && scheduledTime) {
@@ -817,7 +874,7 @@ export default function ServiceDetailScreen() {
     };
 
     const bookMutation = useMutation({
-        mutationFn: (variables?: { overridePaymentMethod?: string }) => {
+        mutationFn: (variables?: { overridePaymentMethod?: string; overridePackageId?: string }) => {
             if (submitting.current) throw new Error('Already submitting');
             submitting.current = true;
             const addr = addresses?.find((a) => a._id === selectedAddressId);
@@ -839,20 +896,22 @@ export default function ServiceDetailScreen() {
                     date: scheduledDate || todayYmd,
                     startingTime: startTime,
                     endingTime: endTime,
-                    totalAmount: priceParam ? parseFloat(priceParam) : 0,
+                    totalAmount: actualPaymentMethod === 'PACKAGE' ? 0 : (priceParam ? parseFloat(priceParam) : 0),
                     paymentMode: actualPaymentMethod === 'COD'
                         ? 'OFFLINE'
                         : actualPaymentMethod === 'WALLET'
                             ? 'WALLET'
-                            : 'ONLINE',
-                    isGatewayPayment: actualPaymentMethod === 'ONLINE', 
+                            : actualPaymentMethod === 'PACKAGE'
+                                ? 'PACKAGE'
+                                : 'ONLINE',
+                    isGatewayPayment: actualPaymentMethod === 'ONLINE',
                     serviceName: nameParam ?? service?.name ?? 'Doctor Consult',
-                    ...(couponApplied ? { couponCode: couponApplied.code, discount: couponApplied.discount } : {}),
+                    ...(couponApplied && actualPaymentMethod !== 'PACKAGE' ? { couponCode: couponApplied.code, discount: couponApplied.discount } : {}),
                 });
             }
 
             const basePrice = priceParam ? parseFloat(priceParam) : 0;
-            const finalPrice = couponApplied?.finalAmount ?? basePrice;
+            const finalPrice = actualPaymentMethod === 'PACKAGE' ? 0 : (couponApplied?.finalAmount ?? basePrice);
             return bookingsService.createServiceBooking({
                 childServiceId: id!,
                 addressId: isHosp ? undefined : addr?._id,
@@ -861,8 +920,9 @@ export default function ServiceDetailScreen() {
                 bookingType: 'SCHEDULED',
                 fulfillmentMode: (service?.fulfillmentMode) ?? (isHosp ? 'HOSPITAL_VISIT' : 'HOME_VISIT'),
                 price: finalPrice,
-                paymentMode: actualPaymentMethod === 'COD' ? 'OFFLINE' : actualPaymentMethod === 'WALLET' ? 'WALLET' : 'ONLINE',
-                ...(couponApplied ? { couponCode: couponApplied.code, discount: couponApplied.discount } : {}),
+                paymentMode: actualPaymentMethod === 'COD' ? 'OFFLINE' : actualPaymentMethod === 'WALLET' ? 'WALLET' : actualPaymentMethod === 'PACKAGE' ? 'PACKAGE' : 'ONLINE',
+                userPackageId: actualPaymentMethod === 'PACKAGE' ? (variables?.overridePackageId || applicablePackage?._id) : undefined,
+                ...(couponApplied && actualPaymentMethod !== 'PACKAGE' ? { couponCode: couponApplied.code, discount: couponApplied.discount } : {}),
             });
         },
         onSuccess: (booking: any) => {
@@ -876,8 +936,8 @@ export default function ServiceDetailScreen() {
                     return;
                 }
             }
-            if (paymentMethod !== 'ONLINE' && paymentMethod !== 'WALLET') sendBookingNotification(booking);
-            if (paymentMethod !== 'ONLINE' && paymentMethod !== 'WALLET') { setSubmitted(true); setSubmittedBookingId(booking?._id ?? null); }
+            if (paymentMethod !== 'ONLINE' && paymentMethod !== 'WALLET' && paymentMethod !== 'PACKAGE') sendBookingNotification(booking);
+            if (paymentMethod !== 'ONLINE' && paymentMethod !== 'WALLET' && paymentMethod !== 'PACKAGE') { setSubmitted(true); setSubmittedBookingId(booking?._id ?? null); }
         },
         onError: (err: any) => {
             submitting.current = false;
@@ -910,9 +970,47 @@ export default function ServiceDetailScreen() {
 
         const payableAmount = couponApplied?.finalAmount ?? (priceParam ? parseFloat(priceParam) : 0);
         // If the coupon brings the total to 0, process it internally as a WALLET payment to skip Razorpay
-        const effectivePaymentMethod = payableAmount === 0 ? 'WALLET' : paymentMethod;
+        // Or if they have a package, it's PACKAGE.
+        const effectivePaymentMethod = applicablePackage ? 'PACKAGE' : (payableAmount === 0 ? 'WALLET' : paymentMethod);
 
-        if (effectivePaymentMethod === 'WALLET') {
+        if (effectivePaymentMethod === 'PACKAGE') {
+            let createdBookingId: string | null = null;
+            try {
+                setSubmittingOnline(true);
+                const booking = await bookMutation.mutateAsync({ overridePaymentMethod: 'PACKAGE', overridePackageId: applicablePackage._id });
+                createdBookingId = booking._id;
+
+                sendBookingNotification(booking);
+                setSubmitted(true);
+                setSubmittedBookingId(booking?._id ?? null);
+                qc.invalidateQueries({ queryKey: ['service-bookings'] });
+                
+                if (shouldUseDoctorAppointment) return;
+                
+                router.replace({
+                    pathname: '/checkout/status' as any,
+                    params: {
+                        status: 'SUCCESS',
+                        txnId: booking._id,
+                        amount: '0',
+                        type: 'BOOKING',
+                        description: `Booking for ${service?.name || nameParam}`,
+                        bookingId: booking._id,
+                        date: todayYmd,
+                        providerName: '',
+                        paymentMode: 'PACKAGE',
+                    },
+                });
+            } catch (err: any) {
+                if (createdBookingId) {
+                    bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
+                }
+                const msg = err?.response?.data?.message || err?.message || 'Package redemption failed.';
+                showToast.error('Payment Error', msg);
+            } finally {
+                setSubmittingOnline(false);
+            }
+        } else if (effectivePaymentMethod === 'WALLET') {
             const walletBalance = wallet?.balance ?? 0;
             if (walletBalance < payableAmount) {
                 showToast.warn(
@@ -1076,6 +1174,14 @@ export default function ServiceDetailScreen() {
                     originCategory: originCategory ?? '',
                 },
             });
+            useBookingStore.getState().saveAbandonedBooking({
+                serviceId: id || '',
+                name: nameParam || service?.name || '',
+                price: priceParam || '',
+                subName: subName || '',
+                originCategory: originCategory || '',
+                lastStep: activeSteps.length > 1 ? activeSteps[1] : 'info'
+            });
             router.push({ pathname: '/(auth)/otp', params: { mobile: phone } });
         } catch (err: any) {
             showToast.error('Failed to Send OTP', err?.response?.data?.message || err?.message || 'Please try again.');
@@ -1102,7 +1208,7 @@ export default function ServiceDetailScreen() {
                     )}
                     <View style={styles.codConfirmBox}>
                         <View>
-                            <Text style={styles.codConfirmTitle}>{paymentMethod === 'WALLET' ? 'Paid via Wallet' : paymentMethod === 'ONLINE' ? 'Paid Online' : 'Pay by Cash'}</Text>
+                            <Text style={styles.codConfirmTitle}>{paymentMethod === 'WALLET' ? 'Paid via Wallet' : paymentMethod === 'PACKAGE' ? 'Covered by Package' : paymentMethod === 'ONLINE' ? 'Paid Online' : 'Pay by Cash'}</Text>
                             <Text style={styles.codConfirmSub}>Thank you for choosing A1Care</Text>
                         </View>
                     </View>
@@ -1421,24 +1527,37 @@ export default function ServiceDetailScreen() {
 
                 {step === 'payment' && (
                     <View style={styles.stepContent}>
-                        <Text style={styles.stepTitle}>Choose Payment Method</Text>
-                        <View style={{ gap: 12 }}>
-                            {(() => {
-                                const price = priceParam ? parseFloat(priceParam) : 0;
-                                const walletBalance = wallet?.balance ?? 0;
-                                const walletInsufficient = walletBalance < price;
-                                return [
-                                    { id: 'WALLET', label: 'A1 Wallet', sub: walletInsufficient ? `Insufficient Balance (₹${walletBalance}) — Add Money →` : `Balance: ${formatCurrency(walletBalance)}`, icon: 'wallet-outline', color: Colors.health, disabled: walletInsufficient },
-                                    { id: 'ONLINE', label: 'Online Payment', sub: 'UPI, Cards, Netbanking', icon: 'card-outline', color: Colors.primary, disabled: false },
+                        <Text style={styles.stepTitle}>Payment</Text>
+                        <Text style={styles.stepSubtitle}>Choose how you want to pay</Text>
+
+                        {applicablePackage ? (
+                            <View style={[styles.payMethodCard, { borderColor: '#059669', borderWidth: 2, backgroundColor: '#ECFDF5' }]}>
+                                <View style={[styles.payMethodIconBox, { backgroundColor: '#D1FAE5' }]}>
+                                    <Ionicons name="shield-checkmark" size={24} color="#059669" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.payMethodTitle, { color: '#059669' }]}>Free via Package</Text>
+                                    <Text style={[styles.payMethodSub, { color: '#047857' }]}>
+                                        Covered by your {applicablePackage.packageId?.name || 'Active Package'}
+                                    </Text>
+                                </View>
+                                <View style={[styles.radioOuter, styles.radioActive, { borderColor: '#059669', backgroundColor: '#059669' }]}>
+                                    <View style={styles.radioInner} />
+                                </View>
+                            </View>
+                        ) : (
+                            <View style={{ gap: 12, marginBottom: 24 }}>
+                                {[
+                                    { id: 'ONLINE', title: 'Pay Online', sub: 'Cards, UPI, Netbanking', icon: 'card-outline' },
+                                    { id: 'WALLET', title: 'A1 Wallet', sub: `Balance: ₹${wallet?.balance || 0}`, icon: 'wallet-outline', disabled: (wallet?.balance || 0) < (couponApplied?.finalAmount ?? (priceParam ? parseFloat(priceParam) : 0)) }
                                 ].map(opt => (
                                     <TouchableOpacity
                                         key={opt.id}
+                                        activeOpacity={opt.disabled ? 1 : 0.7}
                                         onPress={() => {
-                                            if (opt.disabled) {
-                                                router.push('/wallet' as any);
-                                                return;
+                                            if (!opt.disabled) {
+                                                setPaymentMethod(opt.id as any);
                                             }
-                                            setPaymentMethod(opt.id as any);
                                         }}
                                         style={[
                                             styles.payMethodCard, 
@@ -1450,8 +1569,13 @@ export default function ServiceDetailScreen() {
                                             <Ionicons name={opt.icon as any} size={24} color={paymentMethod === opt.id ? '#0B3370' : '#64748B'} />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={styles.payMethodTitle}>{opt.label}</Text>
-                                            <Text style={[styles.payMethodSub, opt.disabled && { color: '#EF4444' }]}>{opt.sub}</Text>
+                                            <Text style={styles.payMethodTitle}>{opt.title}</Text>
+                                            <Text style={styles.payMethodSub}>
+                                                {opt.sub}
+                                                {opt.id === 'WALLET' && opt.disabled && (
+                                                    <Text style={{ color: '#EF4444' }}> (Insufficient)</Text>
+                                                )}
+                                            </Text>
                                         </View>
                                         {!opt.disabled && (
                                             <View style={[styles.radioOuter, paymentMethod === opt.id && styles.radioActive]}>
@@ -1459,9 +1583,9 @@ export default function ServiceDetailScreen() {
                                             </View>
                                         )}
                                     </TouchableOpacity>
-                                ));
-                            })()}
-                        </View>
+                                ))}
+                            </View>
+                        )}
                     </View>
                 )}
 
@@ -1480,7 +1604,7 @@ export default function ServiceDetailScreen() {
                             <View style={styles.reviewSection}>
                                 <View style={[styles.reviewRow, { borderBottomWidth: 1, borderBottomColor: '#F1F5F9', borderStyle: 'dashed' }]}>
                                     <View style={styles.reviewIconBox}>
-                                        <Ionicons name="medical" size={18} color="#0B3370" />
+                                        <Ionicons name="grid" size={20} color="#0B3370" />
                                     </View>
                                     <View style={{ flex: 1, paddingLeft: 12 }}>
                                         <Text style={styles.reviewLabelAlt}>Service</Text>
@@ -1553,7 +1677,6 @@ export default function ServiceDetailScreen() {
                                 )}
                             </View>
 
-                            {/* Payment Summary */}
                             <View style={[styles.reviewSection, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
                                 <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 16 }}>Bill Details</Text>
                                 
@@ -1562,23 +1685,30 @@ export default function ServiceDetailScreen() {
                                     <Text style={styles.billValue}>{formatCurrency(amount)}</Text>
                                 </View>
                                 
-                                {couponApplied && (
+                                {couponApplied && !applicablePackage && (
                                     <View style={[styles.reviewRow, { paddingVertical: 4 }]}>
                                         <Text style={[styles.billLabel, { color: '#16A34A' }]}>Coupon Discount</Text>
                                         <Text style={[styles.billValue, { color: '#16A34A' }]}>-{formatCurrency(couponApplied.discount)}</Text>
                                     </View>
                                 )}
+
+                                {applicablePackage && (
+                                    <View style={[styles.reviewRow, { paddingVertical: 4 }]}>
+                                        <Text style={[styles.billLabel, { color: '#059669' }]}>Package Coverage</Text>
+                                        <Text style={[styles.billValue, { color: '#059669' }]}>-{formatCurrency(amount)}</Text>
+                                    </View>
+                                )}
                                 
                                 <View style={[styles.reviewRow, { paddingVertical: 4 }]}>
-                                    <Text style={styles.billLabel}>Payment Method</Text>
-                                    <Text style={[styles.billValue, { color: paymentMethod === 'ONLINE' ? '#059669' : '#D97706' }]}>{paymentMethod}</Text>
+                                    <Text style={styles.billLabel}>Payment Mode</Text>
+                                    <Text style={[styles.billValue, { color: paymentMethod === 'ONLINE' ? '#059669' : paymentMethod === 'PACKAGE' ? '#059669' : '#D97706' }]}>{applicablePackage ? 'PACKAGE' : paymentMethod}</Text>
                                 </View>
 
                                 <View style={{ height: 1, backgroundColor: '#CBD5E1', borderStyle: 'dashed', marginVertical: 14 }} />
 
                                 <View style={[styles.reviewRow, { paddingVertical: 0, alignItems: 'center' }]}>
                                     <Text style={{ flex: 1, fontSize: 18, fontWeight: '900', color: '#0F172A' }}>To Pay</Text>
-                                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#0B3370', letterSpacing: -0.5 }}>{formatCurrency(couponApplied ? couponApplied.finalAmount : amount)}</Text>
+                                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#0B3370', letterSpacing: -0.5 }}>{formatCurrency(applicablePackage ? 0 : (couponApplied ? couponApplied.finalAmount : amount))}</Text>
                                 </View>
                             </View>
                         </View>
@@ -1591,7 +1721,17 @@ export default function ServiceDetailScreen() {
                     label={step === 'confirm' ? 'Confirm Booking' : 'Continue →'}
                     onPress={() => {
                         if (step === 'confirm') handleFinalSubmit();
-                        else if (step === 'info' && !isAuthenticated) router.push('/(auth)/login');
+                        else if (step === 'info' && !isAuthenticated) {
+                            useBookingStore.getState().saveAbandonedBooking({
+                                serviceId: id || '',
+                                name: nameParam || service?.name || '',
+                                price: priceParam || '',
+                                subName: subName || '',
+                                originCategory: originCategory || '',
+                                lastStep: activeSteps.length > 1 ? activeSteps[1] : 'info'
+                            });
+                            router.push('/(auth)/login');
+                        }
                         else goToNextStep();
                     }}
                     loading={bookMutation.isPending || submittingOnline}

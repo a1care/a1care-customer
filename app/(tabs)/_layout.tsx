@@ -95,7 +95,7 @@ export default function TabsLayout() {
                 name="services"
                 options={{
                     tabBarIcon: ({ focused }) => (
-                        <TabIcon focused={focused} icon="medical" label="Services" />
+                        <TabIcon focused={focused} icon="grid" label="Services" />
                     ),
                 }}
                 listeners={({ navigation }) => ({

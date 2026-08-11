@@ -8,6 +8,7 @@ import {
     ActivityIndicator,
     Modal,
     Platform,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -24,22 +25,30 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/EmptyState';
 import { formatDateTime } from '@/utils/formatters';
-import { MapPin, MessageSquare, XCircle, Clock3, Radio, ShieldCheck, Truck, CheckCircle2, Search, RotateCcw, CreditCard } from 'lucide-react-native';
+import { MapPin, MessageSquare, XCircle, Clock3, Radio, ShieldCheck, Truck, CheckCircle2, Search, RotateCcw, CreditCard, Stethoscope, Ticket } from 'lucide-react-native';
 import { triggerLocalNotification } from '@/utils/notifications';
 import { showToast } from '@/utils/toast';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // ─── Status config ────────────────────────────────────────────────────────────
-const STATUS_STEPS: Array<{ status: string; label: string; key: string; desc: string }> = [
-    { status: 'PENDING', key: 'pending', label: 'Pending', desc: 'Waiting for a provider to be assigned' },
-    { status: 'PARTNER_ASSIGNED', key: 'partner_assigned', label: 'Provider Assigned', desc: 'A provider has been assigned and is confirming' },
-    { status: 'BROADCASTED', key: 'broadcasted', label: 'Searching Provider', desc: 'Finding the nearest available provider' },
-    { status: 'ACCEPTED', key: 'accepted', label: 'Accepted', desc: 'A provider has accepted your request' },
-    { status: 'IN_PROGRESS', key: 'in_progress', label: 'In Progress', desc: 'Provider is on the way' },
-    { status: 'COMPLETED', key: 'completed', label: 'Completed', desc: 'Service completed successfully' },
-];
-
-const STATUS_ORDER = STATUS_STEPS.map((s) => s.status);
+const getStatusSteps = (fulfillmentMode?: string): Array<{ status: string; label: string; key: string; desc: string }> => {
+    if (fulfillmentMode === 'HOSPITAL_VISIT') {
+        return [
+            { status: 'PENDING', key: 'pending', label: 'Pending', desc: 'Awaiting confirmation from hospital' },
+            { status: 'ACCEPTED', key: 'accepted', label: 'Confirmed', desc: 'Appointment confirmed. PIN generated.' },
+            { status: 'IN_PROGRESS', key: 'in_progress', label: 'Patient Arrived', desc: 'Consultation is in progress' },
+            { status: 'COMPLETED', key: 'completed', label: 'Completed', desc: 'Consultation completed successfully' },
+        ];
+    }
+    return [
+        { status: 'PENDING', key: 'pending', label: 'Pending', desc: 'Waiting for a provider to be assigned' },
+        { status: 'PARTNER_ASSIGNED', key: 'partner_assigned', label: 'Provider Assigned', desc: 'A provider has been assigned and is confirming' },
+        { status: 'BROADCASTED', key: 'broadcasted', label: 'Searching Provider', desc: 'Finding the nearest available provider' },
+        { status: 'ACCEPTED', key: 'accepted', label: 'Accepted', desc: 'A provider has accepted your request' },
+        { status: 'IN_PROGRESS', key: 'in_progress', label: 'In Progress', desc: 'Provider is on the way' },
+        { status: 'COMPLETED', key: 'completed', label: 'Completed', desc: 'Service completed successfully' },
+    ];
+};
 
 // ─── Status progression banner ────────────────────────────────────────────────
 const STATUS_BG: Record<string, string> = {
@@ -53,9 +62,14 @@ const STATUS_BG: Record<string, string> = {
     RETURNED_TO_ADMIN: '#FEF3C7',
 };
 
-function StatusHero({ status }: { status: string }) {
-    const step = STATUS_STEPS.find((s) => s.status === status);
-    const bg = STATUS_BG[status] ?? '#F3F4F6';
+function StatusHero({ status, fulfillmentMode }: { status: string; fulfillmentMode?: string }) {
+    const STATUS_STEPS = getStatusSteps(fulfillmentMode);
+    const normalizedStatus = status ? status.toUpperCase() : '';
+    const step = STATUS_STEPS.find((s) => s.status === normalizedStatus);
+    const bg = STATUS_BG[normalizedStatus] ?? '#F3F4F6';
+    
+    // Select icons based on OP vs Home Visit
+    const isHospital = fulfillmentMode === 'HOSPITAL_VISIT';
     const HeroIcon =
         status === 'RETURNED_TO_ADMIN' ? Clock3 :
         status === 'CANCELLED' ? XCircle :
@@ -63,8 +77,8 @@ function StatusHero({ status }: { status: string }) {
         step?.key === 'pending' ? Clock3 :
         step?.key === 'partner_assigned' ? ShieldCheck :
         step?.key === 'broadcasted' ? Radio :
-        step?.key === 'accepted' ? ShieldCheck :
-        step?.key === 'in_progress' ? Truck :
+        step?.key === 'accepted' ? (isHospital ? ShieldCheck : ShieldCheck) :
+        step?.key === 'in_progress' ? (isHospital ? Stethoscope : Truck) :
         step?.key === 'completed' ? CheckCircle2 :
         Search;
     const heroLabel = status === 'RETURNED_TO_ADMIN' ? 'Re-scheduling' : step?.label ?? status.replace(/_/g, ' ');
@@ -102,9 +116,12 @@ function StatusHero({ status }: { status: string }) {
 }
 
 // ─── Timeline ─────────────────────────────────────────────────────────────────
-function Timeline({ status }: { status: string }) {
-    const currentIdx = STATUS_ORDER.indexOf(status);
-    const isCancelled = status === 'CANCELLED';
+function Timeline({ status, fulfillmentMode }: { status: string; fulfillmentMode?: string }) {
+    const STATUS_STEPS = getStatusSteps(fulfillmentMode);
+    const STATUS_ORDER = STATUS_STEPS.map((s) => s.status);
+    const normalizedStatus = status ? status.toUpperCase() : '';
+    const currentIdx = STATUS_ORDER.indexOf(normalizedStatus);
+    const isCancelled = normalizedStatus === 'CANCELLED';
 
     if (isCancelled) {
         return (
@@ -310,8 +327,8 @@ export default function BookingDetailScreen() {
         ? !['COMPLETED', 'CANCELLED'].includes(String(booking.status))
         : false;
 
-    // Contact provider rules: ONLY show Chat/Track for ACCEPTED / IN_PROGRESS
-    const showContactActions = booking && (booking.status === 'ACCEPTED' || booking.status === 'IN_PROGRESS');
+    // Contact provider rules: ONLY show Chat/Track for ACCEPTED / IN_PROGRESS / CONFIRMED, and NOT for HOSPITAL_VISIT
+    const showContactActions = booking && booking.fulfillmentMode !== 'HOSPITAL_VISIT' && (booking.status === 'ACCEPTED' || booking.status === 'IN_PROGRESS' || booking.status === 'CONFIRMED');
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
@@ -347,7 +364,7 @@ export default function BookingDetailScreen() {
             ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
                     {/* Status Hero */}
-                    <StatusHero status={booking.status} />
+                    <StatusHero status={booking.status} fulfillmentMode={booking.fulfillmentMode} />
 
                     {/* Info Card */}
                     <View style={styles.card}>
@@ -378,7 +395,7 @@ export default function BookingDetailScreen() {
                     </View>
 
                     {/* Timeline */}
-                    <Timeline status={booking.status} />
+                    <Timeline status={booking.status} fulfillmentMode={booking.fulfillmentMode} />
 
                     {/* Chat with Provider / Track Live — ONLY when accepted/in progress */}
                     {showContactActions && (
@@ -434,6 +451,79 @@ export default function BookingDetailScreen() {
                             <Text style={styles.pollingText}>Status auto-updates every 12 seconds</Text>
                         </View>
                     ) : null}
+
+                    {/* PIN Display for OP tokens */}
+                    {booking.fulfillmentMode === 'HOSPITAL_VISIT' && booking.checkInPin && (booking.status === 'CONFIRMED' || booking.status === 'ACCEPTED') && (
+                        <View style={{
+                            marginHorizontal: 16,
+                            marginTop: 8,
+                            backgroundColor: '#fff',
+                            borderRadius: 16,
+                            overflow: 'hidden',
+                            elevation: 3,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                        }}>
+                            <View style={{ backgroundColor: '#0B3370', paddingVertical: 12, alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ticket size={18} color="#fff" />
+                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 }}>DIGITAL OP PASS</Text>
+                                </View>
+                            </View>
+                            
+                            {/* Perforated separator */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: -10, zIndex: 10 }}>
+                                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#F8FAFC', marginLeft: -10, borderWidth: 1, borderColor: '#E2E8F0' }} />
+                                <View style={{ flex: 1, height: 1, borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed' }} />
+                                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#F8FAFC', marginRight: -10, borderWidth: 1, borderColor: '#E2E8F0' }} />
+                            </View>
+
+                            <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                                <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Check-in PIN</Text>
+                                <View style={{ 
+                                    backgroundColor: '#fff', 
+                                    paddingHorizontal: 32, 
+                                    paddingVertical: 16, 
+                                    borderRadius: 12, 
+                                    borderWidth: 1.5, 
+                                    borderColor: '#E2E8F0',
+                                    borderStyle: 'dashed',
+                                    marginBottom: 12
+                                }}>
+                                    <Text style={{ fontSize: 42, fontWeight: '900', color: '#0F172A', letterSpacing: 12, textAlign: 'center', marginLeft: 12 }}>
+                                        {booking.checkInPin}
+                                    </Text>
+                                </View>
+                                <Text style={{ fontSize: 12, color: '#475569', textAlign: 'center', fontWeight: '500' }}>
+                                    Show this code at the hospital reception to mark your arrival.
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Get Directions for Hospital OP */}
+                    {booking.fulfillmentMode === 'HOSPITAL_VISIT' && booking.status !== 'CANCELLED' && (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Hospital Location</Text>
+                            <Text style={styles.codReminderText}>
+                                A1 Care Hospital, Main Branch
+                            </Text>
+                            <Button
+                                label="Get Directions"
+                                onPress={() => {
+                                    // Use search query for A1 Care Hospital so it properly finds the location
+                                    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=A1+Care+Hospital`);
+                                }}
+                                variant="primary"
+                                size="md"
+                                style={{ marginTop: 12, backgroundColor: '#059669' }}
+                            />
+                        </View>
+                    )}
 
                     {/* Actions */}
                     {booking.status === 'PENDING' || booking.status === 'BROADCASTED' || booking.status === 'ACCEPTED' ? (

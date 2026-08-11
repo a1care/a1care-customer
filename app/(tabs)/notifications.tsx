@@ -98,20 +98,31 @@ const mergeNotifications = (remoteList: any[], localList: any[]) => {
 
 const NotificationsSkeleton = ({ pulseAnim }: { pulseAnim: Animated.Value }) => {
     return (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14 }} showsVerticalScrollIndicator={false}>
             {[1, 2, 3, 4, 5].map((i) => (
-                <Animated.View
+                <View
                     key={i}
-                    style={[
-                        {
-                            opacity: pulseAnim,
-                            backgroundColor: '#E8EEF5',
-                            height: 88,
-                            borderRadius: 24,
-                            marginBottom: 14,
-                        }
-                    ]}
-                />
+                    style={{
+                        flexDirection: 'row',
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 24,
+                        padding: 16,
+                        marginBottom: 12,
+                        borderWidth: 1,
+                        borderColor: '#E8EEF5',
+                    }}
+                >
+                    {/* Icon Skeleton */}
+                    <Animated.View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: '#E8EEF5', opacity: pulseAnim, marginRight: 14 }} />
+                    
+                    {/* Content Skeleton */}
+                    <View style={{ flex: 1 }}>
+                        <Animated.View style={{ width: '60%', height: 16, borderRadius: 8, backgroundColor: '#E8EEF5', opacity: pulseAnim, marginBottom: 10 }} />
+                        <Animated.View style={{ width: '90%', height: 12, borderRadius: 6, backgroundColor: '#E8EEF5', opacity: pulseAnim, marginBottom: 6 }} />
+                        <Animated.View style={{ width: '40%', height: 12, borderRadius: 6, backgroundColor: '#E8EEF5', opacity: pulseAnim, marginBottom: 12 }} />
+                        <Animated.View style={{ width: '25%', height: 10, borderRadius: 5, backgroundColor: '#E8EEF5', opacity: pulseAnim }} />
+                    </View>
+                </View>
             ))}
         </ScrollView>
     );

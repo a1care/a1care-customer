@@ -86,6 +86,20 @@ export default function HealthPackageDetail() {
 
     const primaryAddress = addresses?.find(a => a.isPrimary) || addresses?.[0];
 
+    const { data: activePackagesData } = useQuery({
+        queryKey: ['active-packages'],
+        queryFn: () => packagesService.getActivePackages(),
+    });
+
+    const activePackages = activePackagesData?.data || [];
+    const alreadyOwns = activePackages.some((up: any) => up.packageId?._id === id);
+
+    React.useEffect(() => {
+        if (alreadyOwns) {
+            showToast.success('Already Active', 'You currently have an active subscription to this package.');
+        }
+    }, [alreadyOwns]);
+
     const bookMutation = useMutation({
         mutationFn: async (mode: 'ONLINE' | 'OFFLINE' | 'WALLET') => {
             return await packagesService.purchasePackage({
@@ -347,61 +361,63 @@ export default function HealthPackageDetail() {
                 </View>
 
                 {/* Payment Method */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Payment Method</Text>
-                    <View style={{ gap: 12 }}>
+                {!alreadyOwns && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Payment Method</Text>
+                        <View style={{ gap: 12 }}>
 
 
-                        {/* A1 Wallet */}
-                        <TouchableOpacity
-                            style={[styles.payCard, paymentMode === 'WALLET' && styles.payCardActive]}
-                            onPress={() => setPaymentMode('WALLET')}
-                        >
-                            <View style={[styles.payIconBox, { backgroundColor: paymentMode === 'WALLET' ? '#16A34A' : '#ECFDF5' }]}>
-                                <Ionicons name="wallet-outline" size={22} color={paymentMode === 'WALLET' ? '#fff' : '#16A34A'} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.payCardLabel}>A1 Wallet</Text>
-                                <Text style={styles.payCardSub}>
-                                    Balance: {formatCurrency(wallet?.balance ?? 0)}
-                                    {((wallet?.balance ?? 0) < pkg.price) && (
-                                        <Text style={{ color: '#EF4444', fontWeight: 'bold' }}> (Insufficient balance)</Text>
-                                    )}
-                                </Text>
-                            </View>
-                            <View style={[styles.radio, paymentMode === 'WALLET' && styles.radioActive]}>
-                                {paymentMode === 'WALLET' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
+                            {/* A1 Wallet */}
+                            <TouchableOpacity
+                                style={[styles.payCard, paymentMode === 'WALLET' && styles.payCardActive]}
+                                onPress={() => setPaymentMode('WALLET')}
+                            >
+                                <View style={[styles.payIconBox, { backgroundColor: paymentMode === 'WALLET' ? '#16A34A' : '#ECFDF5' }]}>
+                                    <Ionicons name="wallet-outline" size={22} color={paymentMode === 'WALLET' ? '#fff' : '#16A34A'} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.payCardLabel}>A1 Wallet</Text>
+                                    <Text style={styles.payCardSub}>
+                                        Balance: {formatCurrency(wallet?.balance ?? 0)}
+                                        {((wallet?.balance ?? 0) < pkg.price) && (
+                                            <Text style={{ color: '#EF4444', fontWeight: 'bold' }}> (Insufficient balance)</Text>
+                                        )}
+                                    </Text>
+                                </View>
+                                <View style={[styles.radio, paymentMode === 'WALLET' && styles.radioActive]}>
+                                    {paymentMode === 'WALLET' && <View style={styles.radioInner} />}
+                                </View>
+                            </TouchableOpacity>
 
-                        {/* Online */}
-                        <TouchableOpacity
-                            style={[styles.payCard, paymentMode === 'ONLINE' && styles.payCardActive]}
-                            onPress={() => setPaymentMode('ONLINE')}
-                        >
-                            <View style={[styles.payIconBox, { backgroundColor: paymentMode === 'ONLINE' ? '#7C3AED' : '#F3EEFF' }]}>
-                                <Ionicons name="card-outline" size={22} color={paymentMode === 'ONLINE' ? '#fff' : '#7C3AED'} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.payCardLabel}>Pay Online</Text>
-                                <Text style={styles.payCardSub}>UPI, Card, Net Banking</Text>
-                            </View>
-                            <View style={[styles.radio, paymentMode === 'ONLINE' && styles.radioActive]}>
-                                {paymentMode === 'ONLINE' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
+                            {/* Online */}
+                            <TouchableOpacity
+                                style={[styles.payCard, paymentMode === 'ONLINE' && styles.payCardActive]}
+                                onPress={() => setPaymentMode('ONLINE')}
+                            >
+                                <View style={[styles.payIconBox, { backgroundColor: paymentMode === 'ONLINE' ? '#7C3AED' : '#F3EEFF' }]}>
+                                    <Ionicons name="card-outline" size={22} color={paymentMode === 'ONLINE' ? '#fff' : '#7C3AED'} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.payCardLabel}>Pay Online</Text>
+                                    <Text style={styles.payCardSub}>UPI, Card, Net Banking</Text>
+                                </View>
+                                <View style={[styles.radio, paymentMode === 'ONLINE' && styles.radioActive]}>
+                                    {paymentMode === 'ONLINE' && <View style={styles.radioInner} />}
+                                </View>
+                            </TouchableOpacity>
 
-                        {/* Wallet insufficient warning */}
-                        {paymentMode === 'WALLET' && (wallet?.balance ?? 0) < pkg.price && (
-                            <View style={styles.walletWarning}>
-                                <Ionicons name="warning-outline" size={14} color="#92400E" />
-                                <Text style={styles.walletWarningText}>
-                                    Insufficient balance (₹{wallet?.balance ?? 0}). Please top up or choose another method.
-                                </Text>
-                            </View>
-                        )}
+                            {/* Wallet insufficient warning */}
+                            {paymentMode === 'WALLET' && (wallet?.balance ?? 0) < pkg.price && (
+                                <View style={styles.walletWarning}>
+                                    <Ionicons name="warning-outline" size={14} color="#92400E" />
+                                    <Text style={styles.walletWarningText}>
+                                        Insufficient balance (₹{wallet?.balance ?? 0}). Please top up or choose another method.
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
-                </View>
+                )}
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -412,25 +428,34 @@ export default function HealthPackageDetail() {
                     <Text style={styles.footerLabel}>Total Amount</Text>
                     <Text style={styles.footerAmount}>₹{pkg.price}</Text>
                 </View>
-                <TouchableOpacity
-                    style={[styles.bookBtn, (submitting || !primaryAddress) && { opacity: 0.7 }]}
-                    onPress={() => {
-                        if (!primaryAddress) {
-                            showToast.warn("Address Required", "Please add a collection address before booking.");
-                            return;
-                        }
-                        handleBooking(paymentMode);
-                    }}
-                    disabled={submitting}
-                >
-                    {submitting ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.bookBtnText}>
-                            {paymentMode === 'ONLINE' ? 'Pay Online' : paymentMode === 'WALLET' ? 'Pay from Wallet' : paymentMode === 'OFFLINE' ? 'Book Now' : 'Select Payment Method'}
-                        </Text>
-                    )}
-                </TouchableOpacity>
+                {alreadyOwns ? (
+                    <TouchableOpacity
+                        style={styles.bookBtn}
+                        onPress={() => router.replace('/profile/my-packages')}
+                    >
+                        <Text style={styles.bookBtnText}>View My Packages</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity
+                        style={[styles.bookBtn, (submitting || !primaryAddress) && { opacity: 0.7 }]}
+                        onPress={() => {
+                            if (!primaryAddress) {
+                                showToast.warn("Address Required", "Please add a collection address before booking.");
+                                return;
+                            }
+                            handleBooking(paymentMode);
+                        }}
+                        disabled={submitting}
+                    >
+                        {submitting ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.bookBtnText}>
+                                {paymentMode === 'ONLINE' ? 'Pay Online' : paymentMode === 'WALLET' ? 'Pay from Wallet' : paymentMode === 'OFFLINE' ? 'Book Now' : 'Select Payment Method'}
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+                )}
             </View>
         </SafeAreaView>
     );
@@ -664,4 +689,15 @@ const styles = StyleSheet.create({
         borderColor: '#FDE68A',
     },
     walletWarningText: { flex: 1, fontSize: 12, color: '#92400E', fontWeight: '600', lineHeight: 17 },
+    alreadyOwnsBox: {
+        flexDirection: 'row',
+        backgroundColor: '#ECFDF5',
+        padding: 24,
+        borderRadius: 24,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#D1FAE5',
+    },
+    alreadyOwnsTitle: { fontSize: 16, fontWeight: '900', color: '#065F46', marginBottom: 6 },
+    alreadyOwnsSub: { fontSize: 13, color: '#047857', lineHeight: 20, fontWeight: '500' },
 });

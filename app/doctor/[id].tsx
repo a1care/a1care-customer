@@ -140,7 +140,7 @@ export default function DoctorDetailScreen() {
                             <View style={[styles.premiumStatIconBg, { backgroundColor: '#DCFCE7' }]}>
                                 <Ionicons name="wallet" size={18} color="#16A34A" />
                             </View>
-                            <Text style={styles.premiumStatNum}>₹{doctor.consultationFee ?? '500'}</Text>
+                            <Text style={styles.premiumStatNum}>₹{typeof doctor.consultationFee === 'number' ? doctor.consultationFee : 0}</Text>
                             <Text style={styles.premiumStatLabel}>Fees</Text>
                         </View>
                     </View>

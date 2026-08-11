@@ -125,15 +125,21 @@ function ServiceCard({ booking, onPress, onDelete }: { booking: ServiceRequest; 
         typeof booking.childServiceId === 'object' && booking.childServiceId
             ? ((booking.childServiceId as any).serviceId?.name 
                 ? `${(booking.childServiceId as any).serviceId.name} - ${(booking.childServiceId as any).name}`
-                : (booking.childServiceId as any).name ?? 'Home Service')
-            : 'Home Service';
+                : (booking.childServiceId as any).name ?? 'Service Request')
+            : 'Service Request';
 
     const packageName =
         typeof (booking as any).healthPackageId === 'object' && (booking as any).healthPackageId
             ? ((booking as any).healthPackageId as any).name ?? ''
             : '';
 
-    const name = selectedReason || packageName || baseName;
+    let name = selectedReason || packageName || baseName;
+    
+    // Make OP tokens look professional even if the underlying service is named generically
+    if (booking.fulfillmentMode === 'HOSPITAL_VISIT') {
+        name = name.replace(/Home Visit/gi, 'Hospital OP Consultation').replace(/Home Service/gi, 'Hospital OP Service');
+    }
+
     const iconTheme = getServiceIconTheme(name);
     const ServiceIcon = iconTheme.icon;
 

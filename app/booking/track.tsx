@@ -5,6 +5,7 @@ import {
     StyleSheet,
     TouchableOpacity,
     ActivityIndicator,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -135,10 +136,10 @@ export default function TrackingScreen() {
                                 <FontAwesome5 name="motorcycle" size={20} color="#F97316" />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.cardTitle}>{provider?.name || 'Your Provider'} is on the way</Text>
-                                <Text style={styles.cardSub} numberOfLines={1}>{provider?.role || 'Service Professional'}</Text>
+                                <Text style={styles.cardTitle}>Your Provider is on the way</Text>
+                                <Text style={styles.cardSub} numberOfLines={1}>Service Professional</Text>
                             </View>
-                            <TouchableOpacity onPress={() => Linking.openURL(`tel:${provider?.mobile}`)} style={styles.callCircle}>
+                            <TouchableOpacity onPress={() => Linking.openURL(`tel:9999999999`)} style={styles.callCircle}>
                                 <Ionicons name="call" size={20} color="#059669" />
                             </TouchableOpacity>
                         </View>

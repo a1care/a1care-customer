@@ -107,7 +107,7 @@ export default function LoginScreen() {
 
                     {/* Logo mark */}
                     <View style={styles.logoMark}>
-                        <Ionicons name="heart-circle" size={38} color="#fff" />
+                        <Ionicons name="person" size={32} color="#fff" />
                     </View>
 
                     <Text style={styles.brandName}>
@@ -123,7 +123,6 @@ export default function LoginScreen() {
                         {[
                             { icon: 'shield-checkmark-outline' as const, label: '100% Secure' },
                             { icon: 'time-outline' as const, label: '24/7 Support' },
-                            { icon: 'people-outline' as const, label: '10K+ Users' },
                         ].map((t, i) => (
                             <View key={i} style={styles.trustPill}>
                                 <Ionicons name={t.icon} size={13} color="rgba(255,255,255,0.9)" />

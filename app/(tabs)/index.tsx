@@ -51,6 +51,8 @@ import {
     Tag,
 } from 'lucide-react-native';
 
+import { reviewsService } from '@/services/reviews.service';
+import { packagesService } from '@/services/packages.service';
 import { servicesService } from '@/services/services.service';
 import { bookingsService } from '@/services/bookings.service';
 import { doctorsService } from '@/services/doctors.service';
@@ -58,6 +60,7 @@ import api from '@/services/api';
 import { notificationsService } from '@/services/notifications.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { useNotificationStore } from '@/stores/notification.store';
+import { useBookingStore } from '@/stores/booking.store';
 import { Colors, Shadows } from '@/constants/colors';
 import { API_BASE_URL, Endpoints } from '@/constants/api';
 import { FontSize } from '@/constants/spacing';
@@ -192,6 +195,7 @@ export default function HomeScreen() {
     const [isKBModalOpen, setIsKBModalOpen] = useState(false);
     const { config, fetchConfig } = useConfigStore();
     const { unreadCount: globalUnreadCount } = useNotificationStore();
+    const { abandonedBooking, clearAbandonedBooking } = useBookingStore();
     const [locCity, setLocCity] = useState(cachedCity || 'Current Location');
     const [locArea, setLocArea] = useState('');
     const [locLoading, setLocLoading] = useState(false);
@@ -505,7 +509,6 @@ export default function HomeScreen() {
     const { data: roles } = useQuery({
         queryKey: ['roles'],
         queryFn: doctorsService.getRoles,
-        enabled: isAuthenticated,
     });
 
     const doctorRoleId = roles?.find(r => r.name.toLowerCase().includes('doctor'))?._id;
@@ -513,7 +516,7 @@ export default function HomeScreen() {
     const { data: allDoctors, refetch: refetchDoctors, isLoading: doctorsLoading } = useQuery({
         queryKey: ['doctors', doctorRoleId],
         queryFn: () => doctorsService.getByRole(doctorRoleId!),
-        enabled: isAuthenticated && !!doctorRoleId,
+        enabled: !!doctorRoleId,
     });
 
     const { data: notifications, refetch: refetchNotifications } = useQuery({
@@ -531,6 +534,14 @@ export default function HomeScreen() {
             return res.data.data as any[];
         },
     });
+
+    const { data: activePackagesData } = useQuery({
+        queryKey: ['active-packages'],
+        queryFn: () => packagesService.getActivePackages(),
+        enabled: isAuthenticated,
+    });
+
+    const activePackages = activePackagesData?.data || [];
 
     const { data: serviceableAreas = [], isLoading: loadingAreas } = useQuery({
         queryKey: ['serviceable-areas'],
@@ -1008,7 +1019,7 @@ export default function HomeScreen() {
                                             specialization={d.specialization?.join(", ") || "Specialist"}
                                             rating={d.rating || 4.8}
                                             experience={formatExperience(d.startExperience ?? 0)}
-                                            price={d.consultationFee || 650}
+                                            price={typeof d.consultationFee === 'number' ? d.consultationFee : 0}
                                             imageUrl={d.profileImage || d.imageUrl}
                                             onPress={() => router.push({ pathname: '/doctor/[id]', params: { id: d._id, from: 'top_doctors' } })}
                                         />
@@ -1158,6 +1169,47 @@ export default function HomeScreen() {
                             </View>
 
                         </View>
+
+                        {/* ── Continue Booking (Abandoned Cart) Card ── */}
+                        {abandonedBooking && (Date.now() - abandonedBooking.timestamp < 24 * 60 * 60 * 1000) && (
+                            <View style={[styles.abandonedCard, { marginHorizontal: 20, marginTop: 8, marginBottom: 12 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                                        <Clock size={12} color="#EF4444" />
+                                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#B91C1C', textTransform: 'uppercase' }}>Incomplete Booking</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={clearAbandonedBooking} style={{ padding: 4, backgroundColor: '#F1F5F9', borderRadius: 12 }}>
+                                        <X size={16} color="#64748B" />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <View style={{ flex: 1, paddingRight: 12 }}>
+                                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 4 }}>Continue {abandonedBooking.name}</Text>
+                                        <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '500' }} numberOfLines={1}>You left off at {abandonedBooking.lastStep}</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={{ backgroundColor: '#0B3370', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                                        onPress={() => {
+                                            router.push({
+                                                pathname: '/service/[id]',
+                                                params: {
+                                                    id: abandonedBooking.serviceId,
+                                                    name: abandonedBooking.name,
+                                                    subName: abandonedBooking.subName || '',
+                                                    price: abandonedBooking.price || '',
+                                                    originCategory: abandonedBooking.originCategory || '',
+                                                    from: 'home',
+                                                    entryMode: 'resume'
+                                                }
+                                            });
+                                        }}
+                                    >
+                                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '800' }}>Resume</Text>
+                                        <ArrowRight size={14} color="#FFF" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
 
                         {/* ── OP Booking Card ── */}
                         <View style={styles.opCard}>
@@ -1335,7 +1387,7 @@ export default function HomeScreen() {
                                         specialization={d.specialization?.join(", ") || "Specialist"}
                                         rating={d.rating || 4.8}
                                         experience={formatExperience(d.startExperience ?? 0)}
-                                        price={d.consultationFee || 650}
+                                        price={typeof d.consultationFee === 'number' ? d.consultationFee : 0}
                                         imageUrl={d.profileImage || d.imageUrl}
                                         workingHours={d.workingHours}
                                         onPress={() => router.push({ pathname: '/doctor/[id]', params: { id: d._id, from: 'top_doctors' } })}
@@ -1375,11 +1427,13 @@ export default function HomeScreen() {
                                         const discountPct = pkg.originalPrice > pkg.price
                                             ? Math.round(((pkg.originalPrice - pkg.price) / pkg.originalPrice) * 100)
                                             : 0;
+                                        const alreadyOwns = activePackages.some((up: any) => up.packageId?._id === pkg._id);
+                                        
                                         return (
                                             <TouchableOpacity
                                                 key={pkg._id}
                                                 activeOpacity={0.88}
-                                                style={styles.pkgCard}
+                                                style={[styles.pkgCard, alreadyOwns && { opacity: 0.8 }]}
                                                 onPress={() => router.push({
                                                     pathname: '/package/[id]',
                                                     params: { id: pkg._id, from: 'home' }
@@ -1391,11 +1445,20 @@ export default function HomeScreen() {
                                                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                                                     style={styles.pkgHeader}
                                                 >
-                                                    {pkg.badge && (
-                                                        <View style={styles.pkgBadge}>
-                                                            <Text style={styles.pkgBadgeText}>{pkg.badge}</Text>
-                                                        </View>
-                                                    )}
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                                        {pkg.badge ? (
+                                                            <View style={styles.pkgBadge}>
+                                                                <Text style={styles.pkgBadgeText}>{pkg.badge}</Text>
+                                                            </View>
+                                                        ) : <View />}
+                                                        
+                                                        {alreadyOwns && (
+                                                            <View style={[styles.pkgBadge, { backgroundColor: '#10B981', marginLeft: 8 }]}>
+                                                                <Text style={styles.pkgBadgeText}>ACTIVE</Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                    
                                                     <Text style={styles.pkgName} numberOfLines={2}>{pkg.name}</Text>
                                                     <View style={styles.pkgPriceRow}>
                                                         <Text style={styles.pkgPrice}>₹{pkg.price}</Text>
@@ -2245,6 +2308,19 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: Colors.muted,
         textDecorationLine: 'line-through',
+    },
+
+    abandonedCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#FECACA', // subtle red/pink border
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 4,
     },
 
     // OP Booking Card (MNC Premium)

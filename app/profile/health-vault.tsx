@@ -12,6 +12,8 @@ import {
     Platform,
     Modal,
     ScrollView,
+    TextInput,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -24,6 +26,9 @@ import { FontSize } from '@/constants/spacing';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { API_BASE_URL } from '@/constants/api';
 import { showToast } from '@/utils/toast';
+import { CustomAlert } from '@/stores/alert.store';
+import { authService } from '@/services/auth.service';
+import api from '@/services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type UploadType = 'prescriptions' | 'labReports';
@@ -94,6 +99,12 @@ function RecordCard({ item, onDelete }: { item: MedicalRecord; onDelete: (id: st
                                 {item.doctorId ? "Verified" : "Self Uploaded"}
                             </Text>
                         </View>
+                        {item.recordFor && item.recordFor !== 'Self' && (
+                            <View style={[styles.statusBadge, { backgroundColor: '#E0E7FF' }]}>
+                                <Ionicons name="person" size={12} color="#4F46E5" />
+                                <Text style={[styles.statusText, { color: '#4F46E5' }]}>{item.recordFor}</Text>
+                            </View>
+                        )}
                     </View>
                     {item.clinicalNotes ? (
                         <Text style={styles.notesText} numberOfLines={expanded ? 10 : 1}>{item.clinicalNotes}</Text>
@@ -171,34 +182,44 @@ function UploadCard({ type, color, label, icon, onPress, disabled }: {
                 <MaterialCommunityIcons name={icon as any} size={30} color={color} />
             </View>
             <Text style={[styles.uploadLabel, { color }]}>{label}</Text>
-            <Text style={[styles.uploadLabel, { color }]}>{label}</Text>
         </TouchableOpacity>
     );
 }
 
 // ── Family Profile Selector ───────────────────────────────────────────────────
-function ProfileSelector({ active, onSelect }: { active: string, onSelect: (p: string) => void }) {
-    const profiles = ['Self', 'Spouse', 'Child', 'Parent'];
+function ProfileSelector({ active, onSelect, profiles, onAdd, onRemove }: { active: string, onSelect: (p: string) => void, profiles: string[], onAdd: () => void, onRemove: (p: string) => void }) {
+    const defaultProfiles = ['Self', 'Spouse', 'Child', 'Parent'];
     return (
         <View style={styles.profileContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
                 {profiles.map(p => {
                     const isActive = active === p;
+                    const isCustom = !defaultProfiles.includes(p);
                     return (
-                        <TouchableOpacity 
-                            key={p}
-                            style={[styles.profileChip, isActive && styles.profileChipActive]}
-                            onPress={() => onSelect(p)}
-                            activeOpacity={0.8}
-                        >
-                            <View style={[styles.profileAvatar, isActive && { backgroundColor: '#FFF' }]}>
-                                <Ionicons name="person" size={16} color={isActive ? Colors.primary : '#64748B'} />
-                            </View>
-                            <Text style={[styles.profileName, isActive && styles.profileNameActive]}>{p}</Text>
-                        </TouchableOpacity>
+                        <View key={p} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <TouchableOpacity 
+                                style={[styles.profileChip, isActive && styles.profileChipActive, isCustom && isActive && { marginRight: 4 }]}
+                                onPress={() => onSelect(p)}
+                                activeOpacity={0.8}
+                            >
+                                <View style={[styles.profileAvatar, isActive && { backgroundColor: '#FFF' }]}>
+                                    <Ionicons name="person" size={16} color={isActive ? Colors.primary : '#64748B'} />
+                                </View>
+                                <Text style={[styles.profileName, isActive && styles.profileNameActive]}>{p}</Text>
+                            </TouchableOpacity>
+                            {isCustom && isActive && (
+                                <TouchableOpacity 
+                                    onPress={() => onRemove(p)} 
+                                    style={{ padding: 4 }}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons name="close-circle" size={20} color="#EF4444" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     );
                 })}
-                <TouchableOpacity style={styles.addProfileBtn} activeOpacity={0.8}>
+                <TouchableOpacity style={styles.addProfileBtn} activeOpacity={0.8} onPress={onAdd}>
                     <Ionicons name="add" size={20} color="#64748B" />
                 </TouchableOpacity>
             </ScrollView>
@@ -228,6 +249,9 @@ export default function HealthVaultScreen() {
     const [uploadPickerType, setUploadPickerType] = useState<UploadType | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('all');
     const [activeProfile, setActiveProfile] = useState('Self');
+    const [profiles, setProfiles] = useState(['Self', 'Spouse', 'Child', 'Parent']);
+    const [showAddProfile, setShowAddProfile] = useState(false);
+    const [newProfileName, setNewProfileName] = useState('');
     const webFileInputRef = useRef<HTMLInputElement | null>(null);
     const [pendingWebUploadType, setPendingWebUploadType] = useState<UploadType | null>(null);
 
@@ -244,8 +268,72 @@ export default function HealthVaultScreen() {
         queryFn: medicalService.getMyRecords,
     });
 
+    const { data: profileData } = useQuery({
+        queryKey: ['profile'],
+        queryFn: authService.getProfile,
+    });
+
+    const updateFamilyMembersMutation = useMutation({
+        mutationFn: (familyMembers: string[]) => api.patch('/patient/family-members', { familyMembers }),
+    });
+
+    // Populate custom profiles from existing records and DB
+    React.useEffect(() => {
+        const existingProfiles = new Set(['Self', 'Spouse', 'Child', 'Parent']);
+        let hasNew = false;
+        
+        if (profileData?.familyMembers) {
+            profileData.familyMembers.forEach((m: string) => {
+                if (!existingProfiles.has(m)) {
+                    existingProfiles.add(m);
+                    hasNew = true;
+                }
+            });
+        }
+        
+        if (records.length > 0) {
+            records.forEach(r => {
+                if (r.recordFor && !existingProfiles.has(r.recordFor)) {
+                    existingProfiles.add(r.recordFor);
+                    hasNew = true;
+                }
+            });
+        }
+
+        if (hasNew) {
+            setProfiles(Array.from(existingProfiles));
+        }
+    }, [records, profileData]);
+
+    // ── Handle Custom Profile Removal ──
+    const handleRemoveProfile = (profileName: string) => {
+        const removeFn = () => {
+            const newProfiles = profiles.filter(p => p !== profileName);
+            setProfiles(newProfiles);
+            if (activeProfile === profileName) {
+                setActiveProfile('Self');
+            }
+            // Save to DB
+            const customOnly = newProfiles.filter(p => !['Self', 'Spouse', 'Child', 'Parent'].includes(p));
+            updateFamilyMembersMutation.mutate(customOnly);
+        };
+
+        CustomAlert.show(
+            'Remove Profile',
+            `Are you sure you want to remove ${profileName}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Remove', style: 'destructive', onPress: removeFn },
+            ],
+            { type: 'warning' }
+        );
+    };
+
     // ── Filter by tab ──
     const filtered = records.filter(r => {
+        if (r.recordFor && r.recordFor !== activeProfile) return false;
+        if (!r.recordFor && activeProfile !== 'Self') return false; // Default is Self
+
         if (activeTab === 'all') return true;
         if (activeTab === 'prescriptions') return r.prescriptions.length > 0;
         if (activeTab === 'labReports') return r.labReports.length > 0;
@@ -282,27 +370,22 @@ export default function HealthVaultScreen() {
 
     // ── Confirm delete ──
     const handleDeleteRecord = (id: string) => {
-        if (Platform.OS === 'web') {
-            if (window.confirm('Are you sure you want to permanently delete this medical record?')) {
-                deleteMutation.mutate(id);
-            }
-        } else {
-            const Alert = require('react-native').Alert;
-            Alert.alert(
-                'Delete Record',
-                'Are you sure you want to permanently delete this medical record?',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate(id) },
-                ]
-            );
-        }
+        CustomAlert.show(
+            'Delete Record',
+            'Are you sure you want to permanently delete this medical record?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate(id) },
+            ],
+            { type: 'warning' }
+        );
     };
 
     // ── Upload helpers ──
     const uploadAssets = (type: UploadType, assets: Array<{ uri: string; name?: string | null; mimeType?: string | null }>) => {
         setIsUploading(true);
         const formData = new FormData();
+        formData.append('recordFor', activeProfile);
         assets.forEach((asset, index) => {
             formData.append(type, {
                 uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''),
@@ -370,6 +453,7 @@ export default function HealthVaultScreen() {
                 if (!files.length) return;
                 setIsUploading(true);
                 const formData = new FormData();
+                formData.append('recordFor', activeProfile);
                 files.forEach(file => formData.append(type, file));
                 uploadMutation.mutate(formData);
             };
@@ -386,7 +470,13 @@ export default function HealthVaultScreen() {
 
     const ListHeader = (
         <View>
-            <ProfileSelector active={activeProfile} onSelect={setActiveProfile} />
+            <ProfileSelector 
+                active={activeProfile} 
+                onSelect={setActiveProfile} 
+                profiles={profiles}
+                onAdd={() => setShowAddProfile(true)}
+                onRemove={handleRemoveProfile}
+            />
 
             {/* Quick Actions */}
             <View style={styles.uploadSection}>
@@ -398,7 +488,7 @@ export default function HealthVaultScreen() {
                         label="Scan Prescription"
                         icon="line-scan"
                         onPress={() => handleWebUpload('prescriptions')}
-                        disabled={isUploading || activeProfile !== 'Self'}
+                        disabled={isUploading}
                     />
                     <UploadCard
                         type="labReports"
@@ -406,7 +496,7 @@ export default function HealthVaultScreen() {
                         label="Upload Report"
                         icon="file-upload-outline"
                         onPress={() => handleWebUpload('labReports')}
-                        disabled={isUploading || activeProfile !== 'Self'}
+                        disabled={isUploading}
                     />
                 </View>
                 {isUploading && (
@@ -485,6 +575,57 @@ export default function HealthVaultScreen() {
                     ListFooterComponent={<View style={{ height: 100 }} />}
                 />
             )}
+
+            {/* Add Profile Modal */}
+            <Modal
+                visible={showAddProfile}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowAddProfile(false)}
+            >
+                <View style={[styles.sheetOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <TouchableOpacity style={[styles.sheetBackdrop, { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }]} activeOpacity={1} onPress={() => setShowAddProfile(false)} />
+                    <View style={styles.addProfileModal}>
+                        <Text style={styles.addProfileTitle}>Add Family Member</Text>
+                        <Text style={styles.addProfileSub}>Enter the name or relation (e.g., Grandfather, Alice).</Text>
+                        
+                        <TextInput
+                            style={styles.addProfileInput}
+                            placeholder="Enter name or relation"
+                            value={newProfileName}
+                            onChangeText={setNewProfileName}
+                            autoFocus
+                        />
+                        
+                        <View style={styles.addProfileBtns}>
+                            <TouchableOpacity style={styles.addProfileCancelBtn} onPress={() => { setShowAddProfile(false); setNewProfileName(''); }}>
+                                <Text style={styles.addProfileCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.addProfileSaveBtn, !newProfileName.trim() && { opacity: 0.5 }]} 
+                                disabled={!newProfileName.trim()}
+                                onPress={() => {
+                                    const name = newProfileName.trim();
+                                    if (name) {
+                                        if (!profiles.includes(name)) {
+                                            const newProfiles = [...profiles, name];
+                                            setProfiles(newProfiles);
+                                            // Save to DB
+                                            const customOnly = newProfiles.filter(p => !['Self', 'Spouse', 'Child', 'Parent'].includes(p));
+                                            updateFamilyMembersMutation.mutate(customOnly);
+                                        }
+                                        setActiveProfile(name);
+                                        setShowAddProfile(false);
+                                        setNewProfileName('');
+                                    }
+                                }}
+                            >
+                                <Text style={styles.addProfileSaveText}>Add</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Native Upload Picker Modal */}
             <Modal
@@ -658,4 +799,21 @@ const styles = StyleSheet.create({
     sheetActionText: { fontSize: 13, fontWeight: '700', color: '#4A647E' },
     sheetCancelBtn: { alignItems: 'center', paddingTop: 4 },
     sheetCancelText: { color: '#EF4444', fontSize: 16, fontWeight: '700' },
+    // Add profile modal
+    addProfileModal: {
+        width: '85%', maxWidth: 400, backgroundColor: '#FFF',
+        borderRadius: 24, padding: 24, ...Shadows.card,
+    },
+    addProfileTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 8 },
+    addProfileSub: { fontSize: 13, color: '#64748B', marginBottom: 20 },
+    addProfileInput: {
+        backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0',
+        borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
+        fontSize: 15, color: '#1E293B', marginBottom: 24,
+    },
+    addProfileBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+    addProfileCancelBtn: { paddingHorizontal: 16, paddingVertical: 10 },
+    addProfileCancelText: { color: '#64748B', fontSize: 15, fontWeight: '600' },
+    addProfileSaveBtn: { backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
+    addProfileSaveText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 });

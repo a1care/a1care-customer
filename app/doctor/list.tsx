@@ -84,7 +84,7 @@ export default function DoctorListScreen() {
             </View>
             <View style={styles.feesCol}>
                 <Text style={styles.feeLabel}>Fees</Text>
-                <Text style={styles.feeVal}>{item.consultationFee ? `₹${item.consultationFee}` : 'N/A'}</Text>
+                <Text style={styles.feeVal}>{typeof item.consultationFee === 'number' ? `₹${item.consultationFee}` : 'N/A'}</Text>
             </View>
         </TouchableOpacity>
     );

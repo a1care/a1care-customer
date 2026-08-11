@@ -9,7 +9,6 @@ import { servicesService } from '@/services/services.service';
 import { bookingsService } from '@/services/bookings.service';
 import { paymentService } from '@/services/payment.service';
 import { useAuthStore } from '@/stores/auth.store';
-import RazorpayCheckout from 'react-native-razorpay';
 import { triggerLocalNotification } from '@/utils/notifications';
 import { showToast } from '@/utils/toast';
 
@@ -77,16 +76,20 @@ export default function HospitalBookingScreen() {
         enabled: !!id && id !== '[id]',
     });
 
-    const dates = useMemo(() => Array.from({ length: 7 }, (_, i) => {
-        const d = new Date();
-        d.setDate(d.getDate() + i);
-        return {
-            full: toLocalYMD(d),
-            dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
-            dayNum: d.getDate(),
-            month: d.toLocaleDateString('en-US', { month: 'short' }),
-        };
-    }), []);
+    const dates = useMemo(() => {
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        return Array.from({ length: 7 }, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            return {
+                full: toLocalYMD(d),
+                dayName: dayNames[d.getDay()],
+                dayNum: d.getDate(),
+                month: monthNames[d.getMonth()],
+            };
+        });
+    }, []);
 
     const timeSlots = useMemo(() => {
         if (selectedDate !== todayYmd) return SLOT_OPTIONS;
