@@ -5,6 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CheckCircle, XCircle, ChevronLeft, CreditCard, AlertCircle, RotateCcw } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQueryClient } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { paymentService } from "../../services/payment.service";
 
 const { width } = Dimensions.get("window");
 
@@ -24,6 +26,8 @@ export default function PaymentStatusScreen() {
                 queryClient.invalidateQueries({ queryKey: ["service-booking"] });
             }
         }
+        // Clear any pending order record — we've landed on the status page normally
+        AsyncStorage.removeItem('pending_razorpay_order').catch(() => {});
     }, [isSuccess]);
 
     const typeLabel =

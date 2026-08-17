@@ -21,6 +21,7 @@ import Toast from 'react-native-toast-message';
 import { CheckCircle, XCircle, Info, AlertTriangle } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import api from '@/services/api';
+import { paymentService } from '@/services/payment.service';
 import { notificationsService } from '@/services/notifications.service';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -367,6 +368,36 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             if (fcmToken) api.put('/notifications/fcm-token/patient', { fcmToken });
         });
         return () => tokenSub.remove();
+    }, [isAuthenticated]);
+
+    // Reconcile any Razorpay order that was pending when the app was killed
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const reconcile = async () => {
+            try {
+                const raw = await AsyncStorage.getItem('pending_razorpay_order');
+                if (!raw) return;
+                await AsyncStorage.removeItem('pending_razorpay_order');
+                const { orderId, bookingId, amount } = JSON.parse(raw);
+                if (!orderId) return;
+                const order = await paymentService.getOrder(orderId);
+                if (order?.status === 'SUCCESS') {
+                    router.replace({
+                        pathname: '/checkout/status' as any,
+                        params: {
+                            status: 'SUCCESS',
+                            txnId: order.txnId,
+                            amount: String(amount || order.amount || 0),
+                            type: 'BOOKING',
+                            bookingId: bookingId || '',
+                        },
+                    });
+                }
+            } catch (_e) {
+                // Reconciliation best-effort; failures are silent
+            }
+        };
+        reconcile();
     }, [isAuthenticated]);
 
     useEffect(() => {

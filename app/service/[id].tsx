@@ -1081,6 +1081,10 @@ export default function ServiceDetailScreen() {
                 });
                 createdTxnId = order.txnId;
                 const razorData = await paymentService.initiateRazorpay(order._id);
+                // Persist before opening sheet so app-kill is recoverable
+                await AsyncStorage.setItem('pending_razorpay_order', JSON.stringify({
+                    orderId: order._id, bookingId: booking._id, amount: payableAmount, type: 'BOOKING',
+                }));
                 const data = await RazorpayCheckout.open({
                     key: razorData.key,
                     amount: razorData.razorOrder.amount,
@@ -1101,6 +1105,7 @@ export default function ServiceDetailScreen() {
                     razorpay_signature: (data as any).razorpay_signature,
                     orderId: order._id,
                 });
+                await AsyncStorage.removeItem('pending_razorpay_order');
                 sendBookingNotification(booking);
                 setSubmitted(true);
                 setSubmittedBookingId(booking._id);
@@ -1119,6 +1124,7 @@ export default function ServiceDetailScreen() {
                     },
                 });
             } catch (err: any) {
+                await AsyncStorage.removeItem('pending_razorpay_order');
                 if (createdBookingId) {
                     bookingsService.updateServiceBookingStatus(createdBookingId, 'CANCELLED').catch(() => {});
                 }
