@@ -36,7 +36,8 @@ const KNOWLEDGE_THEMES: Record<string, { icon: any; color: string; bgColor: stri
 
 export default function KnowledgeBaseScreen() {
     const router = useRouter();
-    const { config, fetchConfig } = useConfigStore();
+    const config = useConfigStore(state => state.config);
+    const fetchConfig = useConfigStore(state => state.fetchConfig);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedKB, setSelectedKB] = useState<any>(null);
     const [isKBModalOpen, setIsKBModalOpen] = useState(false);

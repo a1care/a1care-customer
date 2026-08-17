@@ -119,9 +119,6 @@ export default function OtpScreen() {
             }
             setUser(user);
 
-            if (user.isRegistered) {
-                triggerLocalNotification('Welcome back!', 'Great to see you again.');
-            }
             // _layout.tsx routing handles navigation after auth state updates
 
             // Request location permission after navigation (non-blocking)

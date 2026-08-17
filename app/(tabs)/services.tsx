@@ -10,9 +10,10 @@ import {
     StyleSheet,
     ActivityIndicator,
     RefreshControl,
-    Image,
     Dimensions,
+    FlatList,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -190,19 +191,23 @@ function ServiceRow({
 export default function ServicesScreen() {
     const router = useRouter();
     const navigation = useNavigation();
-    const rawParams = useLocalSearchParams<{ category?: string | string[]; subCategory?: string | string[]; serviceId?: string | string[]; subServiceId?: string | string[]; from?: string | string[] }>();
+    const rawParams = useLocalSearchParams<{ category?: string | string[]; subCategory?: string | string[]; serviceId?: string | string[]; subServiceId?: string | string[]; from?: string | string[]; isEmergencyFastTrack?: string | string[] }>();
     const category = Array.isArray(rawParams.category) ? rawParams.category[0] : rawParams.category;
     const subCategory = Array.isArray(rawParams.subCategory) ? rawParams.subCategory[0] : rawParams.subCategory;
     const serviceId = Array.isArray(rawParams.serviceId) ? rawParams.serviceId[0] : rawParams.serviceId;
     const subServiceId = Array.isArray(rawParams.subServiceId) ? rawParams.subServiceId[0] : rawParams.subServiceId;
     const from = Array.isArray(rawParams.from) ? rawParams.from[0] : rawParams.from;
     const isFromIndex = from === 'home' || from === 'index';
+    const isEmergencyFastTrack = Array.isArray(rawParams.isEmergencyFastTrack) ? rawParams.isEmergencyFastTrack[0] === 'true' : rawParams.isEmergencyFastTrack === 'true';
+    
     const initialLevel: DrillLevel = subServiceId ? 'child' : ((serviceId || category) ? 'sub' : 'services');
     const [level, setLevel] = useState<DrillLevel>(initialLevel);
     const [selectedService, setSelectedService] = useState<Service | null>(null);
     const [selectedSub, setSelectedSub] = useState<SubService | null>(null);
     const [search, setSearch] = useState('');
     const [animPlaceholder, setAnimPlaceholder] = useState('');
+    const [fastTrackStatus, setFastTrackStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+    const [fastTrackError, setFastTrackError] = useState('');
     const hasRestoredDeepLinkRef = useRef(false);
     const navLockRef = useRef(false);
     const lastNavRef = useRef<{ key: string; ts: number } | null>(null);
@@ -322,6 +327,57 @@ export default function ServicesScreen() {
         return () => clearTimeout(timeoutId);
     }, [level, services]);
 
+    // ── Handle Fast Track Resolution ──
+    useEffect(() => {
+        if (!isEmergencyFastTrack || fastTrackStatus !== 'idle') return;
+        if (!serviceId) return;
+
+        let active = true;
+        const resolveFastTrack = async () => {
+            setFastTrackStatus('loading');
+            try {
+                const subs = await servicesService.getSubServices(serviceId);
+                if (!active) return;
+                if (subs && subs.length > 0) {
+                    const children = await servicesService.getChildServices(subs[0]._id);
+                    if (!active) return;
+                    if (children && children.length > 0) {
+                        const targetChild = children[0];
+                        setFastTrackStatus('idle'); // clear state
+                        router.replace({
+                            pathname: '/service/[id]',
+                            params: {
+                                id: targetChild._id || (targetChild as any).id,
+                                name: targetChild.name,
+                                price: targetChild.price,
+                                subName: subs[0].name,
+                                from: isFromIndex ? from : 'services',
+                                entryMode: 'direct',
+                                originServiceId: serviceId,
+                                originSubServiceId: subs[0]._id,
+                                originCategory: category || '',
+                            }
+                        });
+                        return;
+                    }
+                }
+                if (active) {
+                    setFastTrackStatus('error');
+                    setFastTrackError('Could not auto-resolve services in this region.');
+                }
+            } catch (err: any) {
+                if (active) {
+                    setFastTrackStatus('error');
+                    setFastTrackError(err.message || 'Failed to auto-resolve emergency service.');
+                }
+            }
+        };
+
+        resolveFastTrack();
+
+        return () => { active = false; };
+    }, [isEmergencyFastTrack, serviceId, fastTrackStatus, category, from, isFromIndex, router]);
+
     // ── Handle Initial Deep Link ──
     useEffect(() => {
         if (!category && !serviceId) {
@@ -387,36 +443,20 @@ export default function ServicesScreen() {
     }, [level, subServiceId, subServices, (selectedSub?._id || (selectedSub as any)?.id)]);
 
     const handleServicePress = async (s: any) => {
-        // Fast-track for Emergency / Ambulance (2-step booking)
+        // P0.1 / P0.2: Fast-track for Emergency / Ambulance (2-step booking).
+        // Navigate immediately with fast-track param instead of waiting for API here.
         if (s.type === 'Emergency' || s.name.toLowerCase().includes('ambulance')) {
-            try {
-                const subs = await servicesService.getSubServices((s._id || (s as any).id) as string);
-                if (subs && subs.length > 0) {
-                    const children = await servicesService.getChildServices(subs[0]._id);
-                    if (children && children.length > 0) {
-                        const targetChild = children[0]; // Auto pick first (e.g., BLS)
-                        setSelectedService(s);
-                        setLevel('sub');
-                        router.push({
-                            pathname: '/service/[id]',
-                            params: {
-                                id: (targetChild._id || (targetChild as any).id) as string,
-                                name: targetChild.name,
-                                price: targetChild.price,
-                                subName: subs[0].name,
-                                from: isFromIndex ? from : 'services',
-                                entryMode: 'direct',
-                                originServiceId: '',
-                                originSubServiceId: '',
-                                originCategory: '',
-                            }
-                        });
-                        return;
-                    }
+            router.push({
+                pathname: '/services',
+                params: {
+                    category: s.name,
+                    serviceId: (s._id || (s as any).id) as string,
+                    subServiceId: '',
+                    from: isFromIndex ? from : 'services',
+                    isEmergencyFastTrack: 'true'
                 }
-            } catch (err) {
-                console.error("Fast track failed", err);
-            }
+            });
+            return;
         }
 
         // Normal Flow — clear stale sub-selection before switching service
@@ -501,12 +541,17 @@ export default function ServicesScreen() {
         (level === 'child' && !!subServiceId && !selectedSub);
 
     const isLoading =
+        fastTrackStatus === 'loading' ||
         isResolvingRouteContext ||
         (level === 'services' && (servicesLoading || !services)) ||
         (level === 'sub' && (subLoading || !subServices || !selectedService)) ||
         (level === 'child' && (childLoading || !childServices || !selectedSub));
-    const isError = servicesErr || subErr || childErr;
+    const isError = servicesErr || subErr || childErr || fastTrackStatus === 'error';
     const onRetry = () => {
+        if (fastTrackStatus === 'error') {
+            setFastTrackStatus('idle');
+            return;
+        }
         if (servicesErr) refetchServices();
         if (subErr) refetchSubs();
         if (childErr) refetchChildren();
@@ -583,25 +628,31 @@ export default function ServicesScreen() {
                             : [1, 2, 3, 4, 5].map((i) => <SkeletonListItem key={i} />)}
                 </ScrollView>
             ) : (
-                <ScrollView
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={servicesLoading || subLoading || childLoading}
-                            onRefresh={onRetry}
-                            colors={[Colors.primary]}
-                            tintColor={Colors.primary}
-                        />
-                    }
-                >
-                    {/* Level: Root services — 2-column grid */}
-                    {level === 'services' && filteredServices.length > 0 && (
-                        <View style={styles.gridContainer}>
-                            {filteredServices.map((s, idx) => (
+                <>
+                    {level === 'services' && (
+                        <FlatList
+                            contentContainerStyle={styles.listContent}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            data={filteredServices}
+                            keyExtractor={s => s._id || (s as any).id}
+                            numColumns={2}
+                            columnWrapperStyle={{ justifyContent: 'space-between' }}
+                            initialNumToRender={8}
+                            maxToRenderPerBatch={6}
+                            windowSize={5}
+                            refreshControl={<RefreshControl refreshing={servicesLoading} onRefresh={onRetry} colors={[Colors.primary]} tintColor={Colors.primary} />}
+                            ListEmptyComponent={() => !servicesLoading ? (
+                                <EmptyState
+                                    icon="🔍"
+                                    title="No services found"
+                                    subtitle={search ? `Try searching for something else` : 'No services available yet'}
+                                    actionLabel={search ? 'Clear Search' : undefined}
+                                    onAction={search ? () => setSearch('') : undefined}
+                                />
+                            ) : null}
+                            renderItem={({ item: s, index: idx }) => (
                                 <ServiceGridCard
-                                    key={s._id || (s as any).id}
                                     service={s}
                                     idx={idx}
                                     onPress={() => {
@@ -609,53 +660,35 @@ export default function ServicesScreen() {
                                         handleServicePress(s);
                                     }}
                                 />
-                            ))}
-                            {filteredServices.length % 2 !== 0 && (
-                                <View style={{ width: CARD_WIDTH }} />
                             )}
-                        </View>
-                    )}
-
-                    {level === 'services' && filteredServices.length === 0 && !servicesLoading && (
-                        <EmptyState
-                            icon="🔍"
-                            title="No services found"
-                            subtitle={search ? `Try searching for something else` : 'No services available yet'}
-                            actionLabel={search ? 'Clear Search' : undefined}
-                            onAction={search ? () => setSearch('') : undefined}
                         />
                     )}
 
-                    {/* Category hero banner (shown at top of sub-services level) */}
-                    {level === 'sub' && !!toImageUrl(selectedService?.bannerUrl) && (
-                        <View style={styles.categoryBanner}>
-                            <Image
-                                source={{ uri: toImageUrl(selectedService?.bannerUrl) }}
-                                style={styles.categoryBannerImage}
-                                resizeMode="cover"
-                            />
-                            {/* Dark gradient overlay at bottom for readability */}
-                            <LinearGradient
-                                colors={['transparent', 'rgba(10,20,50,0.55)']}
-                                style={StyleSheet.absoluteFillObject}
-                                start={{ x: 0, y: 0.4 }}
-                                end={{ x: 0, y: 1 }}
-                            />
-                            {/* Sub-count pill over banner */}
-                            <View style={styles.bannerPill}>
-                                <Ionicons name="grid-outline" size={12} color="#fff" />
-                                <Text style={styles.bannerPillText}>
-                                    {(subServices ?? []).length} Specialties
-                                </Text>
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Level: Sub-services */}
-                    {level === 'sub' &&
-                        (subServices ?? [])
-                            .filter(s => search.trim() ? s.name.toLowerCase().includes(search.toLowerCase()) : true)
-                            .map((s, idx) => (
+                    {level === 'sub' && (
+                        <FlatList
+                            contentContainerStyle={styles.listContent}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            data={(subServices ?? []).filter(s => search.trim() ? s.name.toLowerCase().includes(search.toLowerCase()) : true)}
+                            keyExtractor={s => s._id || (s as any).id}
+                            initialNumToRender={8}
+                            maxToRenderPerBatch={6}
+                            windowSize={5}
+                            refreshControl={<RefreshControl refreshing={subLoading} onRefresh={onRetry} colors={[Colors.primary]} tintColor={Colors.primary} />}
+                            ListHeaderComponent={() => !!toImageUrl(selectedService?.bannerUrl) ? (
+                                <View style={styles.categoryBanner}>
+                                    <Image source={{ uri: toImageUrl(selectedService?.bannerUrl) }} style={styles.categoryBannerImage} resizeMode="cover" />
+                                    <LinearGradient colors={['transparent', 'rgba(10,20,50,0.55)']} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0.4 }} end={{ x: 0, y: 1 }} />
+                                    <View style={styles.bannerPill}>
+                                        <Ionicons name="grid-outline" size={12} color="#fff" />
+                                        <Text style={styles.bannerPillText}>{(subServices ?? []).length} Specialties</Text>
+                                    </View>
+                                </View>
+                            ) : null}
+                            ListEmptyComponent={() => !subLoading ? (
+                                <EmptyState icon="📋" title="No categories found" subtitle="There are no sub-categories for this service yet." actionLabel="Back to All Services" onAction={goBack} />
+                            ) : null}
+                            renderItem={({ item: s, index: idx }) => (
                                 <TouchableOpacity
                                     key={s._id || (s as any).id}
                                     style={styles.subCard}
@@ -683,9 +716,7 @@ export default function ServicesScreen() {
                                         </View>
                                         <View style={styles.subCardContent}>
                                             <Text style={styles.subCardName} numberOfLines={1}>{s.name}</Text>
-                                            {s.description ? (
-                                                <Text style={styles.subCardDesc} numberOfLines={2}>{s.description}</Text>
-                                            ) : null}
+                                            {s.description ? <Text style={styles.subCardDesc} numberOfLines={2}>{s.description}</Text> : null}
                                             {s.startingPrice != null && s.startingPrice > 0 && (
                                                 <View style={styles.subPriceRow}>
                                                     <Text style={styles.subStartingPrice}>
@@ -699,33 +730,40 @@ export default function ServicesScreen() {
                                         </View>
                                     </View>
                                 </TouchableOpacity>
-                            ))}
-
-                    {level === 'sub' && !subLoading && (subServices ?? []).length === 0 && (
-                        <EmptyState
-                            icon="📋"
-                            title="No categories found"
-                            subtitle="There are no sub-categories for this service yet."
-                            actionLabel="Back to All Services"
-                            onAction={goBack}
+                            )}
                         />
                     )}
 
-                    {/* Level: Child services — bookable items */}
-                    {level === 'child' && (childServices ?? []).filter(c => search.trim() ? c.name.toLowerCase().includes(search.toLowerCase()) : true).length > 0 && (
-                        <View style={styles.childSectionHeader}>
-                            <Text style={styles.childSectionTitle}>Available Services</Text>
-                            <Text style={styles.childSectionSub}>Choose the service that suits your needs</Text>
-                        </View>
-                    )}
-                    {level === 'child' &&
-                        (childServices ?? [])
-                            .filter(c => search.trim() ? c.name.toLowerCase().includes(search.toLowerCase()) : true)
-                            .map((c, idx) => {
+                    {level === 'child' && (
+                        <FlatList
+                            contentContainerStyle={styles.listContent}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            data={(childServices ?? []).filter(c => search.trim() ? c.name.toLowerCase().includes(search.toLowerCase()) : true)}
+                            keyExtractor={c => c._id || (c as any).id}
+                            initialNumToRender={8}
+                            maxToRenderPerBatch={6}
+                            windowSize={5}
+                            refreshControl={<RefreshControl refreshing={childLoading} onRefresh={onRetry} colors={[Colors.primary]} tintColor={Colors.primary} />}
+                            ListHeaderComponent={() => {
+                                const count = (childServices ?? []).filter(c => search.trim() ? c.name.toLowerCase().includes(search.toLowerCase()) : true).length;
+                                if (count > 0) {
+                                    return (
+                                        <View style={styles.childSectionHeader}>
+                                            <Text style={styles.childSectionTitle}>Available Services</Text>
+                                            <Text style={styles.childSectionSub}>Choose the service that suits your needs</Text>
+                                        </View>
+                                    );
+                                }
+                                return null;
+                            }}
+                            ListEmptyComponent={() => !childLoading ? (
+                                <EmptyState icon="📋" title="No services available" subtitle="Check back later or try another category" actionLabel="Go Back" onAction={goBack} />
+                            ) : null}
+                            renderItem={({ item: c, index: idx }) => {
                                 const fulfillment = c.fulfillmentMode === 'HOSPITAL_VISIT' ? 'At Hospital' : c.fulfillmentMode === 'VIRTUAL' ? 'Virtual' : 'At Your Home';
                                 return (
                                 <Pressable
-                                    key={c._id || (c as any).id}
                                     style={styles.childCard}
                                     onPress={() => openChildServiceDetail(c)}
                                 >
@@ -797,20 +835,10 @@ export default function ServicesScreen() {
                                         </TouchableOpacity>
                                     </View>
                                 </Pressable>
-                            )})}
-
-                    {level === 'child' && !childLoading && (childServices?.length ?? 0) === 0 && (
-                        <EmptyState
-                            icon="📋"
-                            title="No services available"
-                            subtitle="Check back later or try another category"
-                            actionLabel="Go Back"
-                            onAction={goBack}
+                            )}}
                         />
                     )}
-
-                    <View style={{ height: 100 }} />
-                </ScrollView>
+                </>
             )}
         </SafeAreaView>
     );

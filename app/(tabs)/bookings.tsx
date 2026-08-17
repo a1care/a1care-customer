@@ -7,6 +7,7 @@ import {
     RefreshControl,
     StyleSheet,
     Alert,
+    FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -177,6 +178,25 @@ function ServiceCard({ booking, onPress, onDelete }: { booking: ServiceRequest; 
                 dateText={formatDateTime((booking as any).scheduledTime || (booking as any).scheduledSlot?.startTime || booking.createdAt)}
                 paymentText={paymentLabel}
             />
+
+            {/* OP Token Highlights for Customer */}
+            {booking.fulfillmentMode === 'HOSPITAL_VISIT' && ((booking as any).tokenNumber || (booking as any).checkInPin) && (
+                <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 10 }}>
+                    {(booking as any).tokenNumber && (
+                        <View style={{ flex: 1, backgroundColor: '#EEF4FF', borderRadius: 8, padding: 8, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 2 }}>Token No.</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E293B' }}>{(booking as any).tokenNumber}</Text>
+                        </View>
+                    )}
+                    {(booking as any).checkInPin && (
+                        <View style={{ flex: 1, backgroundColor: '#F0FDF4', borderRadius: 8, padding: 8, borderLeftWidth: 3, borderLeftColor: '#22C55E' }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 2 }}>Check-in PIN</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E293B', letterSpacing: 2 }}>{(booking as any).checkInPin}</Text>
+                        </View>
+                    )}
+                </View>
+            )}
+            
             <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
                 {showBookAgain && (
                     <TouchableOpacity
@@ -628,7 +648,9 @@ export default function BookingsScreen() {
             {isError ? (
                 <ErrorState message="We could not load your bookings right now." onRetry={onRefresh} />
             ) : (
-                <ScrollView
+                <FlatList
+                    data={isLoading ? [] : filteredItems}
+                    keyExtractor={(item) => `${item.kind}-${item.id}`}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.list}
                     refreshControl={
@@ -638,58 +660,58 @@ export default function BookingsScreen() {
                             colors={[Colors.primary]}
                         />
                     }
-                >
-                    {isLoading ? (
-                        <>
-                            <SkeletonBookingCard />
-                            <SkeletonBookingCard />
-                            <SkeletonBookingCard />
-                        </>
-                    ) : isEmpty ? (
-                        <EmptyState
-                            icon={activeTab === 'cancelled' ? '🚫' : activeTab === 'ongoing' ? '⏳' : activeTab === 'completed' ? '✅' : '📋'}
-                            title={`No ${activeTab} bookings`}
-                            subtitle={
-                                activeTab === 'upcoming'
-                                    ? 'You have no upcoming bookings. Start by booking a service or doctor.'
-                                    : activeTab === 'ongoing'
-                                        ? 'You currently have no active bookings in progress.'
-                                        : activeTab === 'completed'
-                                            ? 'Completed bookings will appear here once services are finished.'
-                                            : 'Cancelled bookings will appear here when any booking is cancelled.'
-                            }
-                            actionLabel={activeTab === 'upcoming' ? 'Browse Services' : undefined}
-                            onAction={activeTab === 'upcoming' ? () => router.push('/services') : undefined}
-                        />
-                    ) : (
-                        <>
-                            {filteredItems.map((item) =>
-                                item.kind === 'appt' ? (
-                                    <AppointmentCard
-                                        key={`appt-${item.id}`}
-                                        appt={item.appt}
-                                        onPress={() => {
-                                            if (!allowCardPress) return;
-                                            router.push({ pathname: '/doctor/appointment/[id]', params: { id: item.appt._id } });
-                                        }}
-                                        onDelete={() => confirmDelete(item.appt._id, 'appt')}
-                                    />
-                                ) : (
-                                    <ServiceCard
-                                        key={`service-${item.id}`}
-                                        booking={item.booking}
-                                        onPress={() => {
-                                            if (!allowCardPress) return;
-                                            router.push({ pathname: '/booking/[id]', params: { id: item.booking._id } });
-                                        }}
-                                        onDelete={() => confirmDelete(item.booking._id, 'service')}
-                                    />
-                                )
-                            )}
-                        </>
+                    initialNumToRender={8}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    removeClippedSubviews={true}
+                    ListEmptyComponent={
+                        isLoading ? (
+                            <>
+                                <SkeletonBookingCard />
+                                <SkeletonBookingCard />
+                                <SkeletonBookingCard />
+                            </>
+                        ) : isEmpty ? (
+                            <EmptyState
+                                icon={activeTab === 'cancelled' ? '🚫' : activeTab === 'ongoing' ? '⏳' : activeTab === 'completed' ? '✅' : '📋'}
+                                title={`No ${activeTab} bookings`}
+                                subtitle={
+                                    activeTab === 'upcoming'
+                                        ? 'You have no upcoming bookings. Start by booking a service or doctor.'
+                                        : activeTab === 'ongoing'
+                                            ? 'You currently have no active bookings in progress.'
+                                            : activeTab === 'completed'
+                                                ? 'Completed bookings will appear here once services are finished.'
+                                                : 'Cancelled bookings will appear here when any booking is cancelled.'
+                                }
+                                actionLabel={activeTab === 'upcoming' ? 'Browse Services' : undefined}
+                                onAction={activeTab === 'upcoming' ? () => router.push('/services') : undefined}
+                            />
+                        ) : null
+                    }
+                    renderItem={({ item }) => (
+                        item.kind === 'appt' ? (
+                            <AppointmentCard
+                                appt={item.appt}
+                                onPress={() => {
+                                    if (!allowCardPress) return;
+                                    router.push({ pathname: '/doctor/appointment/[id]', params: { id: item.appt._id } });
+                                }}
+                                onDelete={() => confirmDelete(item.appt._id, 'appt')}
+                            />
+                        ) : (
+                            <ServiceCard
+                                booking={item.booking}
+                                onPress={() => {
+                                    if (!allowCardPress) return;
+                                    router.push({ pathname: '/booking/[id]', params: { id: item.booking._id } });
+                                }}
+                                onDelete={() => confirmDelete(item.booking._id, 'service')}
+                            />
+                        )
                     )}
-                    <View style={{ height: 24 }} />
-                </ScrollView>
+                    ListFooterComponent={<View style={{ height: 24 }} />}
+                />
             )}
 
             <ConfirmModal

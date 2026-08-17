@@ -26,7 +26,7 @@
       }
     },
     "android": {
-      "versionCode": 105,
+      "versionCode": 138,
       "usesCleartextTraffic": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -58,6 +58,9 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "./plugins/withPageSizeCompat",
+      "./plugins/withExtractNativeLibs",
+      "./plugins/withLegacyPackaging",
       "./plugins/withFmtPodfileFix",
       [
         "expo-notifications",
@@ -87,7 +90,7 @@
             "deploymentTarget": "15.1"
           },
           "android": {
-            "compileSdkVersion": 35,
+            "compileSdkVersion": 36,
             "targetSdkVersion": 35,
             "minSdkVersion": 24,
             "kotlinVersion": "1.9.25",
@@ -111,9 +114,10 @@
         "origin": false
       },
       "eas": {
-        "projectId": "41fec92d-417c-4e63-be91-6956d77d4993"
+        "projectId": "2f09e786-1b21-4e36-a562-87cf8a363776"
       }
     },
-    "owner": "a1carea2026s-team"
+    "owner": "a1carea2026"
   }
 }
+

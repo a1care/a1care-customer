@@ -14,10 +14,14 @@ import {
     Platform,
     Animated,
     Easing,
+    InteractionManager,
+    FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { useRouter, useFocusEffect, Link } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -182,7 +186,10 @@ let cachedCity = "";
 export default function HomeScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { user, isAuthenticated } = useAuthStore();
+    
+    const user = useAuthStore(state => state.user);
+    const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+    
     const [refreshing, setRefreshing] = useState(false);
     const [activeHero, setActiveHero] = useState(0);
     const [activePopular, setActivePopular] = useState(0);
@@ -193,9 +200,14 @@ export default function HomeScreen() {
     const [activeKB, setActiveKB] = useState(0);
     const [selectedKB, setSelectedKB] = useState<any>(null);
     const [isKBModalOpen, setIsKBModalOpen] = useState(false);
-    const { config, fetchConfig } = useConfigStore();
-    const { unreadCount: globalUnreadCount } = useNotificationStore();
-    const { abandonedBooking, clearAbandonedBooking } = useBookingStore();
+    
+    const config = useConfigStore(state => state.config);
+    const fetchConfig = useConfigStore(state => state.fetchConfig);
+    
+    const globalUnreadCount = useNotificationStore(state => state.unreadCount);
+    
+    const abandonedBooking = useBookingStore(state => state.abandonedBooking);
+    const clearAbandonedBooking = useBookingStore(state => state.clearAbandonedBooking);
     const [locCity, setLocCity] = useState(cachedCity || 'Current Location');
     const [locArea, setLocArea] = useState('');
     const [locLoading, setLocLoading] = useState(false);
@@ -234,8 +246,8 @@ export default function HomeScreen() {
         const main = config?.landing.mainBanners || [];
         const festival = config?.landing.festivalBanners || [];
 
-        // Prefer mainBanners, fallback to festivalBanners
-        const pool = main.length > 0 ? main : festival;
+        // Prefer festivalBanners (seasonal), fallback to mainBanners
+        const pool = festival.length > 0 ? festival : main;
         const activeBanners = pool.filter(b => b.active !== false);
 
         if (activeBanners.length > 0) {
@@ -259,6 +271,17 @@ export default function HomeScreen() {
 
         return [];
     }, [config?.branding?.primaryColor, config?.branding?.secondaryColor, config?.landing.mainBanners, config?.landing.festivalBanners]);
+
+    const dynamicFestivalBanners = useMemo(() => {
+        const festival = config?.landing.festivalBanners || [];
+        return festival.filter(b => b.active !== false).map((b: any, index: number) => ({
+            id: b.id || b._id || `festival-banner-${index}`,
+            title: b.title || 'Festival Offer',
+            imageUrl: getBannerImage(b),
+            path: b.redirectUrl || b.link || '/services',
+            params: b.params || {},
+        }));
+    }, [config?.landing.festivalBanners]);
 
     const dynamicPromotionalBanners = useMemo(() => {
         const promo = config?.landing.promotionalBanners || [];
@@ -490,6 +513,14 @@ export default function HomeScreen() {
         return () => clearInterval(timer);
     }, [dynamicKB.length]);
 
+    const [isInteractive, setIsInteractive] = useState(false);
+    useEffect(() => {
+        const task = InteractionManager.runAfterInteractions(() => {
+            setIsInteractive(true);
+        });
+        return () => task.cancel();
+    }, []);
+
     const { data: services, refetch: refetchServices } = useQuery({
         queryKey: ['services'],
         queryFn: servicesService.getAll,
@@ -498,6 +529,7 @@ export default function HomeScreen() {
     const { data: featured, refetch: refetchFeatured } = useQuery({
         queryKey: ['services-featured'],
         queryFn: servicesService.getFeatured,
+        enabled: isInteractive,
     });
 
     const { data: ongoingBookings, refetch: refetchBookings } = useQuery({
@@ -509,6 +541,7 @@ export default function HomeScreen() {
     const { data: roles } = useQuery({
         queryKey: ['roles'],
         queryFn: doctorsService.getRoles,
+        enabled: isInteractive,
     });
 
     const doctorRoleId = roles?.find(r => r.name.toLowerCase().includes('doctor'))?._id;
@@ -516,7 +549,7 @@ export default function HomeScreen() {
     const { data: allDoctors, refetch: refetchDoctors, isLoading: doctorsLoading } = useQuery({
         queryKey: ['doctors', doctorRoleId],
         queryFn: () => doctorsService.getByRole(doctorRoleId!),
-        enabled: !!doctorRoleId,
+        enabled: !!doctorRoleId && isInteractive,
     });
 
     const { data: notifications, refetch: refetchNotifications } = useQuery({
@@ -533,12 +566,13 @@ export default function HomeScreen() {
             const res = await api.get(Endpoints.HEALTH_PACKAGES);
             return res.data.data as any[];
         },
+        enabled: isInteractive,
     });
 
     const { data: activePackagesData } = useQuery({
         queryKey: ['active-packages'],
         queryFn: () => packagesService.getActivePackages(),
-        enabled: isAuthenticated,
+        enabled: isAuthenticated && isInteractive,
     });
 
     const activePackages = activePackagesData?.data || [];
@@ -549,6 +583,7 @@ export default function HomeScreen() {
             const res = await api.get('/serviceable-areas/public');
             return res.data?.data || [];
         },
+        enabled: isInteractive,
     });
 
     const topDoctors = useMemo(() => {
@@ -678,115 +713,98 @@ export default function HomeScreen() {
     };
 
     const handleQuickServiceOpen = async (item: any) => {
-        setFastTrackLoading(item.id);
         const label = String(item?.label || '').toLowerCase();
         const isAmbulance = label.includes('ambulance') || label.includes('emergency');
-        try {
-        const withTimeout = async <T,>(promise: Promise<T>, ms = 7000) => {
-            let timer: ReturnType<typeof setTimeout> | null = null;
-            const timeoutPromise = new Promise<T>((_, reject) => {
-                timer = setTimeout(() => reject(new Error('Request timed out')), ms);
-            });
-            try {
-                return await Promise.race([promise, timeoutPromise]);
-            } finally {
-                if (timer) clearTimeout(timer);
-            }
-        };
-
-        if (isAmbulance && item?.id) {
-            try {
-                const subs = await withTimeout(servicesService.getSubServices(item.id));
-                if (subs?.length) {
-                    const children = await withTimeout(servicesService.getChildServices(subs[0]._id));
-                    if (children?.length) {
-                        const targetChild = children[0];
-                        router.push({
-                            pathname: '/service/[id]',
-                            params: {
-                                id: targetChild._id,
-                                name: targetChild.name,
-                                price: targetChild.price,
-                                subName: subs[0].name,
-                                from: 'index',
-                                entryMode: 'direct',
-                                originServiceId: '',
-                                originSubServiceId: '',
-                                originCategory: '',
-                            },
-                        });
-                        return;
-                    }
-                }
-            } catch (err) {
-                console.log('[QuickService] Ambulance fast-track failed:', err);
-            }
-
-            // Always fallback if fast-track cannot resolve a child service.
-            router.push({
-                pathname: '/services',
-                params: { category: item.label, serviceId: item.id, subServiceId: '', from: 'home' }
-            });
-            return;
-        }
-
+        
+        // P0.1 & P0.2: Navigate immediately. Let the destination screen handle fetching.
+        // For ambulance/emergency, we pass a specific parameter that /services will use to auto-resolve.
         router.push({
             pathname: '/services',
-            params: { category: item.label, serviceId: item.id, subServiceId: '', from: 'home' }
+            params: { 
+                category: item.label, 
+                serviceId: item.id, 
+                subServiceId: '', 
+                from: 'home',
+                isEmergencyFastTrack: isAmbulance ? 'true' : undefined
+            }
         });
-        } catch (err) {
-            console.log('[QuickService] Error:', err);
-            router.push({ pathname: '/services', params: { category: item.label, serviceId: item.id, subServiceId: '', from: 'home' } });
-        } finally {
-            setFastTrackLoading(null);
-        }
     };
 
     // Dynamic Hospital OP Link - Ultra-fast separate booking flow
+    const isOpBookingRef = useRef(false);
+    const [isOpBooking, setIsOpBooking] = useState(false);
+    
     const handleHospitalBooking = async () => {
-        // 1. Try to find the specific Hospital service
-        let hSrv = services?.find(s =>
-            s.name.toLowerCase().includes('hospital') ||
-            s.title?.toLowerCase().includes('op booking')
-        );
+        if (isOpBookingRef.current) return;
+        isOpBookingRef.current = true;
+        setIsOpBooking(true);
+        try {
+            // 1. Try to find the specific Hospital service
+            let hSrv = services?.find(s =>
+                s?.name?.toLowerCase().includes('hospital') ||
+                s?.title?.toLowerCase().includes('op booking')
+            );
 
-        // 2. Fallback: Try to find 'Doctor Consult' if Hospital isn't in DB yet
-        if (!hSrv) {
-            hSrv = services?.find(s => s.name.toLowerCase().includes('doctor'));
-        }
-
-        if (hSrv) {
-            try {
-                const subs = await servicesService.getSubServices(hSrv._id);
-                if (subs && subs.length > 0) {
-                    // Look for an OP-related sub-service or just pick the first one
-                    const opSub = subs.find(sub =>
-                        sub.name.toLowerCase().includes('op') ||
-                        sub.name.toLowerCase().includes('general')
-                    ) || subs[0];
-
-                    const children = await servicesService.getChildServices(opSub._id);
-                    if (children && children.length > 0) {
-                        const target = children[0];
-                        router.push({
-                            pathname: '/hospital/book',
-                            params: { id: target._id, from: 'index' }
-                        });
-                        return;
-                    }
-                }
-            } catch (err) {
-                console.error("Hospital fast-track failed", err);
+            // 2. Fallback: Try to find 'Doctor Consult' if Hospital isn't in DB yet
+            if (!hSrv) {
+                hSrv = services?.find(s => s?.name?.toLowerCase().includes('doctor'));
             }
 
-            // Fallback to services list with category filter if quick-book fails
-            router.push({
-                pathname: '/services',
-                params: { category: hSrv.name, from: 'index' }
-            });
-        } else {
-            // Last resort: basic services list
-            router.push('/services');
+            if (hSrv && hSrv._id) {
+                try {
+                    const subs = await servicesService.getSubServices(hSrv._id);
+                    if (subs && subs.length > 0) {
+                        const opSub = subs.find(sub =>
+                            sub?.name?.toLowerCase().includes('op') ||
+                            sub?.name?.toLowerCase().includes('general')
+                        ) || subs[0];
+
+                        if (opSub && opSub._id) {
+                            const children = await servicesService.getChildServices(opSub._id);
+                            if (children && children.length > 0) {
+                                const target = children[0];
+                                if (target && target._id) {
+                                    try {
+                                        isOpBookingRef.current = false;
+                                        setIsOpBooking(false);
+                                        router.push({
+                                            pathname: '/op_bookings/book' as any,
+                                            params: { id: String(target._id), from: 'index' }
+                                        });
+                                    } catch (navErr) {
+                                        Toast.show({ type: 'error', text1: 'Navigation Error', text2: String(navErr) });
+                                    }
+                                    return;
+                                }
+                            } else {
+                                Toast.show({ type: 'error', text1: 'No doctors available for OP' });
+                                isOpBookingRef.current = false;
+                                setIsOpBooking(false);
+                                return;
+                            }
+                        }
+                    } else {
+                        Toast.show({ type: 'error', text1: 'No departments found' });
+                        isOpBookingRef.current = false;
+                        setIsOpBooking(false);
+                        return;
+                    }
+                } catch (err: any) {
+                    Toast.show({ type: 'error', text1: 'Network Error', text2: err?.message || 'Could not connect to server' });
+                    isOpBookingRef.current = false;
+                    setIsOpBooking(false);
+                    return; 
+                }
+            } else {
+                Toast.show({ type: 'error', text1: 'OP Booking Not Available', text2: 'Please try again later' });
+                isOpBookingRef.current = false;
+                setIsOpBooking(false);
+                return;
+            }
+        } catch (e: any) {
+            Toast.show({ type: 'error', text1: 'Unexpected Error', text2: e?.message });
+            isOpBookingRef.current = false;
+            setIsOpBooking(false);
         }
     };
 
@@ -821,7 +839,7 @@ export default function HomeScreen() {
                                 <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setShowAreaPicker(false)} />
                                 <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', maxHeight: '80%' }}>
                                     {/* Gradient Header */}
-                                    <View style={{ background: '#fff', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                                    <View style={{ backgroundColor: '#fff', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
                                         <View style={{ width: 44, height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                             <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#EEF4FF', justifyContent: 'center', alignItems: 'center' }}>
@@ -991,19 +1009,26 @@ export default function HomeScreen() {
                         {matchedServices.length > 0 && (
                             <View style={styles.searchSection}>
                                 <Text style={styles.searchSectionTitle}>Services & Categories</Text>
-                                {matchedServices.map(s => (
-                                    <TouchableOpacity
-                                        key={s._id}
-                                        style={styles.searchResultRow}
-                                        onPress={() => router.push({ pathname: '/services', params: { category: s.name, serviceId: s._id, subServiceId: '', from: 'home' } })}
-                                    >
-                                        <View style={styles.searchResultIcon}>
-                                            <LayoutGrid size={18} color={Colors.primary} />
-                                        </View>
-                                        <Text style={styles.searchResultText}>{s.name}</Text>
-                                        <ArrowRight size={14} color={Colors.muted} />
-                                    </TouchableOpacity>
-                                ))}
+                                <FlatList
+                                    data={matchedServices}
+                                    keyExtractor={(s) => s._id}
+                                    initialNumToRender={5}
+                                    maxToRenderPerBatch={5}
+                                    windowSize={5}
+                                    scrollEnabled={false}
+                                    renderItem={({ item: s }) => (
+                                        <TouchableOpacity
+                                            style={styles.searchResultRow}
+                                            onPress={() => router.push({ pathname: '/services', params: { category: s.name, serviceId: s._id, subServiceId: '', from: 'home' } })}
+                                        >
+                                            <View style={styles.searchResultIcon}>
+                                                <LayoutGrid size={18} color={Colors.primary} />
+                                            </View>
+                                            <Text style={styles.searchResultText}>{s.name}</Text>
+                                            <ArrowRight size={14} color={Colors.muted} />
+                                        </TouchableOpacity>
+                                    )}
+                                />
                             </View>
                         )}
 
@@ -1011,10 +1036,17 @@ export default function HomeScreen() {
                         {topDoctors.length > 0 ? (
                             <View style={styles.searchSection}>
                                 <Text style={styles.searchSectionTitle}>Doctors & Specialists</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
-                                    {topDoctors.map(d => (
+                                <FlatList 
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingBottom: 10 }}
+                                    data={topDoctors}
+                                    keyExtractor={d => d._id}
+                                    initialNumToRender={3}
+                                    maxToRenderPerBatch={3}
+                                    windowSize={5}
+                                    renderItem={({ item: d }) => (
                                         <DoctorCard
-                                            key={d._id}
                                             name={d.name || "Doctor"}
                                             specialization={d.specialization?.join(", ") || "Specialist"}
                                             rating={d.rating || 4.8}
@@ -1023,8 +1055,8 @@ export default function HomeScreen() {
                                             imageUrl={d.profileImage || d.imageUrl}
                                             onPress={() => router.push({ pathname: '/doctor/[id]', params: { id: d._id, from: 'top_doctors' } })}
                                         />
-                                    ))}
-                                </ScrollView>
+                                    )}
+                                />
                             </View>
                         ) : !matchedServices.length && (
                             <View style={styles.noResults}>
@@ -1232,9 +1264,15 @@ export default function HomeScreen() {
                                 <View style={styles.opDivider} />
 
                                 <View style={styles.opRight}>
-                                    <TouchableOpacity style={styles.opBtn} onPress={handleHospitalBooking} activeOpacity={0.88}>
-                                        <Text style={styles.opBtnText}>Book Now</Text>
-                                        <ArrowRight size={18} color="#fff" />
+                                    <TouchableOpacity style={styles.opBtn} onPress={handleHospitalBooking} activeOpacity={0.88} disabled={isOpBooking}>
+                                        {isOpBooking ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <>
+                                                <Text style={styles.opBtnText}>Book Now</Text>
+                                                <ArrowRight size={18} color="#fff" />
+                                            </>
+                                        )}
                                     </TouchableOpacity>
                                     <View style={styles.opTrustRow}>
                                         <ShieldCheck size={13} color={Colors.accent} />
@@ -1357,18 +1395,13 @@ export default function HomeScreen() {
                                     </TouchableOpacity>
                                 </Link>
                             </View>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                style={styles.doctorScroll}
-                                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 10 }}
-                            >
-                                {doctorsLoading ? (
-                                    [1, 2, 3].map(i => (
-                                        <View key={i} style={[styles.doctorCardSkeleton, { opacity: 0.7 }]}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                                                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#E2E8F0' }} />
-                                                <View style={{ marginLeft: 12, flex: 1 }}>
+                            {doctorsLoading ? (
+                                <View style={{ paddingHorizontal: 20, flexDirection: 'row', gap: 16 }}>
+                                    {[1, 2, 3].map(i => (
+                                        <View key={i} style={{ width: 280, backgroundColor: '#fff', borderRadius: 20, padding: 16 }}>
+                                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#E2E8F0' }} />
+                                                <View style={{ flex: 1, justifyContent: 'center' }}>
                                                     <View style={{ width: '80%', height: 16, backgroundColor: '#E2E8F0', borderRadius: 4, marginBottom: 6 }} />
                                                     <View style={{ width: '50%', height: 14, backgroundColor: '#E2E8F0', borderRadius: 4 }} />
                                                 </View>
@@ -1379,25 +1412,36 @@ export default function HomeScreen() {
                                                 <View style={{ width: '30%', height: 28, backgroundColor: '#E2E8F0', borderRadius: 14 }} />
                                             </View>
                                         </View>
-                                    ))
-                                ) : topDoctors.length > 0 ? topDoctors.map(d => (
-                                    <DoctorCard
-                                        key={d._id}
-                                        name={d.name || "Doctor"}
-                                        specialization={d.specialization?.join(", ") || "Specialist"}
-                                        rating={d.rating || 4.8}
-                                        experience={formatExperience(d.startExperience ?? 0)}
-                                        price={typeof d.consultationFee === 'number' ? d.consultationFee : 0}
-                                        imageUrl={d.profileImage || d.imageUrl}
-                                        workingHours={d.workingHours}
-                                        onPress={() => router.push({ pathname: '/doctor/[id]', params: { id: d._id, from: 'top_doctors' } })}
-                                    />
-                                )) : (
-                                    <View style={styles.emptyCard}>
-                                        <Text style={styles.emptyText}>No experts available at the moment.</Text>
-                                    </View>
-                                )}
-                            </ScrollView>
+                                    ))}
+                                </View>
+                            ) : topDoctors.length > 0 ? (
+                                <FlatList
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 20, gap: 16, paddingBottom: 10 }}
+                                    data={topDoctors}
+                                    keyExtractor={d => d._id}
+                                    initialNumToRender={3}
+                                    maxToRenderPerBatch={3}
+                                    windowSize={5}
+                                    renderItem={({ item: d }) => (
+                                        <DoctorCard
+                                            name={d.name || "Doctor"}
+                                            specialization={d.specialization?.join(", ") || "Specialist"}
+                                            rating={d.rating || 4.8}
+                                            experience={formatExperience(d.startExperience ?? 0)}
+                                            price={typeof d.consultationFee === 'number' ? d.consultationFee : 0}
+                                            imageUrl={d.profileImage || d.imageUrl}
+                                            workingHours={d.workingHours}
+                                            onPress={() => router.push({ pathname: '/doctor/[id]', params: { id: d._id, from: 'top_doctors' } })}
+                                        />
+                                    )}
+                                />
+                            ) : (
+                                <View style={styles.emptyCard}>
+                                    <Text style={styles.emptyText}>No experts available at the moment.</Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* ── 7. Health Packages (Dynamic) ── */}
@@ -1417,13 +1461,18 @@ export default function HomeScreen() {
                                     </TouchableOpacity>
                                 </Link>
                             </View>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 24 }}
-                            >
-                                {healthPackages && healthPackages.length > 0 ? (
-                                    healthPackages.map((pkg: any) => {
+                            {healthPackages && healthPackages.length > 0 ? (
+                                <FlatList
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 24 }}
+                                    data={healthPackages}
+                                    keyExtractor={pkg => pkg._id}
+                                    initialNumToRender={3}
+                                    maxToRenderPerBatch={3}
+                                    windowSize={5}
+                                    removeClippedSubviews
+                                    renderItem={({ item: pkg }) => {
                                         const discountPct = pkg.originalPrice > pkg.price
                                             ? Math.round(((pkg.originalPrice - pkg.price) / pkg.originalPrice) * 100)
                                             : 0;
@@ -1431,7 +1480,6 @@ export default function HomeScreen() {
                                         
                                         return (
                                             <TouchableOpacity
-                                                key={pkg._id}
                                                 activeOpacity={0.88}
                                                 style={[styles.pkgCard, alreadyOwns && { opacity: 0.8 }]}
                                                 onPress={() => router.push({
@@ -1500,10 +1548,16 @@ export default function HomeScreen() {
                                                 </View>
                                             </TouchableOpacity>
                                         );
-                                    })
-                                ) : (
+                                    }}
+                                />
+                            ) : (
                                     // Static fallback while loading or if no packages
-                                    [{ name: 'Basic Health Checkup', price: 999, color: '#2F80ED', badge: 'BEST VALUE' },
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 24 }}
+                                    >
+                                    {[{ name: 'Basic Health Checkup', price: 999, color: '#2F80ED', badge: 'BEST VALUE' },
                                     { name: 'Diabetes Care Pack', price: 1499, color: '#9B51E0', badge: 'POPULAR' },
                                     { name: 'Full Body Checkup', price: 2999, color: '#F2994A', badge: 'COMPREHENSIVE' }].map((p, i) => (
                                         <TouchableOpacity key={i} activeOpacity={0.88} style={styles.pkgCard}>
@@ -1519,9 +1573,9 @@ export default function HomeScreen() {
                                                 </TouchableOpacity>
                                             </View>
                                         </TouchableOpacity>
-                                    ))
+                                    ))}
+                                    </ScrollView>
                                 )}
-                            </ScrollView>
                         </View>
 
 
@@ -1590,14 +1644,13 @@ export default function HomeScreen() {
                         )}
 
 
-
-                        {/* ── Knowledge Base Section (from knowledgeBanners) ── */}
-                        {dynamicKnowledgeBanners.length > 0 && (
-                            <View style={[styles.section, { marginBottom: 20 }]}>
+                        {/* ── Festival Banners Section (from festivalBanners) ── */}
+                        {dynamicFestivalBanners.length > 0 && (
+                            <View style={[styles.section, { marginBottom: 32 }]}>
                                 <View style={styles.sectionHeader}>
                                     <View>
-                                        <Text style={styles.sectionTitle}>Knowledge Base</Text>
-                                        <Text style={styles.sectionSub}>Expert health tips and articles</Text>
+                                        <Text style={styles.sectionTitle}>Festival Offers</Text>
+                                        <Text style={styles.sectionSub}>Celebrate with special health packages</Text>
                                     </View>
                                 </View>
                                 <ScrollView
@@ -1605,7 +1658,7 @@ export default function HomeScreen() {
                                     showsHorizontalScrollIndicator={false}
                                     contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
                                 >
-                                    {dynamicKnowledgeBanners.map((banner: any) => (
+                                    {dynamicFestivalBanners.map((banner) => (
                                         <TouchableOpacity
                                             key={banner.id}
                                             activeOpacity={0.9}
@@ -1619,11 +1672,74 @@ export default function HomeScreen() {
                                                 transition={200}
                                             />
                                             <View style={styles.knowledgePromoOverlay}>
+                                                <View style={[styles.knowledgePromoBadge, { backgroundColor: '#F59E0B' }]}>
+                                                    <Text style={[styles.knowledgePromoBadgeText, { color: '#FFF' }]}>SPECIAL</Text>
+                                                </View>
+                                                <Text style={styles.knowledgePromoTitle} numberOfLines={2}>
+                                                    {banner.title || 'Festival Offer'}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        {/* ── Knowledge Base Section (from backend knowledgeBanners or knowledgeBase) ── */}
+                        {(dynamicKnowledgeBanners.length > 0 || dynamicKB.length > 0) && (
+                            <View style={[styles.section, { marginBottom: 20 }]}>
+                                <View style={styles.sectionHeader}>
+                                    <View>
+                                        <Text style={styles.sectionTitle}>Knowledge Base</Text>
+                                        <Text style={styles.sectionSub}>Expert health tips and articles</Text>
+                                    </View>
+                                </View>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
+                                >
+                                    {dynamicKnowledgeBanners.length > 0 ? dynamicKnowledgeBanners.map((item: any) => (
+                                        <TouchableOpacity
+                                            key={item.id}
+                                            activeOpacity={0.9}
+                                            style={styles.knowledgePromoCard}
+                                            onPress={() => handleBannerPress(item)}
+                                        >
+                                            <Image
+                                                source={{ uri: item.imageUrl }}
+                                                style={styles.knowledgePromoImage}
+                                                contentFit="cover"
+                                                transition={200}
+                                            />
+                                            <View style={styles.knowledgePromoOverlay}>
                                                 <View style={styles.knowledgePromoBadge}>
                                                     <Text style={styles.knowledgePromoBadgeText}>LATEST</Text>
                                                 </View>
                                                 <Text style={styles.knowledgePromoTitle} numberOfLines={2}>
-                                                    {banner.title || 'Health Insights'}
+                                                    {item.title || 'Health Insights'}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    )) : dynamicKB.map((item: any) => (
+                                        <TouchableOpacity
+                                            key={item.id}
+                                            activeOpacity={0.9}
+                                            style={styles.knowledgePromoCard}
+                                            onPress={() => handleBannerPress({ isKB: true, ...item })}
+                                        >
+                                            <Image
+                                                source={item.imageUrl ? { uri: item.imageUrl } : item.fallbackImage}
+                                                style={styles.knowledgePromoImage}
+                                                contentFit="cover"
+                                                transition={200}
+                                            />
+                                            <View style={styles.knowledgePromoOverlay}>
+                                                <View style={styles.knowledgePromoBadge}>
+                                                    <Text style={styles.knowledgePromoBadgeText}>{item.category?.toUpperCase() || 'LATEST'}</Text>
+                                                </View>
+                                                <Text style={styles.knowledgePromoTitle} numberOfLines={2}>
+                                                    {item.title || 'Health Insights'}
                                                 </Text>
                                             </View>
                                         </TouchableOpacity>

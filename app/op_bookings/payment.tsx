@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -38,6 +38,7 @@ export default function PaymentMethodScreen() {
     const router = useRouter();
     const { id, deptName, date, time, price } = useLocalSearchParams<{ id: string, deptName: string, date: string, time: string, price: string }>();
     const qc = useQueryClient();
+    const insets = useSafeAreaInsets();
     
     const [paymentMode, setPaymentMode] = useState<'WALLET' | 'ONLINE' | 'PACKAGE'>('WALLET');
     const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export default function PaymentMethodScreen() {
                 fulfillmentMode: 'HOSPITAL_VISIT',
                 price: Number(price) || 0,
                 paymentMode: paymentMode,
-                userPackageId: paymentMode === 'PACKAGE' ? selectedPackageId : undefined,
+                userPackageId: paymentMode === 'PACKAGE' ? (selectedPackageId || undefined) : undefined,
                 notes: "OP Department: " + (deptName || 'General OP')
             });
         },
@@ -92,18 +93,19 @@ export default function PaymentMethodScreen() {
                     theme: { color: '#2563EB' }
                 };
 
-                RazorpayCheckout.open(options).then(async (rzpData) => {
-                    await paymentService.verifyPayment({
+                RazorpayCheckout.open(options).then(async (rzpData: any) => {
+                    await paymentService.verifyRazorpay({
                         razorpay_order_id: rzpData.razorpay_order_id,
                         razorpay_payment_id: rzpData.razorpay_payment_id,
-                        razorpay_signature: rzpData.razorpay_signature
+                        razorpay_signature: rzpData.razorpay_signature,
+                        orderId: orderRes.data.orderId
                     });
                     
                     triggerLocalNotification('OP Ticket Confirmed', `Your OP Token for ${deptName || 'General OP'} is confirmed.`);
                     qc.invalidateQueries({ queryKey: ['service-bookings'] });
                     showToast.success('Booking Successful', 'Paid via Online Payment');
                     router.replace('/(tabs)/bookings');
-                }).catch((error) => {
+                }).catch((error: any) => {
                     Toast.show({ type: 'error', text1: 'Payment Failed', text2: 'Please try again.' });
                 });
             } catch (err: any) {
@@ -132,7 +134,7 @@ export default function PaymentMethodScreen() {
     const originalFee = Number(price) || 0;
 
     return (
-        <SafeAreaView style={styles.root} edges={['top']}>
+        <View style={[styles.root, { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 0) }]}>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -272,7 +274,7 @@ export default function PaymentMethodScreen() {
                     )}
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </View>
     );
 }
 

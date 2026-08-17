@@ -12,6 +12,7 @@ import {
     ImageBackground,
     Modal,
     TouchableWithoutFeedback,
+    Linking,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -80,8 +81,8 @@ export default function BookingChatScreen() {
     });
 
     useEffect(() => {
-        if (initialData?.length > 0) {
-            setChatMessages(initialData);
+        if ((initialData?.length ?? 0) > 0) {
+            setChatMessages(initialData || []);
         }
     }, [initialData]);
 
@@ -142,9 +143,7 @@ export default function BookingChatScreen() {
 
     const handleCall = () => {
         if (providerMobile) {
-            import('react-native').then(({ Linking }) => {
-                Linking.openURL(`tel:${providerMobile}`);
-            });
+            Linking.openURL(`tel:${providerMobile}`);
         } else {
             Toast.show({ type: 'error', text1: 'Not Available', text2: 'Phone number is not available for this provider.' });
         }

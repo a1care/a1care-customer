@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import React, { useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '@/constants/colors';
@@ -60,10 +60,14 @@ function TabIcon({ focused, icon, label, isCenter, badge }: TabIconProps) {
     );
 }
 
+import { useAuthStore } from '@/stores/auth.store';
+
 export default function TabsLayout() {
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
+    const { isAuthenticated } = useAuthStore();
 
     useEffect(() => {
+        if (!isAuthenticated) return;
         const task = InteractionManager.runAfterInteractions(() => {
             fetchUnreadCount();
         });
@@ -72,7 +76,7 @@ export default function TabsLayout() {
             task.cancel();
             clearInterval(interval);
         };
-    }, []);
+    }, [isAuthenticated]);
 
     return (
         <Tabs
@@ -81,6 +85,7 @@ export default function TabsLayout() {
                 tabBarStyle: styles.tabBar,
                 tabBarShowLabel: false,
                 freezeOnBlur: true,
+                tabBarButton: (props) => <TouchableOpacity {...props as any} activeOpacity={0.8} />,
             }}
         >
             <Tabs.Screen
@@ -127,7 +132,7 @@ export default function TabsLayout() {
                             focused={focused}
                             icon="notifications"
                             label="Alerts"
-                            badge={unreadCount}
+                            badge={isAuthenticated ? unreadCount : 0}
                         />
                     ),
                     // Keep the native badge hidden — we render our own

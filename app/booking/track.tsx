@@ -14,7 +14,7 @@ import { bookingsService } from '@/services/bookings.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import Map from '@/components/Map';
+import Map from '@/components/Map.native';
 import { socketService } from '@/services/socket.service';
 
 export default function TrackingScreen() {
@@ -168,6 +168,7 @@ const styles = StyleSheet.create({
     headerInfo: { flex: 1 },
     headerTitle: { fontSize: FontSize.base, fontWeight: "800", color: '#0F172A' },
     headerSub: { fontSize: FontSize.xs, color: '#F97316', fontWeight: '600' },
+    refreshBtn: { padding: 8, backgroundColor: '#F1F5F9', borderRadius: 20 },
     center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 30 },
     loadingText: { marginTop: 15, color: Colors.textSecondary, fontSize: FontSize.sm },
     infoSheet: {

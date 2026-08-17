@@ -1,19 +1,45 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image, Dimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { servicesService } from '@/services/services.service';
-import { bookingsService } from '@/services/bookings.service';
-import { paymentService } from '@/services/payment.service';
 import { useAuthStore } from '@/stores/auth.store';
-import { triggerLocalNotification } from '@/utils/notifications';
-import { showToast } from '@/utils/toast';
+
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+    // Log to Metro console immediately
+    console.error('[OP BOOKINGS ERROR BOUNDARY]', {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack,
+    });
+
+    return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF1F2', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <Text style={{ fontSize: 13, fontWeight: '900', color: '#EF4444', textAlign: 'center', marginBottom: 6, letterSpacing: 1 }}>
+                OP BOOKINGS ERROR
+            </Text>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#991B1B', textAlign: 'center', marginBottom: 12 }}>
+                {error?.name || 'Error'}
+            </Text>
+            <Text style={{ fontSize: 13, color: '#B91C1C', textAlign: 'center', marginBottom: 16, fontFamily: 'monospace' }}>
+                {error?.message || 'Unknown error'}
+            </Text>
+            {__DEV__ && (
+                <Text style={{ fontSize: 10, color: '#64748B', textAlign: 'left', marginBottom: 24, fontFamily: 'monospace' }} selectable>
+                    {error?.stack?.slice(0, 600)}
+                </Text>
+            )}
+            <TouchableOpacity onPress={retry} style={{ backgroundColor: '#2563EB', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Try Again</Text>
+            </TouchableOpacity>
+        </SafeAreaView>
+    );
+}
 
 const { width } = Dimensions.get('window');
-
 const DEPARTMENTS = [
     { id: 'ortho', name: 'Orthopaedics', icon: 'bone' },
     { id: 'pulmo', name: 'Pulmonology', icon: 'lungs' },
@@ -48,13 +74,6 @@ const parse12HourSlot = (slot: string) => {
     return { hours, minutes: Number.isNaN(minutes) ? 0 : minutes };
 };
 
-const buildScheduledIsoFromLocal = (dateYmd: string, slot: string) => {
-    const [y, m, d] = dateYmd.split('-').map(Number);
-    const { hours, minutes } = parse12HourSlot(slot);
-    if (!y || !m || !d) return undefined;
-    return new Date(y, m - 1, d, hours, minutes, 0, 0).toISOString();
-};
-
 const slotToMinutes = (slot: string) => {
     const { hours, minutes } = parse12HourSlot(slot);
     return hours * 60 + minutes;
@@ -63,7 +82,6 @@ const slotToMinutes = (slot: string) => {
 export default function HospitalBookingScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
-    const qc = useQueryClient();
 
     const [selectedDept, setSelectedDept] = useState('');
     const todayYmd = useMemo(() => toLocalYMD(new Date()), []);
@@ -117,7 +135,7 @@ export default function HospitalBookingScreen() {
         const deptName = DEPARTMENTS.find(d => d.id === selectedDept)?.name || 'General OP';
         
         router.push({
-            pathname: '/hospital/payment',
+            pathname: '/op_bookings/payment',
             params: {
                 id: id,
                 deptName: deptName,
@@ -128,7 +146,23 @@ export default function HospitalBookingScreen() {
         });
     };
 
-    if (isLoading) return <ActivityIndicator size="large" color="#2563EB" style={{ flex: 1 }} />;
+    if (isLoading) {
+        return (
+            <SafeAreaView style={styles.root} edges={['top']}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color="#1E293B" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Reserve OP Token</Text>
+                    <View style={{ width: 24 }} />
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#2563EB" />
+                    <Text style={{ marginTop: 12, color: '#64748B' }}>Loading details...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
@@ -138,7 +172,7 @@ export default function HospitalBookingScreen() {
                     <Ionicons name="arrow-back" size={24} color="#1E293B" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Reserve OP Token</Text>
-                <View style={{ width: 24 }} /> {/* Balancer */}
+                <View style={{ width: 24 }} />
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -258,7 +292,7 @@ const styles = StyleSheet.create({
     
     grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 },
     deptCard: { 
-        width: (width - 48) / 3, 
+        width: '31%',
         paddingVertical: 20,
         paddingHorizontal: 8,
         borderRadius: 16, 
@@ -299,9 +333,9 @@ const styles = StyleSheet.create({
     dayName: { fontSize: 12, fontWeight: '600', color: '#64748B' },
     textWhite: { color: '#FFFFFF' },
     
-    slotGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+    slotGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
     slotCard: { 
-        width: (width - 48) / 3,
+        width: '31%',
         paddingVertical: 14, 
         borderRadius: 12, 
         backgroundColor: '#FFFFFF', 
@@ -309,6 +343,7 @@ const styles = StyleSheet.create({
         borderColor: '#E2E8F0',
         alignItems: 'center',
         marginBottom: 12,
+        marginRight: 8,
     },
     slotCardActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
     slotText: { fontSize: 13, fontWeight: '700', color: '#475569' },

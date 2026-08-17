@@ -22,6 +22,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { Colors } from "@/constants/colors";
+import { useAuthStore } from "@/stores/auth.store";
 
 const { width, height } = Dimensions.get("window");
 
@@ -124,6 +125,7 @@ const Pagination = ({ scrollX }: { scrollX: Animated.SharedValue<number> }) => {
 
 export default function OnboardingScreen() {
     const router = useRouter();
+    const { setHasSeenOnboarding } = useAuthStore();
     const flatListRef = useRef<FlatList>(null);
     const scrollX = useSharedValue(0);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -132,17 +134,17 @@ export default function OnboardingScreen() {
         scrollX.value = event.contentOffset.x;
     });
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (currentIndex < slides.length - 1) {
             flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
         } else {
-            AsyncStorage.setItem('onboarding_done', 'true');
+            await setHasSeenOnboarding(true);
             router.replace("/(tabs)");
         }
     };
 
-    const handleSkip = () => {
-        AsyncStorage.setItem('onboarding_done', 'true');
+    const handleSkip = async () => {
+        await setHasSeenOnboarding(true);
         router.replace("/(tabs)");
     };
 

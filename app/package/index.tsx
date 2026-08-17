@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -48,17 +48,33 @@ export default function PackageStorefrontScreen() {
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-                <View style={styles.heroSection}>
-                    <MaterialCommunityIcons name="shield-star" size={48} color="#2563EB" />
-                    <Text style={styles.title}>Protect Your Health</Text>
-                    <Text style={styles.subtitle}>Save up to 40% on consultations and treatments with our exclusive prepaid packages.</Text>
-                </View>
-
-                {isLoading ? (
-                    <View style={{ width: '100%' }}>
-                        {[1, 2, 3].map((item) => (
-                            <View key={item} style={styles.card}>
+            <FlatList
+                data={isLoading ? [1, 2, 3] : (packages.length === 0 ? [] : packages)}
+                keyExtractor={(item, index) => isLoading ? `skeleton-${item}` : item._id.toString()}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                initialNumToRender={5}
+                maxToRenderPerBatch={5}
+                windowSize={5}
+                ListHeaderComponent={
+                    <View style={styles.heroSection}>
+                        <MaterialCommunityIcons name="shield-star" size={48} color="#2563EB" />
+                        <Text style={styles.title}>Protect Your Health</Text>
+                        <Text style={styles.subtitle}>Save up to 40% on consultations and treatments with our exclusive prepaid packages.</Text>
+                    </View>
+                }
+                ListEmptyComponent={
+                    !isLoading ? (
+                        <View style={styles.emptyBox}>
+                            <Text style={styles.emptyTitle}>No Packages Available</Text>
+                            <Text style={styles.emptyDesc}>Check back later for exciting health offers!</Text>
+                        </View>
+                    ) : null
+                }
+                renderItem={({ item, index }) => {
+                    if (isLoading) {
+                        return (
+                            <View style={styles.card}>
                                 <View style={[styles.cardHeader, { backgroundColor: '#F1F5F9' }]}>
                                     <View style={styles.headerRow}>
                                         <Skeleton style={{ height: 24, width: '60%', borderRadius: 4 }} />
@@ -81,20 +97,14 @@ export default function PackageStorefrontScreen() {
                                     <Skeleton style={{ height: 50, width: '100%', borderRadius: 12, marginTop: 12 }} />
                                 </View>
                             </View>
-                        ))}
-                    </View>
-                ) : packages.length === 0 ? (
-                    <View style={styles.emptyBox}>
-                        <Text style={styles.emptyTitle}>No Packages Available</Text>
-                        <Text style={styles.emptyDesc}>Check back later for exciting health offers!</Text>
-                    </View>
-                ) : (
-                    packages.map((pkg: any) => {
-                        const isActive = activePackageIds.has(pkg._id?.toString());
-                        
-                        return (
+                        );
+                    }
+
+                    const pkg = item;
+                    const isActive = activePackageIds.has(pkg._id?.toString());
+                    
+                    return (
                         <TouchableOpacity 
-                            key={pkg._id} 
                             style={[styles.card, isActive && { borderColor: '#10B981', borderWidth: 2 }]}
                             activeOpacity={isActive ? 1 : 0.9}
                             onPress={() => !isActive && handleBuy(pkg)}
@@ -151,10 +161,9 @@ export default function PackageStorefrontScreen() {
                                 </TouchableOpacity>
                             </View>
                         </TouchableOpacity>
-                        );
-                    })
-                )}
-            </ScrollView>
+                    );
+                }}
+            />
         </SafeAreaView>
     );
 }

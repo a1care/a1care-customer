@@ -3,6 +3,7 @@
 // ──────────────────────────────────────────
 export interface Patient {
     _id: string;
+    id?: string;
     mobileNumber: string;
     name?: string;
     email?: string;
@@ -12,6 +13,7 @@ export interface Patient {
     fcmToken?: string;
     isRegistered: boolean;
     primaryAddressId?: Address | string;
+    familyMembers?: any[];
     createdAt: string;
     updatedAt: string;
 }
@@ -132,6 +134,7 @@ export interface DoctorAppointment {
     paymentStatus?: PaymentStatus;
     totalAmount?: number;
     serviceName?: string;
+    tokenNumber?: string;
     createdAt: string;
 }
 
@@ -142,8 +145,10 @@ export type ServiceRequestStatus =
     | 'PENDING'
     | 'BROADCASTED'
     | 'ACCEPTED'
+    | 'PARTNER_ASSIGNED'
     | 'RETURNED_TO_ADMIN'
     | 'IN_PROGRESS'
+    | 'CONFIRMED'
     | 'COMPLETED'
     | 'CANCELLED';
 
@@ -152,6 +157,10 @@ export interface ServiceRequest {
     userId: Patient | string;
     childServiceId: ChildService | string;
     address?: string;
+    addressId?: Address | string;
+    location?: { lat: number; lng: number };
+    checkInPin?: string;
+    assignedProviderId?: any;
     scheduledTime?: string;
     status: ServiceRequestStatus;
     bookingType: 'SCHEDULED' | 'ON_DEMAND';
@@ -159,6 +168,7 @@ export interface ServiceRequest {
     paymentMode?: PaymentMode;
     paymentStatus?: PaymentStatus;
     price?: number;
+    tokenNumber?: string;
     createdAt: string;
     updatedAt: string;
 }

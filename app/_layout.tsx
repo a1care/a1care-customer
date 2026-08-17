@@ -13,7 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import { authService } from '@/services/auth.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { useConfigStore } from '@/stores/config.store';
-import { ActivityIndicator, View, Image, Text, Animated, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, Image, Text, Animated, StyleSheet, InteractionManager } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Alert, Platform } from 'react-native';
@@ -99,13 +99,21 @@ const showSmartToast = (title: string, body: string, data: any, router: any, seg
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-    const { isAuthenticated, isLoading, user, initialize, postLoginReturn, setPostLoginReturn, token } = useAuthStore();
-    const { fetchConfig, config } = useConfigStore();
+    const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+    const isInitialized = useAuthStore(state => state.isInitialized);
+    const user = useAuthStore(state => state.user);
+    const initialize = useAuthStore(state => state.initialize);
+    const postLoginReturn = useAuthStore(state => state.postLoginReturn);
+    const setPostLoginReturn = useAuthStore(state => state.setPostLoginReturn);
+    const token = useAuthStore(state => state.token);
+    const hasSeenOnboarding = useAuthStore(state => state.hasSeenOnboarding);
+    
+    const fetchConfig = useConfigStore(state => state.fetchConfig);
+    const config = useConfigStore(state => state.config);
+    
     const router = useRouter();
     const segments = useSegments();
     const [hasRequestedPostLoginPermissions, setHasRequestedPostLoginPermissions] = React.useState(false);
-    const [onboardingChecked, setOnboardingChecked] = React.useState(false);
-    const [onboardingDone, setOnboardingDone] = React.useState(false);
     const [routerReady, setRouterReady] = React.useState(false);
 
     // Keep track of segments for the FCM listener which doesn't re-bind on segment changes
@@ -117,10 +125,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         initialize();
         fetchConfig();
-        AsyncStorage.getItem('onboarding_done').then(done => {
-            setOnboardingDone(!!done);
-            setOnboardingChecked(true);
-        });
     }, []);
 
     // OS-level permission dialog only — safe to call before login (no API calls).
@@ -273,14 +277,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         const inTabs = currentSegment === '(tabs)';
         if (!isAuthenticated || !user?.isRegistered || !inTabs) return;
 
-        // Small delay to let the screen transition finish
-        const timer = setTimeout(() => {
+        // Initialize non-critical services after JS thread and animations are idle
+        const task = InteractionManager.runAfterInteractions(() => {
             requestNotificationPermissionOnly();
             requestLocationPermission();
             requestNotificationPermission();
-        }, 1000);
+        });
 
-        return () => clearTimeout(timer);
+        return () => task.cancel();
     }, [isAuthenticated, user?.isRegistered, segments]);
 
     useEffect(() => {
@@ -366,14 +370,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }, [isAuthenticated]);
 
     useEffect(() => {
-        if (isLoading || !onboardingChecked) return;
+        if (!isInitialized) return; // Wait for app state initialization
 
-        const isMaintenancePage = (segments as string[])[0] === 'maintenance';
+        const currentSegment = segments[0] as string | undefined;
+        const isMaintenancePage = currentSegment === 'maintenance';
+
         if (config?.maintenanceMode) {
             if (!isMaintenancePage) {
                 router.replace('/maintenance' as any);
             }
-            setRouterReady(true); // don't leave splash stuck
+            setRouterReady(true);
             return;
         } else if (isMaintenancePage) {
             router.replace('/' as any);
@@ -381,31 +387,22 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        const currentSegment = (segments as string[])[0];
         const isAtRoot = !segments.length || currentSegment === 'index';
         const inAuthGroup = currentSegment === '(auth)';
-        const excludedSegments = ['(auth)', 'privacy', 'terms', 'faq', 'index', '(tabs)', 'service', 'hospital', 'doctor', 'package', 'knowledge-base'];
-        // Treat unresolved route (empty segments) as excluded to avoid premature redirect
-        const isExcluded = !segments.length || excludedSegments.includes(currentSegment);
 
-        if (!isAuthenticated && !isExcluded) {
-            // Unauthenticated users always land on tabs to browse freely (Apple 5.1.1)
-            router.replace('/(tabs)');
-            setRouterReady(true); // don't leave splash stuck
+        if (!hasSeenOnboarding) {
+            // Must show onboarding. Onboarding is at root (index.tsx)
+            if (!isAtRoot) {
+                router.replace('/' as any);
+            }
+            setRouterReady(true);
             return;
         }
 
-        if (!isAuthenticated && isAtRoot) {
-            // If onboarding already seen, skip to tabs. Otherwise show onboarding.
-            if (onboardingDone) {
-                router.replace('/(tabs)');
-            } else {
-                setRouterReady(true);
-            }
-            return;
-        } else if (isAuthenticated && user && (inAuthGroup || isAtRoot)) {
-            // If registered go to tabs (or back to service if returning from guest checkout); else profile setup
-            if (user.isRegistered) {
+        // Onboarding is completed
+        if (isAuthenticated && user?.isRegistered) {
+            // Active user returning to the app
+            if (isAtRoot || inAuthGroup) {
                 const run = async () => {
                     if (!hasRequestedPostLoginPermissions) {
                         await requestNotificationPermissionOnly();
@@ -422,15 +419,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
                     }
                 };
                 run();
-            } else {
+            }
+        } else if (isAuthenticated && user && !user.isRegistered) {
+            // Logged in but profile incomplete
+            if (currentSegment !== '(auth)' || segments[1] !== 'profile-setup') {
                 router.replace('/(auth)/profile-setup');
+            }
+        } else {
+            // Unauthenticated returning user OR authenticated user exploring guest mode
+            if (isAtRoot) {
+                router.replace('/(tabs)');
             }
         }
 
         setRouterReady(true);
-    }, [isAuthenticated, isLoading, user, segments, config?.maintenanceMode, hasRequestedPostLoginPermissions, onboardingDone, onboardingChecked]);
+    }, [isAuthenticated, isInitialized, user, segments, config?.maintenanceMode, hasRequestedPostLoginPermissions, hasSeenOnboarding]);
 
-    const showSplash = isLoading || !onboardingChecked || !routerReady;
+    const showSplash = !isInitialized || !routerReady;
 
     const scaleAnim = React.useRef(new Animated.Value(0.75)).current;
     const opacityAnim = React.useRef(new Animated.Value(0)).current;
@@ -489,6 +494,7 @@ export default function RootLayout() {
 
     return (
         <>
+            <QueryProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
                 <AuthGuard>
                     <GlobalAlert />
@@ -511,6 +517,8 @@ export default function RootLayout() {
                                 contentStyle: { backgroundColor: Colors.background },
                             }}
                         />
+                        <Stack.Screen name="op_bookings/book" options={{ animation: 'none' }} />
+                        <Stack.Screen name="op_bookings/payment" />
                         <Stack.Screen name="doctor/[id]" />
                         <Stack.Screen name="booking/[id]" />
                         <Stack.Screen name="booking/chat" />
@@ -526,7 +534,8 @@ export default function RootLayout() {
                         <Stack.Screen name="maintenance" />
                     </Stack>
                 </AuthGuard>
-            <Toast zIndex={99999}
+            </GestureHandlerRootView>
+            <Toast
                 position="top"
                 topOffset={Platform.OS === 'ios' ? 55 : 40}
                 visibilityTime={3500}
@@ -581,7 +590,7 @@ export default function RootLayout() {
                     ),
                 }}
             />
-            </GestureHandlerRootView>
+            </QueryProvider>
         </>
     );
 }

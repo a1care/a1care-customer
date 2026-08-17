@@ -517,6 +517,7 @@ const styles = StyleSheet.create({
 
     premiumRowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     premiumReviewCount: { fontSize: 14, fontWeight: '700', color: '#64748B' },
+    starText: { color: '#F59E0B', fontSize: 12, fontWeight: '800' },
     premiumEmptyReviews: {
         paddingVertical: 32,
         alignItems: 'center',

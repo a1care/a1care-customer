@@ -1014,9 +1014,9 @@ export default function ServiceDetailScreen() {
             const walletBalance = wallet?.balance ?? 0;
             if (walletBalance < payableAmount) {
                 showToast.warn(
-                    'Insufficient Balance', `Your wallet balance (₹${walletBalance}) is not enough for this payment (₹${payableAmount}). Please add funds or choose another payment method.`,
-                    [{ text: 'OK', onPress: () => setStep('payment') }]
+                    'Insufficient Balance', `Your wallet balance (₹${walletBalance}) is not enough for this payment (₹${payableAmount}). Please add funds or choose another payment method.`
                 );
+                setStep('payment');
                 return;
             }
             let createdBookingId: string | null = null;
@@ -1071,7 +1071,7 @@ export default function ServiceDetailScreen() {
             let createdTxnId: string | null = null;
             try {
                 setSubmittingOnline(true);
-                const booking = await bookMutation.mutateAsync();
+                const booking = await bookMutation.mutateAsync({});
                 createdBookingId = booking._id;
                 const order = await paymentService.createOrder({
                     amount: payableAmount,
@@ -1139,7 +1139,7 @@ export default function ServiceDetailScreen() {
                 setSubmittingOnline(false);
             }
         } else {
-            bookMutation.mutate();
+            bookMutation.mutate({});
         }
     };
 
@@ -2327,6 +2327,7 @@ const styles = StyleSheet.create({
         color: '#475569',
     },
     asapIcon: { fontSize: 18 },
+    cardDivider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 12 },
     asapText: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
     noSlotsCard: {
         flexDirection: 'row',

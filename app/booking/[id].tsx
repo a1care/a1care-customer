@@ -36,7 +36,7 @@ const getStatusSteps = (fulfillmentMode?: string): Array<{ status: string; label
         return [
             { status: 'PENDING', key: 'pending', label: 'Pending', desc: 'Awaiting confirmation from hospital' },
             { status: 'ACCEPTED', key: 'accepted', label: 'Confirmed', desc: 'Appointment confirmed. PIN generated.' },
-            { status: 'IN_PROGRESS', key: 'in_progress', label: 'Patient Arrived', desc: 'Consultation is in progress' },
+            { status: 'CHECKED_IN', key: 'checked_in', label: 'Patient Arrived', desc: 'Patient checked in at hospital' },
             { status: 'COMPLETED', key: 'completed', label: 'Completed', desc: 'Consultation completed successfully' },
         ];
     }
@@ -85,12 +85,12 @@ function StatusHero({ status, fulfillmentMode }: { status: string; fulfillmentMo
     
     // Premium MNC Gradient Banner mapping
     const getGradient = () => {
-        if (status === 'CANCELLED') return ['#FEF2F2', '#FEE2E2'];
-        if (status === 'COMPLETED') return ['#F0FDF4', '#DCFCE7'];
-        if (status === 'IN_PROGRESS' || status === 'ACCEPTED') return ['#EFF6FF', '#DBEAFE'];
-        if (status === 'PAYMENT_PENDING') return ['#FFFBEB', '#FEF3C7'];
-        if (status === 'BROADCASTED') return ['#F5EBFF', '#E9D5FF']; // Searching Provider
-        return ['#F8FAFC', '#F1F5F9'];
+        if (status === 'CANCELLED') return ['#FEF2F2', '#FEE2E2'] as const;
+        if (status === 'COMPLETED') return ['#F0FDF4', '#DCFCE7'] as const;
+        if (status === 'IN_PROGRESS' || status === 'ACCEPTED') return ['#EFF6FF', '#DBEAFE'] as const;
+        if (status === 'PAYMENT_PENDING') return ['#FFFBEB', '#FEF3C7'] as const;
+        if (status === 'BROADCASTED') return ['#F5EBFF', '#E9D5FF'] as const; // Searching Provider
+        return ['#F8FAFC', '#F1F5F9'] as const;
     };
 
     const getTextColor = () => {
@@ -453,7 +453,7 @@ export default function BookingDetailScreen() {
                     ) : null}
 
                     {/* PIN Display for OP tokens */}
-                    {booking.fulfillmentMode === 'HOSPITAL_VISIT' && booking.checkInPin && (booking.status === 'CONFIRMED' || booking.status === 'ACCEPTED') && (
+                    {booking.fulfillmentMode === 'HOSPITAL_VISIT' && (booking.checkInPin || booking.tokenNumber) && (
                         <View style={{
                             marginHorizontal: 16,
                             marginTop: 8,
@@ -495,9 +495,15 @@ export default function BookingDetailScreen() {
                                     marginBottom: 12
                                 }}>
                                     <Text style={{ fontSize: 42, fontWeight: '900', color: '#0F172A', letterSpacing: 12, textAlign: 'center', marginLeft: 12 }}>
-                                        {booking.checkInPin}
+                                        {booking.checkInPin || '---'}
                                     </Text>
                                 </View>
+                                {booking.tokenNumber && (
+                                    <View style={{ alignItems: 'center', marginTop: 4 }}>
+                                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Token Number</Text>
+                                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#3B82F6', letterSpacing: 0.5 }}>{booking.tokenNumber}</Text>
+                                    </View>
+                                )}
                                 <Text style={{ fontSize: 12, color: '#475569', textAlign: 'center', fontWeight: '500' }}>
                                     Show this code at the hospital reception to mark your arrival.
                                 </Text>
@@ -700,7 +706,7 @@ export default function BookingDetailScreen() {
                                     if (isCancelling) return;
                                     try {
                                         setIsCancelling(true);
-                                        await bookingsService.updateServiceBookingStatus(booking._id, 'CANCELLED');
+                                        await bookingsService.updateServiceBookingStatus(booking!._id, 'CANCELLED');
                                         await refetch();
                                         setShowCancelConfirmModal(false);
                                     } catch (error: any) {

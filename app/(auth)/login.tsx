@@ -16,6 +16,8 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { authService } from '@/services/auth.service';
+import api from '@/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/stores/auth.store';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -65,7 +67,7 @@ export default function LoginScreen() {
         const cleaned = mobile.replace(/\D/g, '');
         setRestoring(true);
         try {
-            await authService.api.post(`/patient/auth/restore`, { mobileNumber: cleaned });
+            await api.post(`/patient/auth/restore`, { mobileNumber: cleaned });
             setShowRestoreModal(false);
             Toast.show({ type: 'success', text1: 'Account Restored', text2: 'Your account is active again!', position: 'top' });
             handleSendOtp();

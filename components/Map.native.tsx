@@ -28,9 +28,11 @@ export default function Map({ location, destLatNum, destLngNum }: any) {
             coordinate.timing({
                 latitude: location.latitude,
                 longitude: location.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
                 duration: 1000,
                 useNativeDriver: false,
-            }).start();
+            } as any).start();
         }
 
         // Auto-zoom to fit both the partner and the destination

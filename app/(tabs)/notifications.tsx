@@ -10,6 +10,7 @@ import {
     Alert,
     Platform,
     Animated,
+    FlatList,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -352,20 +353,24 @@ export default function NotificationsScreen() {
                     <Text style={styles.emptySub}>No notifications right now. We'll alert you when something needs your attention.</Text>
                 </View>
             ) : (
-                <ScrollView
+                <FlatList
+                    data={localList}
+                    keyExtractor={(n) => n._id}
                     contentContainerStyle={styles.list}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl refreshing={isPullRefreshing} onRefresh={handleManualRefresh} tintColor="#2563EB" />
                     }
-                >
-                    {localList.map((n) => {
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    removeClippedSubviews={true}
+                    renderItem={({ item: n }) => {
                         const meta = getMeta(n.refType);
                         const Icon = meta.icon;
                         const isUnread = !n.isRead;
                         return (
                             <TouchableOpacity
-                                key={n._id}
                                 style={[styles.card, isUnread && styles.cardUnread]}
                                 onPress={() => handlePress(n)}
                                 activeOpacity={0.88}
@@ -403,9 +408,9 @@ export default function NotificationsScreen() {
                                 </View>
                             </TouchableOpacity>
                         );
-                    })}
-                    <View style={{ height: 100 }} />
-                </ScrollView>
+                    }}
+                    ListFooterComponent={<View style={{ height: 100 }} />}
+                />
             )}
 
             <ConfirmModal

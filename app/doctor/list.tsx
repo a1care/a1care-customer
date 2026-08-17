@@ -64,6 +64,16 @@ export default function DoctorListScreen() {
         if (doctorRoleId) refetchDoctors();
     };
 
+    const getExperience = (startExp: any) => {
+        if (!startExp) return '0';
+        const date = new Date(startExp);
+        if (!isNaN(date.getTime()) && String(startExp).includes('-')) {
+            const diffMs = Date.now() - date.getTime();
+            return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 365.25)).toString();
+        }
+        return String(startExp);
+    };
+
     const renderDoctor = ({ item }: { item: Doctor }) => (
         <TouchableOpacity
             style={styles.card}
@@ -75,16 +85,22 @@ export default function DoctorListScreen() {
             </View>
             <View style={styles.info}>
                 <Text style={styles.name}>Dr. {item.name}</Text>
-                <Text style={styles.spec}>{item.specialization?.join(', ') || 'N/A'}</Text>
+                {item.specialization && item.specialization.length > 0 ? (
+                    <Text style={styles.spec}>{item.specialization.join(', ')}</Text>
+                ) : null}
                 <View style={styles.meta}>
-                    <Text style={styles.stat}>⭐ {item.rating ? item.rating.toFixed(1) : 'N/A'}</Text>
-                    <Text style={styles.dot}>•</Text>
-                    <Text style={styles.stat}>{item.startExperience || '0'}+ Yrs Exp.</Text>
+                    {!!item.rating && (
+                        <>
+                            <Text style={styles.stat}>⭐ {item.rating.toFixed(1)}</Text>
+                            <Text style={styles.dot}>•</Text>
+                        </>
+                    )}
+                    <Text style={styles.stat}>{getExperience(item.startExperience)}+ Yrs Exp.</Text>
                 </View>
             </View>
             <View style={styles.feesCol}>
                 <Text style={styles.feeLabel}>Fees</Text>
-                <Text style={styles.feeVal}>{typeof item.consultationFee === 'number' ? `₹${item.consultationFee}` : 'N/A'}</Text>
+                <Text style={styles.feeVal}>{typeof item.consultationFee === 'number' && item.consultationFee > 0 ? `₹${item.consultationFee}` : ''}</Text>
             </View>
         </TouchableOpacity>
     );

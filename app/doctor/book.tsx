@@ -158,6 +158,7 @@ export default function DoctorBookingScreen() {
                 date: selectedDate,
                 startingTime: slot.startingTime,
                 endingTime: slot.endingTime,
+                totalAmount: doctor?.consultationFee ?? 0,
                 paymentMode: paymentMethod === 'WALLET' ? 'ONLINE' : 'OFFLINE',
                 serviceName: chosenSpecialization || "Doctor Consultation"
             }),
@@ -234,11 +235,10 @@ export default function DoctorBookingScreen() {
                     date: selectedDate,
                     startingTime: selectedSlot.startingTime,
                     endingTime: selectedSlot.endingTime,
+                    totalAmount: fee,
                     paymentMode: 'WALLET',
                     serviceName: chosenSpecialization || 'Doctor Consultation',
                 });
-                const order = await paymentService.createOrder({ amount: fee, type: 'BOOKING', referenceId: booking._id });
-                await paymentService.payWithWallet(order._id);
                 triggerLocalNotification('Appointment Confirmed', `Paid ₹${fee} from wallet for Dr. ${doctor?.name}.`);
                 qc.invalidateQueries({ queryKey: ['appointments'] });
                 qc.invalidateQueries({ queryKey: ['wallet'] });
@@ -276,6 +276,7 @@ export default function DoctorBookingScreen() {
                     date: selectedDate,
                     startingTime: selectedSlot.startingTime,
                     endingTime: selectedSlot.endingTime,
+                    totalAmount: fee,
                     paymentMode: 'ONLINE',
                     serviceName: chosenSpecialization || 'Doctor Consultation',
                 });

@@ -9,6 +9,9 @@ export interface MedicalRecord {
     diagnosis?: string;
     prescriptions: string[];
     labReports: string[];
+    recordFor?: string;
+    type?: string;
+    date?: string;
     createdAt: string;
 }
 

@@ -57,7 +57,10 @@ function MenuLink({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
     const router = useRouter();
-    const { user, logout, isAuthenticated } = useAuthStore();
+    const user = useAuthStore(state => state.user);
+    const logout = useAuthStore(state => state.logout);
+    const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+    
     const qc = useQueryClient();
     const [refreshing, setRefreshing] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -67,6 +70,7 @@ export default function ProfileScreen() {
     const { data: profile, refetch: refetchProfile } = useQuery({
         queryKey: ['profile'],
         queryFn: authService.getProfile,
+        initialData: user as any, // Prevent duplicate request on mount
     });
 
     // Wallet

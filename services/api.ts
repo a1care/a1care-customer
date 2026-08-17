@@ -114,8 +114,14 @@ api.interceptors.response.use(
                 processQueue(refreshError, null);
                 await tokenStorage.removeItem('auth_token');
                 await tokenStorage.removeItem('refresh_token');
-                const { useAuthStore } = require('@/stores/auth.store');
-                useAuthStore.getState().logout();
+                try {
+                    const authStore = require('@/stores/auth.store');
+                    if (authStore && authStore.useAuthStore) {
+                        authStore.useAuthStore.getState().logout();
+                    }
+                } catch (e) {
+                    console.error("Failed to trigger auth store logout from api interceptor", e);
+                }
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

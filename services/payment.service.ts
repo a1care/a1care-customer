@@ -2,7 +2,7 @@ import api from "./api";
 
 export interface CreateOrderParams {
     amount: number;
-    type: "WALLET_TOPUP" | "BOOKING";
+    type: "WALLET_TOPUP" | "BOOKING" | "PACKAGE";
     referenceId?: string;
 }
 
