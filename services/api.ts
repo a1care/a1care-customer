@@ -38,7 +38,11 @@ api.interceptors.request.use(
         }
         if (['post', 'put', 'patch'].includes(config.method?.toLowerCase() || '')) {
             if (!config.headers['Idempotency-Key']) {
-                config.headers['Idempotency-Key'] = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+                // Key is stable for the same endpoint within a 30-second window so retries reuse it.
+                const windowSlot = Math.floor(Date.now() / 30000);
+                const keyBase = `${config.method}:${config.url}:${windowSlot}`;
+                const hash = keyBase.split('').reduce((h: number, c: string) => (((h << 5) - h + c.charCodeAt(0)) | 0), 0);
+                config.headers['Idempotency-Key'] = Math.abs(hash).toString(36);
             }
         }
         if (DEBUG_API) {
@@ -107,6 +111,14 @@ api.interceptors.response.use(
 
                 api.defaults.headers.common['Authorization'] = 'Bearer ' + newToken;
                 originalRequest.headers.Authorization = 'Bearer ' + newToken;
+
+                // Keep auth store and socket in sync with the refreshed token
+                try {
+                    const { useAuthStore } = require('@/stores/auth.store');
+                    useAuthStore.getState().setToken(newToken);
+                    const { socketService } = require('@/services/socket.service');
+                    socketService.updateAuth(newToken);
+                } catch (e) { /* non-fatal */ }
 
                 processQueue(null, newToken);
                 return api(originalRequest);

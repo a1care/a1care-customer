@@ -6,7 +6,10 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Linking,
+    Alert,
 } from 'react-native';
+import { useMutation } from '@tanstack/react-query';
+import api from '@/services/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -26,7 +29,37 @@ export default function TrackingScreen() {
         queryKey: ['tracking', providerId],
         queryFn: () => bookingsService.getProviderLocation(providerId!),
         enabled: !!providerId,
+        refetchInterval: 15000,
     });
+
+    const { data: booking } = useQuery({
+        queryKey: ['booking-track', id],
+        queryFn: () => bookingsService.getServiceBookingById(id!),
+        enabled: !!id,
+    });
+    const providerPhone = (booking as any)?.assignedProvider?.mobile || (booking as any)?.assignedProvider?.phone || '';
+    const bookingStatus = (booking as any)?.status;
+    const canReportNoShow = ['ACCEPTED', 'IN_PROGRESS'].includes(bookingStatus ?? '');
+
+    const noShowMutation = useMutation({
+        mutationFn: () => api.patch(`/service/booking/no-show/${id}`),
+        onSuccess: () => {
+            Alert.alert('Reported', 'Your report has been submitted. Our team will follow up shortly.');
+            router.back();
+        },
+        onError: () => Alert.alert('Error', 'Could not submit report. Please try again.'),
+    });
+
+    const handleReportNoShow = () => {
+        Alert.alert(
+            'Report No-Show',
+            'Has your provider not arrived? Reporting this will notify our support team.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Report', style: 'destructive', onPress: () => noShowMutation.mutate() },
+            ]
+        );
+    };
 
     useEffect(() => {
         if (initialLocation) setLiveLocation(initialLocation);
@@ -37,16 +70,19 @@ export default function TrackingScreen() {
         const socket = socketService.getSocket();
         if (!socket) return;
 
-        socket.emit('join_room', id);
+        const joinRoom = () => socket.emit('join_room', id);
+        joinRoom();
 
         const handleLocationUpdate = (data: any) => {
             setLiveLocation(data);
         };
 
         socket.on('location_update', handleLocationUpdate);
+        socket.on('connect', joinRoom);
 
         return () => {
             socket.off('location_update', handleLocationUpdate);
+            socket.off('connect', joinRoom);
             socket.emit('leave_room', id);
         };
     }, [id]);
@@ -139,11 +175,17 @@ export default function TrackingScreen() {
                                 <Text style={styles.cardTitle}>Your Provider is on the way</Text>
                                 <Text style={styles.cardSub} numberOfLines={1}>Service Professional</Text>
                             </View>
-                            <TouchableOpacity onPress={() => Linking.openURL(`tel:9999999999`)} style={styles.callCircle}>
+                            <TouchableOpacity onPress={() => providerPhone && Linking.openURL(`tel:${providerPhone}`)} style={[styles.callCircle, !providerPhone && { opacity: 0.4 }]}>
                                 <Ionicons name="call" size={20} color="#059669" />
                             </TouchableOpacity>
                         </View>
                         
+                        {canReportNoShow && (
+                            <TouchableOpacity onPress={handleReportNoShow} disabled={noShowMutation.isPending} style={{ marginBottom: 16, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#FEF2F2', borderRadius: 12, borderWidth: 1, borderColor: '#FECACA', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
+                                <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>Provider Not Arrived? Report No-Show</Text>
+                            </TouchableOpacity>
+                        )}
                         <View style={styles.statGrid}>
                             <View style={styles.statBox}>
                                 <Text style={styles.statLabel}>DISTANCE REMAINING</Text>

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ticketsService } from '@/services/tickets.service';
 import { Colors, Shadows } from '@/constants/colors';
@@ -22,21 +22,36 @@ const CATEGORIES = [
     'Payment/Refund',
     'Service Quality',
     'Technical Problem',
+    'Dispute',
     'Other',
 ];
 
 export default function CreateTicketScreen() {
     const router = useRouter();
     const qc = useQueryClient();
+    const params = useLocalSearchParams<{
+        bookingId?: string;
+        bookingType?: string;
+        category?: string;
+        subject?: string;
+    }>();
 
-    const [category, setCategory] = useState(CATEGORIES[0]);
-    const [description, setDescription] = useState('');
+    const isDispute = params.category === 'Dispute';
+    const [category, setCategory] = useState(isDispute ? 'Dispute' : CATEGORIES[0]);
+    const [description, setDescription] = useState(
+        isDispute && params.bookingId
+            ? `Issue with booking #${String(params.bookingId).slice(-8).toUpperCase()}\n\n`
+            : ''
+    );
 
     const createMutation = useMutation({
         mutationFn: () => ticketsService.createTicket({
-            subject: category,
+            subject: params.subject || category,
             description,
-            priority: 'Medium', // default priority
+            priority: isDispute ? 'High' : 'Medium',
+            category: category === 'Dispute' ? 'Dispute' : 'General',
+            bookingId: params.bookingId,
+            bookingType: params.bookingType,
         }),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['tickets'] });

@@ -1033,7 +1033,8 @@ export default function ServiceDetailScreen() {
                 setSubmitted(true);
                 setSubmittedBookingId(booking?._id ?? null);
                 qc.invalidateQueries({ queryKey: ['service-bookings'] });
-                
+                qc.invalidateQueries({ queryKey: ['wallet'] });
+
                 if (shouldUseDoctorAppointment) {
                     // For doctor appointment, navigation is handled in onSuccess of bookMutation
                     // We just need to make sure we don't proceed to checkout/status

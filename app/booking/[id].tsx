@@ -215,22 +215,25 @@ export default function BookingDetailScreen() {
         retry: 1,
     });
 
-    // Socket — join booking room for real-time status updates
+    // Socket — join booking room for real-time status updates; rejoin on reconnect
     React.useEffect(() => {
         if (!id) return;
         const socket = socketService.getSocket();
         if (!socket) return;
-        
-        socket.emit('join_room', id);
-        
+
+        const joinRoom = () => socket.emit('join_room', id);
+        joinRoom();
+
         const handleStatusUpdate = (data: { bookingId: string; status: string }) => {
             if (data.bookingId === id) refetch();
         };
-        
+
         socket.on('booking_status_updated', handleStatusUpdate);
-        
-        return () => { 
+        socket.on('connect', joinRoom);
+
+        return () => {
             socket.off('booking_status_updated', handleStatusUpdate);
+            socket.off('connect', joinRoom);
             socket.emit('leave_room', id);
         };
     }, [id]);
@@ -614,6 +617,24 @@ export default function BookingDetailScreen() {
                                 style={{ marginTop: 16 }}
                             />
                         </View>
+                    )}
+
+                    {/* Raise Dispute — for completed/cancelled bookings */}
+                    {(booking.status === 'COMPLETED' || booking.status === 'CANCELLED') && (
+                        <TouchableOpacity
+                            style={{ marginHorizontal: 16, marginBottom: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FEF2F2', alignItems: 'center' }}
+                            onPress={() => router.push({
+                                pathname: '/support/create' as any,
+                                params: {
+                                    bookingId: booking._id,
+                                    bookingType: 'ServiceRequest',
+                                    category: 'Dispute',
+                                    subject: `Dispute: Booking #${String(booking._id).slice(-8).toUpperCase()}`,
+                                }
+                            })}
+                        >
+                            <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>Raise a Dispute / Complaint</Text>
+                        </TouchableOpacity>
                     )}
 
                     <View style={{ height: 60 }} />

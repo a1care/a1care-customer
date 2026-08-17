@@ -14,7 +14,14 @@ export interface Ticket {
 }
 
 export const ticketsService = {
-    createTicket: async (data: { subject: string; description: string; priority: string }) => {
+    createTicket: async (data: {
+        subject: string;
+        description: string;
+        priority: string;
+        category?: string;
+        bookingId?: string;
+        bookingType?: string;
+    }) => {
         const res = await api.post<ApiResponse<Ticket>>(
             Endpoints.CREATE_TICKET,
             data

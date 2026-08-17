@@ -69,7 +69,7 @@ export default function PaymentMethodScreen() {
             });
         },
         onSuccess: async (data: any) => {
-            const bookingId = data.data?._id;
+            const bookingId = data?._id;
 
             if (paymentMode === 'WALLET' || paymentMode === 'PACKAGE') {
                 triggerLocalNotification('OP Ticket Confirmed', `Your OP Token for ${deptName || 'General OP'} is confirmed.`);
@@ -80,36 +80,38 @@ export default function PaymentMethodScreen() {
             }
 
             try {
-                const orderRes = await paymentService.createOrder(bookingId);
-                const options = {
-                    description: "OP Booking - " + (deptName || 'General OP'),
-                    image: 'https://a1care.in/logo.png',
+                const order = await paymentService.createOrder({ amount: Number(price) || 0, type: 'BOOKING', referenceId: bookingId });
+                const razorData = await paymentService.initiateRazorpay(order._id);
+                const rzpData = await RazorpayCheckout.open({
+                    key: razorData.key,
+                    amount: razorData.razorOrder.amount,
                     currency: 'INR',
-                    key: orderRes.data.key,
-                    amount: orderRes.data.amount,
                     name: 'A1Care OP Booking',
-                    order_id: orderRes.data.orderId,
-                    prefill: { email: 'contact@a1care.in', contact: '9999999999', name: 'Patient' },
+                    description: 'OP Booking - ' + (deptName || 'General OP'),
+                    order_id: razorData.razorOrder.id,
+                    prefill: {
+                        email: razorData.customer?.email || '',
+                        contact: razorData.customer?.contact || '',
+                        name: razorData.customer?.name || '',
+                    },
                     theme: { color: '#2563EB' }
-                };
-
-                RazorpayCheckout.open(options).then(async (rzpData: any) => {
-                    await paymentService.verifyRazorpay({
-                        razorpay_order_id: rzpData.razorpay_order_id,
-                        razorpay_payment_id: rzpData.razorpay_payment_id,
-                        razorpay_signature: rzpData.razorpay_signature,
-                        orderId: orderRes.data.orderId
-                    });
-                    
-                    triggerLocalNotification('OP Ticket Confirmed', `Your OP Token for ${deptName || 'General OP'} is confirmed.`);
-                    qc.invalidateQueries({ queryKey: ['service-bookings'] });
-                    showToast.success('Booking Successful', 'Paid via Online Payment');
-                    router.replace('/(tabs)/bookings');
-                }).catch((error: any) => {
-                    Toast.show({ type: 'error', text1: 'Payment Failed', text2: 'Please try again.' });
                 });
+                await paymentService.verifyRazorpay({
+                    razorpay_order_id: (rzpData as any).razorpay_order_id,
+                    razorpay_payment_id: (rzpData as any).razorpay_payment_id,
+                    razorpay_signature: (rzpData as any).razorpay_signature,
+                    orderId: order._id,
+                });
+                triggerLocalNotification('OP Ticket Confirmed', `Your OP Token for ${deptName || 'General OP'} is confirmed.`);
+                qc.invalidateQueries({ queryKey: ['service-bookings'] });
+                showToast.success('Booking Successful', 'Paid via Online Payment');
+                router.replace('/(tabs)/bookings');
             } catch (err: any) {
-                showToast.error('Payment Initialization Failed', err.message);
+                // Cancel the booking that was already created so it doesn't stay in unpaid limbo
+                if (bookingId) {
+                    await bookingsService.updateServiceBookingStatus(bookingId, 'CANCELLED').catch(() => {});
+                }
+                showToast.error('Payment Failed', err?.message || 'Please try again.');
             }
         },
         onError: (err: any) => {

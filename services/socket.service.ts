@@ -41,5 +41,14 @@ export const socketService = {
 
     getSocket: () => {
         return socket;
+    },
+
+    updateAuth: (token: string) => {
+        if (socket) {
+            socket.auth = { token };
+            if (!socket.connected) {
+                socket.connect();
+            }
+        }
     }
 };
