@@ -37,7 +37,7 @@ export default function MyPackagesScreen() {
                         <MaterialCommunityIcons name="star-circle-outline" size={48} color="#94A3B8" />
                         <Text style={styles.emptyTitle}>No Active Packages</Text>
                         <Text style={styles.emptyDesc}>You haven't purchased any health packages yet, or your previous packages have expired.</Text>
-                        <TouchableOpacity style={styles.buyBtn} onPress={() => router.push('/package')}>
+                        <TouchableOpacity style={styles.buyBtn} onPress={() => router.push('/package' as any)}>
                             <Text style={styles.buyBtnText}>Browse Packages</Text>
                         </TouchableOpacity>
                     </View>

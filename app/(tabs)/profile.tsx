@@ -296,7 +296,7 @@ export default function ProfileScreen() {
                         bgColor="#FEF3C7"
                         title="My Packages"
                         subtitle="View your active health packages"
-                        onPress={() => router.push("/profile/my-packages")}
+                        onPress={() => router.push("/profile/my-packages" as any)}
                     />
                 </View>
 

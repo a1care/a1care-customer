@@ -243,7 +243,7 @@ export default function HealthPackageDetail() {
                     </Text>
                     <TouchableOpacity
                         style={styles.successBtn}
-                        onPress={() => router.replace('/profile/my-packages')}
+                        onPress={() => router.replace('/profile/my-packages' as any)}
                     >
                         <Text style={styles.successBtnText}>View My Packages</Text>
                     </TouchableOpacity>
@@ -431,7 +431,7 @@ export default function HealthPackageDetail() {
                 {alreadyOwns ? (
                     <TouchableOpacity
                         style={styles.bookBtn}
-                        onPress={() => router.replace('/profile/my-packages')}
+                        onPress={() => router.replace('/profile/my-packages' as any)}
                     >
                         <Text style={styles.bookBtnText}>View My Packages</Text>
                     </TouchableOpacity>

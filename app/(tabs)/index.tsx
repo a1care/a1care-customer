@@ -1451,7 +1451,7 @@ export default function HomeScreen() {
                                     <Text style={styles.sectionTitle}>Health Packages</Text>
                                     <Text style={styles.sectionSub}>Bundled checkups at best prices</Text>
                                 </View>
-                                <Link href="/package" asChild>
+                                <Link href={"/package" as any} asChild>
                                     <TouchableOpacity 
                                         style={{ flexDirection: 'row', alignItems: 'center' }} 
                                         activeOpacity={0.7}

@@ -135,7 +135,7 @@ export default function HospitalBookingScreen() {
         const deptName = DEPARTMENTS.find(d => d.id === selectedDept)?.name || 'General OP';
         
         router.push({
-            pathname: '/op_bookings/payment',
+            pathname: '/op_bookings/payment' as any,
             params: {
                 id: id,
                 deptName: deptName,
