@@ -39,7 +39,6 @@ import {
 
 import { bookingsService } from '@/services/bookings.service';
 import { useAuthStore } from '@/stores/auth.store';
-import { socketService } from '@/services/socket.service';
 import { Colors, Shadows } from '@/constants/colors';
 import { FontSize } from '@/constants/spacing';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -443,19 +442,9 @@ export default function BookingsScreen() {
         refetchAppt();
     }, [isFocused, refetchSB, refetchAppt]);
 
-    // Socket: refetch bookings on any status update so customer sees live changes
-    useEffect(() => {
-        const socket = socketService.getSocket();
-        if (!socket) return;
-        
-        const handleUpdate = () => {
-            refetchSB();
-            refetchAppt();
-        };
-        
-        socket.on('booking_status_updated', handleUpdate);
-        return () => { socket.off('booking_status_updated', handleUpdate); };
-    }, []);
+    // Live updates come via the 30-second refetchInterval on both queries above.
+    // A room-scoped socket listener was removed — it never joined any booking
+    // rooms so the subscription was dead and misleading.
 
     React.useEffect(() => {
         if (!isFocused) return;
