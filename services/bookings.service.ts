@@ -185,7 +185,7 @@ export const bookingsService = {
 
     getBookingMessages: async (bookingId: string) => {
         const res = await api.get<ApiResponse<any[]>>(
-            `/chat/${bookingId}`
+            `/chat/${bookingId}?cb=${Date.now()}`
         );
         return res.data.data;
     },

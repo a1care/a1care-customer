@@ -246,7 +246,7 @@ export default function DoctorBookingScreen() {
                     pathname: '/checkout/status' as any,
                     params: {
                         status: 'SUCCESS',
-                        txnId: booking._id,
+                        txnId: `WALLET-${Date.now()}`,
                         amount: String(fee),
                         type: 'BOOKING',
                         description: `Consultation with Dr. ${doctor?.name}`,
