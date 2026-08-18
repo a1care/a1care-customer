@@ -13,6 +13,7 @@ import {
     Modal,
     TouchableWithoutFeedback,
     Linking,
+    Image,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +24,7 @@ import { Colors } from '@/constants/colors';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { socketService } from '@/services/socket.service';
+import * as ImagePicker from 'expo-image-picker';
 
 // ── A1Care Brand Color Palette (Premium) ──────────────────────────────
 const PRIMARY      = '#059669';          // A1Care primary green
@@ -127,6 +129,24 @@ export default function BookingChatScreen() {
         sendMutation.mutate(text);
     };
 
+    const handlePickImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Toast.show({ type: 'error', text1: 'Permission Denied' });
+            return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.5,
+            base64: true,
+        });
+        if (!result.canceled && result.assets[0].base64) {
+            const base64Str = `[IMAGE]data:image/jpeg;base64,${result.assets[0].base64}`;
+            handleSend(base64Str);
+        }
+    };
+
     useEffect(() => {
         if (chatMessages.length > 0)
             setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
@@ -229,6 +249,10 @@ export default function BookingChatScreen() {
                             const isMe = sender === 'patient' || sender === 'user' || sender === 'customer';
                             const showDay = idx === 0 || !isSameDay(msg.createdAt, chatMessages[idx - 1]?.createdAt);
                             
+                            const msgRawText = msg.message || msg.text || msg.content || '';
+                            const isImage = typeof msgRawText === 'string' && msgRawText.startsWith('[IMAGE]');
+                            const content = isImage ? msgRawText.replace('[IMAGE]', '') : msgRawText;
+
                             return (
                                 <React.Fragment key={msg._id || idx}>
                                     {showDay && (
@@ -238,9 +262,13 @@ export default function BookingChatScreen() {
                                     )}
                                     <View style={[styles.msgRow, isMe ? styles.rowMe : styles.rowThem]}>
                                         <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-                                            <Text style={[styles.msgText, { color: isMe ? MY_BUBBLE_TEXT : THEIR_TEXT }]}>
-                                                {msg.message || msg.text || msg.content || ''}
-                                            </Text>
+                                            {isImage ? (
+                                                <Image source={{ uri: content }} style={{ width: 220, height: 220, borderRadius: 12, marginBottom: 4 }} resizeMode="cover" />
+                                            ) : (
+                                                <Text style={[styles.msgText, { color: isMe ? MY_BUBBLE_TEXT : THEIR_TEXT }]}>
+                                                    {content}
+                                                </Text>
+                                            )}
                                             <View style={styles.metaRow}>
                                                 <Text style={[styles.msgTime, { color: isMe ? 'rgba(255,255,255,0.8)' : '#94A3B8' }]}>{formatMsgTime(msg.createdAt)}</Text>
                                                 {isMe && (
@@ -290,10 +318,10 @@ export default function BookingChatScreen() {
                 </TouchableOpacity>
             ) : (
                 <View style={styles.inputBar}>
+                    <TouchableOpacity style={styles.attachBtn} onPress={handlePickImage} disabled={sendMutation.isPending}>
+                        <Ionicons name="image-outline" size={24} color="#64748B" />
+                    </TouchableOpacity>
                     <View style={styles.inputWrap}>
-                        <TouchableOpacity style={{ paddingHorizontal: 8 }}>
-                            <Ionicons name="happy-outline" size={22} color="#94A3B8" />
-                        </TouchableOpacity>
                         <TextInput
                             style={styles.input}
                             placeholder="Reply..."
@@ -438,10 +466,16 @@ const styles = StyleSheet.create({
     // Input bar
     inputBar: {
         flexDirection: 'row', alignItems: 'flex-end',
-        gap: 10, paddingHorizontal: 16, paddingVertical: 12,
+        gap: 8, paddingHorizontal: 12, paddingVertical: 12,
         backgroundColor: '#FFFFFF',
         borderTopWidth: 1, borderTopColor: '#F1F5F9',
         elevation: 10, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: -4 }
+    },
+    attachBtn: {
+        width: 44, height: 44, borderRadius: 22,
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center', justifyContent: 'center',
+        marginBottom: 2,
     },
     inputWrap: {
         flex: 1, flexDirection: 'row', alignItems: 'center',
