@@ -65,6 +65,7 @@ export default function WalletScreen() {
     } = useQuery({
         queryKey: ['wallet'],
         queryFn: walletService.getWallet,
+        refetchInterval: 60000,
     });
 
     // Ensure admin-side topups show up as soon as the screen is opened

@@ -77,6 +77,7 @@ export default function ProfileScreen() {
     const { data: wallet, refetch: refetchWallet } = useQuery({
         queryKey: ['wallet'],
         queryFn: walletService.getWallet,
+        refetchInterval: 60000,
     });
 
     const onRefresh = async () => {
