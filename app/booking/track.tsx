@@ -20,10 +20,14 @@ import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import Map from '@/components/Map.native';
 import { socketService } from '@/services/socket.service';
 
+const LOCATION_STALE_MS = 90_000; // 90 seconds without update → show "connection lost"
+
 export default function TrackingScreen() {
     const { id, providerId, destLat, destLng } = useLocalSearchParams<{ id: string, providerId: string, destLat?: string, destLng?: string }>();
     const router = useRouter();
     const [liveLocation, setLiveLocation] = useState<any>(null);
+    const [isProviderDisconnected, setIsProviderDisconnected] = useState(false);
+    const lastLocationTime = useRef<number>(Date.now());
 
     const { data: initialLocation, isLoading, refetch } = useQuery({
         queryKey: ['tracking', providerId],
@@ -74,14 +78,30 @@ export default function TrackingScreen() {
         joinRoom();
 
         const handleLocationUpdate = (data: any) => {
+            lastLocationTime.current = Date.now();
+            setIsProviderDisconnected(false);
             setLiveLocation(data);
         };
 
+        const handleProviderDisconnected = () => {
+            setIsProviderDisconnected(true);
+        };
+
         socket.on('location_update', handleLocationUpdate);
+        socket.on('provider_disconnected', handleProviderDisconnected);
         socket.on('connect', joinRoom);
 
+        // Staleness check: if no location update in 90s, mark as disconnected
+        const stalenessTimer = setInterval(() => {
+            if (Date.now() - lastLocationTime.current > LOCATION_STALE_MS) {
+                setIsProviderDisconnected(true);
+            }
+        }, 15000);
+
         return () => {
+            clearInterval(stalenessTimer);
             socket.off('location_update', handleLocationUpdate);
+            socket.off('provider_disconnected', handleProviderDisconnected);
             socket.off('connect', joinRoom);
             socket.emit('leave_room', id);
         };
@@ -158,10 +178,17 @@ export default function TrackingScreen() {
                         <View style={styles.dragHandle} />
                         
                         <View style={styles.sheetHeader}>
-                            <View style={styles.pulseContainer}>
-                                <View style={styles.pulseDot} />
-                                <Text style={styles.liveText}>LIVE TRACKING</Text>
-                            </View>
+                            {isProviderDisconnected ? (
+                                <View style={[styles.pulseContainer, { backgroundColor: '#FEF3C7' }]}>
+                                    <View style={[styles.pulseDot, { backgroundColor: '#D97706' }]} />
+                                    <Text style={[styles.liveText, { color: '#D97706' }]}>CONNECTION LOST</Text>
+                                </View>
+                            ) : (
+                                <View style={styles.pulseContainer}>
+                                    <View style={styles.pulseDot} />
+                                    <Text style={styles.liveText}>LIVE TRACKING</Text>
+                                </View>
+                            )}
                             <Text style={styles.arrivingText}>Arriving in <Text style={styles.timeBold}>{durationStr}</Text></Text>
                         </View>
                         

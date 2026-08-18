@@ -36,15 +36,9 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-        if (['post', 'put', 'patch'].includes(config.method?.toLowerCase() || '')) {
-            if (!config.headers['Idempotency-Key']) {
-                // Key is stable for the same endpoint within a 30-second window so retries reuse it.
-                const windowSlot = Math.floor(Date.now() / 30000);
-                const keyBase = `${config.method}:${config.url}:${windowSlot}`;
-                const hash = keyBase.split('').reduce((h: number, c: string) => (((h << 5) - h + c.charCodeAt(0)) | 0), 0);
-                config.headers['Idempotency-Key'] = Math.abs(hash).toString(36);
-            }
-        }
+        // Idempotency-Key header removed — backend does not enforce it, so the
+        // header created a false sense of safety without any actual protection.
+        // Real idempotency is handled atomically in the DB (findOneAndUpdate guards).
         if (DEBUG_API) {
             const fullUrl = `${config.baseURL || ''}${config.url || ''}`;
             console.log(`\n🚀 [API Request] ${config.method?.toUpperCase()} ${config.url}`);
