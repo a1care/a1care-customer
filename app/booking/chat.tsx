@@ -91,24 +91,51 @@ export default function BookingChatScreen() {
 
     useEffect(() => {
         if (!id) return;
-        const socket = socketService.getSocket();
-        if (!socket) return;
         
-        socket.emit('join_room', id);
+        let socket = socketService.getSocket();
+        let handleConnect: any = null;
+        let handleReceiveMessage: any = null;
+        let interval: NodeJS.Timeout | null = null;
         
-        const handleReceiveMessage = (data: any) => {
-            if (data.roomId === id || data.bookingId === id) {
-                setChatMessages(prev => {
-                    if (prev.find((m: any) => m._id && m._id === data._id)) return prev;
-                    return [...prev, data];
-                });
-            }
+        const setupSocket = (s: any) => {
+            s.emit('join_room', id);
+            
+            handleConnect = () => {
+                s.emit('join_room', id);
+            };
+            s.on('connect', handleConnect);
+            
+            handleReceiveMessage = (data: any) => {
+                if (data.roomId === id || data.bookingId === id) {
+                    setChatMessages(prev => {
+                        if (prev.find((m: any) => m._id && m._id === data._id)) return prev;
+                        return [...prev, data];
+                    });
+                }
+            };
+            
+            s.on('receive_message', handleReceiveMessage);
         };
+
+        if (socket) {
+            setupSocket(socket);
+        } else {
+            interval = setInterval(() => {
+                socket = socketService.getSocket();
+                if (socket) {
+                    if (interval) clearInterval(interval);
+                    setupSocket(socket);
+                }
+            }, 500);
+        }
         
-        socket.on('receive_message', handleReceiveMessage);
         return () => { 
-            socket.off('receive_message', handleReceiveMessage);
-            socket.emit('leave_room', id);
+            if (interval) clearInterval(interval);
+            if (socket) {
+                if (handleReceiveMessage) socket.off('receive_message', handleReceiveMessage);
+                if (handleConnect) socket.off('connect', handleConnect);
+                socket.emit('leave_room', id);
+            }
         };
     }, [id]);
 
